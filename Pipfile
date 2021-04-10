@@ -1,0 +1,13 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+beancount = {editable = true, git = "https://github.com/beancount/beancount"}
+
+[dev-packages]
+pytest = "*"
+
+[requires]
+python_version = "3.7"
