@@ -56,9 +56,13 @@ query_parser.py
 query_parser_test.py
 
 * This is the SQL parser. It uses PLY and it does *not* need to be fast (PLY is
-  just fine for this, no need to introduce C code). It produces nested
-  namedtuples to describe the query (this could be formalized a bit more
-  (proto?) but it works nicely now).
+  just fine for this, no need to introduce C code).
+
+* It produces nested namedtuples to describe the query (this could be formalized
+  a bit more (proto?) but it works nicely now). Also, the data structure which
+  describes the query could be made much better, so that in theory another
+  simpler query language could be implemented on top and generate the same query
+  data structure, for example, a simplified ands-of-ors like in Gmail.
 
 * The HAVING clause is parsed but was never implemented. It should be either
   removed or implemented.
@@ -86,13 +90,16 @@ query_env_test.py
 * This code defines all the functions available to call from the language. There
   are different sets of functions available from the `FROM` and `WHERE` clauses,
   and function name aliases.
+
 * I let this evolve as it went, not taking too much care for naming the
   functions consistently. It's a bit of a mess and could certainly use a nice
   holistic review of all the naming.
+
 * I'd like to replace all (most?) of those classes by simple functions with type
   annotations, and have code that inspects the type annotations to infer the in
   and out data types. Then I'd like to make it easier for people to add
   functions.
+
 * All functions here that are operating on Beancount-specific types ideally
   should be seggregated to another file and inserted via hooks, so that a user
   that just needs to process a CSV file (not Beancount context) can stil use the
@@ -103,6 +110,7 @@ query_render.py
 query_render_test.py
 
 * This code renders each of the data types to strings to be written out.
+
 * In particular, the formatting of numbers is problematic here and has never
   been reconciled with the rest of Beancount. Ideally it should follow
   Beancount's pattern and allow for a "display context" object of sort to be
@@ -118,7 +126,7 @@ query_render_test.py
 numberify.py
 numberify_test.py
 
-- That's code to handle the Amount data type (which is a pair of number and a
+* That's code to handle the Amount data type (which is a pair of number and a
   currency) to split it into two columns so that when loading into a spreadsheet
   that numbers can be processed (in their own column). Currently this is
   triggered by a flag (-m) but if you can find a better way to express this
