@@ -10,9 +10,9 @@ from beancount.core import inventory
 from beancount.core import position
 from beancount.core import amount
 from beancount.parser import parser
-from beancount.query import query_compile as qc
-from beancount.query import query_env as qe
-from beancount.query import query
+from beanquery import query_compile as qc
+from beanquery import query_env as qe
+from beanquery import query
 
 
 class TestCompileDataTypes(unittest.TestCase):

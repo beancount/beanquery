@@ -7,7 +7,7 @@ import unittest
 from os import path
 
 from beancount.utils import test_utils
-from beancount.query import shell
+from beanquery import shell
 from beancount import loader
 
 

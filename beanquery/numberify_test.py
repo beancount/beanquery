@@ -11,7 +11,7 @@ from beancount.core import amount
 from beancount.core import position
 from beancount.core import inventory
 from beancount.core import display_context
-from beancount.query import numberify
+from beanquery import numberify
 
 
 class TestNumerifySimple(unittest.TestCase):

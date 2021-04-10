@@ -4,7 +4,7 @@ __license__ = "GNU GPLv2"
 from os import path
 import unittest
 
-from beancount.query import query
+from beanquery import query
 from beancount.utils import test_utils
 from beancount import loader
 

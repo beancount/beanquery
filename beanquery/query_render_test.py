@@ -13,7 +13,7 @@ from beancount.core.amount import A
 from beancount.core import inventory
 from beancount.core import position
 from beancount.core import display_context
-from beancount.query import query_render
+from beanquery import query_render
 
 
 
