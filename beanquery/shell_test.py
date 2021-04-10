@@ -7,6 +7,7 @@ import unittest
 from os import path
 
 from beancount.utils import test_utils
+from beanquery import test_utils as beanquery_test_utils
 from beancount.query import shell
 from beancount import loader
 
@@ -15,7 +16,7 @@ entries, errors, options_map = None, None, None
 
 
 def setup_module():
-    example_filename = path.join(test_utils.find_repository_root(__file__),
+    example_filename = path.join(beanquery_test_utils.find_repository_root(__file__),
                                  'examples', 'example.beancount')
     global entries, errors, options_map  # pylint: disable=invalid-name
     entries, errors, options_map = loader.load_file(example_filename)
