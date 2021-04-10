@@ -10,10 +10,10 @@ from decimal import Decimal
 
 from beancount.core.number import D
 from beancount.core import inventory
-from beancount.query import query_parser
-from beancount.query import query_compile as qc
-from beancount.query import query_env as qe
-from beancount.query import query_execute as qx
+from beanquery import query_parser
+from beanquery import query_compile as qc
+from beanquery import query_env as qe
+from beanquery import query_execute as qx
 from beancount.parser import cmptest
 from beancount.utils import misc_utils
 from beancount import loader

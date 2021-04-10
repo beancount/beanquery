@@ -6,9 +6,9 @@ import unittest
 from decimal import Decimal
 
 from beancount.core.number import D
-from beancount.query import query_parser as qp
-from beancount.query import query_compile as qc
-from beancount.query import query_env as qe
+from beanquery import query_parser as qp
+from beanquery import query_compile as qc
+from beanquery import query_env as qe
 
 
 class TestCompileExpression(unittest.TestCase):

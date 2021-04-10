@@ -5,7 +5,7 @@ import datetime
 import unittest
 
 from beancount.core.number import D
-from beancount.query import query_parser as qp
+from beanquery import query_parser as qp
 
 
 def qSelect(target_spec=None,

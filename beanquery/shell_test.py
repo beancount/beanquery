@@ -6,10 +6,10 @@ import sys
 import unittest
 from os import path
 
+from beancount import loader
 from beancount.utils import test_utils
 from beanquery import test_utils as beanquery_test_utils
-from beancount.query import shell
-from beancount import loader
+from beanquery import shell
 
 
 entries, errors, options_map = None, None, None

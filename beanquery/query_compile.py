@@ -15,7 +15,7 @@ import operator
 from decimal import Decimal
 
 from beancount.core import inventory
-from beancount.query import query_parser
+from beanquery import query_parser
 
 
 # A global constant which sets whether we support inferred/implicit group-by

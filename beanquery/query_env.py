@@ -26,7 +26,7 @@ from beancount.core import data
 from beancount.core import getters
 from beancount.core import convert
 from beancount.core import prices
-from beancount.query import query_compile
+from beanquery import query_compile
 from beancount.utils.date_utils import parse_date_liberally
 
 

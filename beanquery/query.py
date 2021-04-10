@@ -3,11 +3,11 @@
 __copyright__ = "Copyright (C) 2015-2017  Martin Blais"
 __license__ = "GNU GPLv2"
 
-from beancount.query import query_parser
-from beancount.query import query_compile
-from beancount.query import query_env
-from beancount.query import query_execute
-from beancount.query import numberify as numberify_lib
+from beanquery import query_parser
+from beanquery import query_compile
+from beanquery import query_env
+from beanquery import query_execute
+from beanquery import numberify as numberify_lib
 
 
 def run_query(entries, options_map, query, *format_args, numberify=False):

@@ -21,12 +21,12 @@ except ImportError:
 
 import click
 
-from beancount.query import query_parser
-from beancount.query import query_compile
-from beancount.query import query_env
-from beancount.query import query_execute
-from beancount.query import query_render
-from beancount.query import numberify
+from beanquery import query_parser
+from beanquery import query_compile
+from beanquery import query_env
+from beanquery import query_execute
+from beanquery import query_render
+from beanquery import numberify
 from beancount.parser import printer
 from beancount.core import data
 from beancount.utils import misc_utils
