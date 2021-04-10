@@ -5,7 +5,7 @@ from os import path
 import unittest
 
 from beancount.query import query
-from beancount.utils import test_utils
+from beanquery import test_utils
 from beancount import loader
 
 
