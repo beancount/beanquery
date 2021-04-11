@@ -21,18 +21,19 @@ except ImportError:
 
 import click
 
-from beanquery import query_parser
-from beanquery import query_compile
-from beanquery import query_env
-from beanquery import query_execute
-from beanquery import query_render
-from beanquery import numberify
 from beancount.parser import printer
 from beancount.core import data
 from beancount.utils import misc_utils
 from beancount.utils import pager
 from beancount.parser.version import VERSION
 from beancount import loader
+
+from beanquery import query_parser
+from beanquery import query_compile
+from beanquery import query_env
+from beanquery import query_execute
+from beanquery import query_render
+from beanquery import numberify
 
 
 HISTORY_FILENAME = "~/.bean-shell-history"
@@ -157,24 +158,23 @@ class DispatchingShell(cmd.Cmd):
         if self.is_interactive:
             return pager.ConditionalPager(self.vars.get('pager', None),
                                           minlines=misc_utils.get_screen_height())
-        else:
-            file = (codecs.getwriter("utf-8")(sys.stdout.buffer)
-                    if hasattr(sys.stdout, 'buffer') else
-                    sys.stdout)
-            return pager.flush_only(file)
+        file = (codecs.getwriter("utf-8")(sys.stdout.buffer)
+                if hasattr(sys.stdout, 'buffer') else
+                sys.stdout)
+        return pager.flush_only(file)
 
-    def cmdloop(self):
+    def cmdloop(self, intro=None):
         """Override cmdloop to handle keyboard interrupts."""
         while True:
             try:
-                super().cmdloop()
+                super().cmdloop(intro)
                 break
             except KeyboardInterrupt:
                 print('\n(Interrupted)', file=self.outfile)
 
-    def do_help(self, command):
+    def do_help(self, arg):
         """Strip superfluous semicolon."""
-        super().do_help(command.rstrip('; \t'))
+        super().do_help(arg.rstrip('; \t'))
 
     def do_history(self, _):
         "Print the command-line history statement."
@@ -777,14 +777,15 @@ _SUPPORTED_FORMATS = ('text', 'csv')
 @click.argument('query', nargs=-1)
 @click.option('--numberify', '-m', is_flag=True,
               help="Numberify the output, removing the currencies.")
-@click.option('--format', '-f', type=click.Choice(_SUPPORTED_FORMATS),
+@click.option('--format', '-f', 'output_format',
+              type=click.Choice(_SUPPORTED_FORMATS),
               default=_SUPPORTED_FORMATS[0], help="Output format.")
 @click.option('--output', '-o', type=click.File('w'), default='-',
               help="Output filename.")
 @click.option('--no-errors', '-q', is_flag=True,
               help="Do not report errors.")
 @click.version_option(message=VERSION)
-def main(filename, query, numberify, format, output, no_errors):
+def main(filename, query, numberify, output_format, output, no_errors):
     """An interactive interpreter for the Beancount Query Language.
 
     Load Beancount ledger FILENAME and run Beancount Query Language
@@ -803,7 +804,7 @@ def main(filename, query, numberify, format, output, no_errors):
 
     # Create the shell.
     is_interactive = sys.stdin.isatty() and not query
-    shell_obj = BQLShell(is_interactive, load, output, format, numberify)
+    shell_obj = BQLShell(is_interactive, load, output, output_format, numberify)
     shell_obj.on_Reload()
 
     # Run interactively if we're a TTY and no query is supplied.
