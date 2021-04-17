@@ -26,8 +26,8 @@ from beancount.core import data
 from beancount.core import getters
 from beancount.core import convert
 from beancount.core import prices
-from beanquery import query_compile
 from beancount.utils.date_utils import parse_date_liberally
+from beanquery import query_compile
 
 
 # Non-aggregating functions. These functionals maintain no state.
@@ -1443,8 +1443,7 @@ class FileLocationColumn(query_compile.EvalColumn):
         if context.posting.meta is not None:
             return '{}:{:d}:'.format(context.posting.meta.get("filename", "N/A"),
                                      context.posting.meta.get("lineno", 0))
-        else:
-            return '' # Unknown.
+        return '' # Unknown.
 
 class DateColumn(query_compile.EvalColumn):
     "The date of the parent transaction for this posting."

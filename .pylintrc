@@ -42,3 +42,6 @@ disable=
   unused-variable,
   unused-wildcard-import,
   wildcard-import,
+  # existing violations, revist them
+  too-many-lines,
+  attribute-defined-outside-init,
