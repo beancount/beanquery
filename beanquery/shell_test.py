@@ -18,7 +18,7 @@ entries, errors, options_map = None, None, None
 def setup_module():
     example_filename = path.join(beanquery_test_utils.find_repository_root(__file__),
                                  'examples', 'example.beancount')
-    global entries, errors, options_map  # pylint: disable=invalid-name
+    global entries, errors, options_map  # pylint: disable=global-statement
     entries, errors, options_map = loader.load_file(example_filename)
     assert not errors
 
