@@ -4,6 +4,7 @@ __license__ = "GNU GPLv2"
 import atexit
 import cmd
 import codecs
+import contextlib
 import io
 import logging
 import os
@@ -37,6 +38,12 @@ from beanquery import numberify
 
 
 HISTORY_FILENAME = "~/.bean-shell-history"
+
+
+# The same as contextlib.nullcontext in Python >= 3.7.
+@contextlib.contextmanager
+def nullcontext(result):
+    yield result
 
 
 def load_history(filename):
@@ -152,8 +159,8 @@ class DispatchingShell(cmd.Cmd):
         """Create and return a context manager to write to, a pager subprocess if required.
 
         Returns:
-          A pair of a file object to write to, and a pipe object to wait on (or
-        None if not necessary to wait).
+          A context manager.
+
         """
         if self.is_interactive:
             return pager.ConditionalPager(self.vars.get('pager', None),
@@ -162,6 +169,22 @@ class DispatchingShell(cmd.Cmd):
                 if hasattr(sys.stdout, 'buffer') else
                 sys.stdout)
         return pager.flush_only(file)
+
+    def get_output(self):
+        """Return where to direct command output.
+
+        When the output stream is connected to the standard output,
+        and we are running interactively, use an indirection that can
+        send the output to a pager when the number of lines emitted is
+        greater than a threshold.
+
+        Returns:
+          A context manager that returns a file descriptor on enter.
+
+        """
+        if self.outfile is sys.stdout:
+            return self.get_pager()
+        return nullcontext(self.outfile)
 
     def cmdloop(self, intro=None):
         """Override cmdloop to handle keyboard interrupts."""
@@ -351,12 +374,8 @@ class BQLShell(DispatchingShell):
             print('ERROR: {}.'.format(str(exc).rstrip('.')), file=self.outfile)
             return
 
-        if self.outfile is sys.stdout:
-            query_execute.execute_print(c_print, self.entries, self.options_map,
-                                        file=self.outfile)
-        else:
-            with self.get_pager() as file:
-                query_execute.execute_print(c_print, self.entries, self.options_map, file)
+        with self.get_output() as out:
+            query_execute.execute_print(c_print, self.entries, self.options_map, out)
 
     def on_Select(self, statement):
         """
@@ -426,17 +445,10 @@ class BQLShell(DispatchingShell):
                 kwds = dict(boxed=self.vars['boxed'],
                             spaced=self.vars['spaced'],
                             expand=self.vars['expand'])
-                if self.outfile is sys.stdout:
-                    with self.get_pager() as file:
-                        query_render.render_text(rtypes, rrows,
-                                                 self.options_map['dcontext'],
-                                                 file,
-                                                 **kwds)
-                else:
+                with self.get_output() as out:
                     query_render.render_text(rtypes, rrows,
                                              self.options_map['dcontext'],
-                                             self.outfile,
-                                             **kwds)
+                                             out, **kwds)
 
             elif output_format == 'csv':
                 # Numberify CSV output if requested.
