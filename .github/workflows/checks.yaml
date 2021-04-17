@@ -13,4 +13,4 @@ jobs:
         with:
           python-version: '3.9'
       - run: pip install -r requirements.txt pylint
-      - run: python -m pylint beanquery/shell.py
+      - run: python -m pylint beanquery/shell.py beanquery/shell_test.py
