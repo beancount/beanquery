@@ -824,7 +824,3 @@ def main(filename, query, numberify, output_format, output, no_errors):
             query = sys.stdin.read()
 
         shell_obj.onecmd(query)
-
-
-if __name__ == '__main__':
-    main()
