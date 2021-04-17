@@ -3,7 +3,6 @@ __license__ = "GNU GPLv2"
 
 import atexit
 import cmd
-import codecs
 import contextlib
 import io
 import logging
@@ -165,10 +164,7 @@ class DispatchingShell(cmd.Cmd):
         if self.is_interactive:
             return pager.ConditionalPager(self.vars.get('pager', None),
                                           minlines=misc_utils.get_screen_height())
-        file = (codecs.getwriter("utf-8")(sys.stdout.buffer)
-                if hasattr(sys.stdout, 'buffer') else
-                sys.stdout)
-        return pager.flush_only(file)
+        return pager.flush_only(sys.stdout)
 
     def get_output(self):
         """Return where to direct command output.
