@@ -6,15 +6,13 @@ import unittest
 
 from beancount import loader
 from beanquery import query
-from beanquery import test_utils
+from beanquery.test_utils import EXAMPLE_LEDGER_PATH
 
 
 class TestSimple(unittest.TestCase):
 
     def test_run_query(self):
-        rootdir = test_utils.find_repository_root(__file__)
-        filename = path.join(rootdir, 'examples', 'example.beancount')
-        entries, errors, options_map = loader.load_file(filename)
+        entries, errors, options_map = loader.load_file(EXAMPLE_LEDGER_PATH)
         assert not errors
         sql_query = r"""
           SELECT
