@@ -1,39 +1,34 @@
 __copyright__ = "Copyright (C) 2014-2016  Martin Blais"
 __license__ = "GNU GPLv2"
 
+import functools
 import re
 import sys
 import unittest
-from os import path
 
 from beancount import loader
 from beancount.utils import test_utils
-from beanquery import test_utils as beanquery_test_utils
 from beanquery import shell
+from beanquery.test_utils import EXAMPLE_LEDGER_PATH
 
 
-entries, errors, options_map = None, None, None
-
-
-def setup_module():
-    example_filename = path.join(beanquery_test_utils.find_repository_root(__file__),
-                                 'examples', 'example.beancount')
-    global entries, errors, options_map  # pylint: disable=global-statement
-    entries, errors, options_map = loader.load_file(example_filename)
+@functools.lru_cache(None)
+def load():
+    """Load entries from the example ledger."""
+    entries, errors, options = loader.load_file(EXAMPLE_LEDGER_PATH)
     assert not errors
+    return entries, errors, options
 
 
 def runshell(function):
     """Decorate a function to run the shell and return the output."""
-    def test_function(self):
-        def loadfun():
-            return entries, errors, options_map
+    def wrapper(self):
         with test_utils.capture('stdout') as stdout:
-            shell_obj = shell.BQLShell(False, loadfun, sys.stdout)
+            shell_obj = shell.BQLShell(False, load, sys.stdout)
             shell_obj.on_Reload()
             shell_obj.onecmd(function.__doc__)
         return function(self, stdout.getvalue())
-    return test_function
+    return wrapper
 
 
 class TestUseCases(unittest.TestCase):
@@ -227,10 +222,5 @@ class TestShell(test_utils.ClickTestCase):
         self.assertTrue(result.stdout)
 
 
-__incomplete__ = True
-
-
 if __name__ == '__main__':
-    if re.search(r"\.runfiles\b", __file__):
-        setup_module()
     unittest.main()
