@@ -92,6 +92,17 @@ class AbsDecimal(query_compile.EvalFunction):
         args = self.eval_args(context)
         return abs(args[0])
 
+class RoundDecimal(query_compile.EvalFunction):
+    "Rounds a decimal to the specified number of decimal digits"
+    __intypes__ = [Decimal, int]
+
+    def __init__(self, operands):
+        super().__init__(operands, Decimal)
+
+    def __call__(self, context):
+        args = self.eval_args(context)
+        return round(args[0], args[1])
+
 class AbsPosition(query_compile.EvalFunction):
     "Absolute value."
     __intypes__ = [position.Position]
@@ -938,6 +949,7 @@ SIMPLE_FUNCTIONS = {
     'length'                                             : Length,
     ('decimal', str)                                     : ToDecimal,
     ('decimal', str, Decimal)                            : ToDecimalDefault,
+    ('round', Decimal, int)                              : RoundDecimal,
     'str'                                                : Str,
     'maxwidth'                                           : MaxWidth,
     'substr'                                             : SubStr,
