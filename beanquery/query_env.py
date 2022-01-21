@@ -753,6 +753,19 @@ class OnlyInventory(query_compile.EvalFunction):
         currency, inventory_ = self.eval_args(context)
         return inventory_.get_currency_units(currency)
 
+
+class EmptyInventory(query_compile.EvalFunction):
+    "Determine whether the inventiry is empty."
+    __intypes__ = [inventory.Inventory]
+
+    def __init__(self, operands):
+        super().__init__(operands, bool)
+
+    def __call__(self, context):
+        inventory_, = self.eval_args(context)
+        return inventory_.is_empty()
+
+
 class FilterCurrencyPosition(query_compile.EvalFunction):
     "Filter an inventory to just the specified currency."
     __intypes__ = [position.Position, str]
@@ -971,6 +984,7 @@ SIMPLE_FUNCTIONS = {
     ('possign', inventory.Inventory, str)                : PosSignInventory,
     'coalesce'                                           : Coalesce,
 
+    'empty'                                              : EmptyInventory,
     # FIXME: 'only' should be removed.
     'only'                                               : OnlyInventory,
     ('filter_currency', position.Position, str)          : FilterCurrencyPosition,
