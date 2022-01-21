@@ -588,11 +588,9 @@ def compile_group_by(group_by, c_targets, environ):
     c_target_expressions = [c_target.c_expr for c_target in c_targets]
 
     group_indexes = []
-    if group_by:
-        # Check that HAVING is not supported yet.
-        if group_by and group_by.having is not None:
-            raise CompilationError("The HAVING clause is not supported yet")
+    having_index = None
 
+    if group_by:
         assert group_by.columns, "Internal error with GROUP-BY parsing"
 
         # Compile group-by expressions and resolve them to their targets if
@@ -663,6 +661,14 @@ def compile_group_by(group_by, c_targets, environ):
                     "GROUP-BY a non-hashable type is not supported: '{}'".format(
                         column))
 
+        # Compile HAVING clause.
+        if group_by.having is not None:
+            c_expr = compile_expression(group_by.having, environ)
+            if not is_aggregate(c_expr):
+                raise CompilationError("The HAVING clause must be an aggregate expression")
+            having_index = len(new_targets)
+            new_targets.append(EvalTarget(c_expr, None, True))
+            c_target_expressions.append(c_expr)
 
     else:
         # If it does not have a GROUP-BY clause...
@@ -692,7 +698,7 @@ def compile_group_by(group_by, c_targets, environ):
             # anything useful, we won't need it.
             group_indexes = None
 
-    return new_targets[len(c_targets):], group_indexes
+    return new_targets[len(c_targets):], group_indexes, having_index
 
 
 def compile_order_by(order_by, c_targets, environ):
@@ -820,7 +826,8 @@ def compile_from(from_clause, environ):
 #   flatten: An optional boolean that requests we should output a single posting
 #     row for each currency present in an accumulated and output inventory.
 EvalQuery = collections.namedtuple('EvalQuery', ('c_targets c_from c_where '
-                                                 'group_indexes order_indexes ordering '
+                                                 'group_indexes having_index '
+                                                 'order_indexes ordering '
                                                  'limit distinct flatten'))
 
 def compile_select(select, targets_environ, postings_environ, entries_environ):
@@ -874,9 +881,9 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
         c_where = None
 
     # Process the GROUP-BY clause.
-    new_targets, group_indexes = compile_group_by(select.group_by,
-                                                  c_targets,
-                                                  environ_target)
+    new_targets, group_indexes, having_index = compile_group_by(select.group_by,
+                                                                c_targets,
+                                                                environ_target)
     if new_targets:
         c_targets.extend(new_targets)
 
@@ -916,6 +923,7 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
                      c_from,
                      c_where,
                      group_indexes,
+                     having_index,
                      order_indexes,
                      ordering,
                      select.limit,

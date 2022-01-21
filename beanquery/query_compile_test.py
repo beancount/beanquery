@@ -378,7 +378,7 @@ class TestCompileSelect(CompileSelectBase):
             self.compile("""
               SELECT account, sum(number) GROUP BY account HAVING flag;
             """)
-        self.assertRegex(str(assertion.exception), 'The HAVING clause is not supported yet')
+        self.assertRegex(str(assertion.exception), 'The HAVING clause must be an aggregate')
 
     def test_compile_group_by_inventory(self):
         with self.assertRaises(qc.CompilationError):
