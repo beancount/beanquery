@@ -357,6 +357,11 @@ def execute_query(query, entries, options_map):
                     value = c_expr(context)
                 values.append(value)
 
+            # Skip row if HAVING clause expression is false.
+            if query.having_index is not None:
+                if not values[query.having_index]:
+                    continue
+
             # Compute result and sort-key objects.
             result = ResultRow._make(values[index]
                                      for index in result_indexes)

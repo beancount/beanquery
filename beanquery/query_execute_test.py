@@ -714,6 +714,32 @@ class TestExecuteAggregatedQuery(QueryBase):
                 (2,),
                 ])
 
+    def test_aggregated_group_by_with_having(self):
+        self.check_query(
+            """
+            2010-02-21 * "First"
+              Assets:Bank:Checking       -1.00 USD
+              Expenses:Foo                1.00 USD
+
+            2010-02-23 * "Second"
+              Liabilities:Credit-Card    -2.00 USD
+              Expenses:Bar                2.00 USD
+            """,
+            """
+            SELECT account, sum(number)
+            GROUP BY account
+            HAVING sum(number) > 0.0
+            ORDER BY account
+            """,
+            [
+                ('account', str),
+                ('sum_number', Decimal),
+            ],
+            [
+                ('Expenses:Bar', D(2.0)),
+                ('Expenses:Foo', D(1.0)),
+            ])
+
 
 class TestExecuteOptions(QueryBase):
 
