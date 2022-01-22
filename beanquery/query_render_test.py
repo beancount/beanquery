@@ -218,6 +218,7 @@ class TestInventoryRenderer(ColumnRendererBase):
 
 class TestQueryRender(unittest.TestCase):
 
+    # pylint: disable=invalid-name
     def assertMultiLineEqualNoWS(self, expected, actual):
         for left, right in zip_longest(
                 expected.strip().splitlines(), actual.strip().splitlines()):

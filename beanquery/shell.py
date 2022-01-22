@@ -245,8 +245,7 @@ class DispatchingShell(cmd.Cmd):
         try:
             statement = self.parser.parse(line, True)
             print(statement, file=self.outfile)
-        except (query_parser.ParseError,
-                query_compile.CompilationError) as exc:
+        except (query_parser.ParseError, query_compile.CompilationError) as exc:
             print(exc, file=self.outfile)
         except Exception as exc:
             traceback.print_exc(file=self.outfile)
@@ -328,7 +327,7 @@ class BQLShell(DispatchingShell):
         if self.is_interactive:
             print_statistics(self.entries, self.options_map, self.outfile)
 
-    def on_Errors(self, errors_statement):
+    def on_Errors(self, _):
         """
         Print the errors that occurred during parsing.
         """
