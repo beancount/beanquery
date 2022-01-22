@@ -373,11 +373,12 @@ class TestCompileSelect(CompileSelectBase):
             """)
         self.assertRegex(str(assertion.exception), 'Aggregates of aggregates')
 
-    def test_compile_having(self):
-        with self.assertRaises(qc.CompilationError):
+    def test_compile_having_non_aggregate(self):
+        with self.assertRaises(qc.CompilationError) as assertion:
             self.compile("""
-              SELECT account, sum(number) GROUP BY account HAVING sum(number) > 0;
+              SELECT account, sum(number) GROUP BY account HAVING flag;
             """)
+        self.assertRegex(str(assertion.exception), 'The HAVING clause is not supported yet')
 
     def test_compile_group_by_inventory(self):
         with self.assertRaises(qc.CompilationError):

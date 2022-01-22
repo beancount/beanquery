@@ -1,7 +1,6 @@
 __copyright__ = "Copyright (C) 2015-2017  Martin Blais"
 __license__ = "GNU GPLv2"
 
-from os import path
 import unittest
 
 from beancount import loader

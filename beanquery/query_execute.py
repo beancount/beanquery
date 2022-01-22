@@ -8,10 +8,9 @@ import collections
 import datetime
 import itertools
 import operator
+
 from decimal import Decimal
 
-from beanquery import query_compile
-from beanquery import query_env
 from beancount.core import number
 from beancount.core import data
 from beancount.core import position
@@ -23,6 +22,9 @@ from beancount.parser import options
 from beancount.ops import summarize
 from beancount.core import prices
 from beancount.utils import misc_utils
+
+from beanquery import query_compile
+from beanquery import query_env
 
 
 def filter_entries(c_from, entries, options_map, context):
@@ -126,8 +128,6 @@ class Allocator:
 class RowContext:
     """A dumb container for information used by a row expression."""
 
-    # pylint: disable=too-many-instance-attributes
-
     # The current posting being evaluated.
     posting = None
 
@@ -151,6 +151,9 @@ class RowContext:
 
     # A price dict as computed by build_price_map()
     price_map = None
+
+    # A storage area for computing aggregate expression.
+    store = None
 
 
 def uses_balance_column(c_expr):

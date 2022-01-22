@@ -157,15 +157,17 @@ Constant = cmptuple('Constant', 'value')
 #   operand: An expression, the operand of the operator.
 UnaryOp = cmptuple('UnaryOp', 'operand')
 
-# Negation operator.
-class Not(UnaryOp): pass
-
 # Base classes for binary operators.
 #
 # Attributes:
 #   left: An expression, the left operand.
 #   right: An expression, the right operand.
 BinaryOp = cmptuple('BinaryOp', 'left right')
+
+# pylint: disable=multiple-statements
+
+# Negation operator.
+class Not(UnaryOp): pass
 
 # Logical and/or operators.
 class And(BinaryOp): pass
@@ -190,6 +192,7 @@ class Div(BinaryOp): pass
 class Add(BinaryOp): pass
 class Sub(BinaryOp): pass
 
+# pylint: enable=multiple-statements
 
 class ParseError(Exception):
     """A parser error."""
@@ -326,8 +329,7 @@ class SelectParser(Lexer):
         """
         if len(p) == 2:
             return [] if p[1] is None else [p[1]]
-        else:
-            return p[1] + [p[3]]
+        return p[1] + [p[3]]
 
     def p_account(self, p):
         """
@@ -735,23 +737,22 @@ def get_expression_name(expr):
     if isinstance(expr, Column):
         return expr.name.lower()
 
-    elif isinstance(expr, Function):
+    if isinstance(expr, Function):
         names = [expr.fname.lower()]
         for operand in expr.operands:
             names.append(get_expression_name(operand))
         return '_'.join(names)
 
-    elif isinstance(expr, Constant):
+    if isinstance(expr, Constant):
         return 'c{}'.format(re.sub('[^a-z0-9]+', '_', str(expr.value)))
 
-    elif isinstance(expr, UnaryOp):
+    if isinstance(expr, UnaryOp):
         return '_'.join([type(expr).__name__.lower(),
                          get_expression_name(expr.operand)])
 
-    elif isinstance(expr, BinaryOp):
+    if isinstance(expr, BinaryOp):
         return '_'.join([type(expr).__name__.lower(),
                          get_expression_name(expr.left),
                          get_expression_name(expr.right)])
 
-    else:
-        assert False, "Unknown expression type."
+    assert False, "Unknown expression type."

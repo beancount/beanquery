@@ -12,6 +12,7 @@ import datetime
 import decimal
 import re
 import textwrap
+
 from decimal import Decimal
 
 from beancount.core.number import ZERO
@@ -26,8 +27,9 @@ from beancount.core import data
 from beancount.core import getters
 from beancount.core import convert
 from beancount.core import prices
-from beanquery import query_compile
 from beancount.utils.date_utils import parse_date_liberally
+
+from beanquery import query_compile
 
 
 # Non-aggregating functions. These functionals maintain no state.
@@ -293,6 +295,7 @@ class Grep(query_compile.EvalFunction):
         match = re.search(args[0], args[1])
         if match:
             return match.group(0)
+        return None
 
 class GrepN(query_compile.EvalFunction):
     "Match a pattern with subgroups against a string and return the subgroup at the index"
@@ -306,6 +309,7 @@ class GrepN(query_compile.EvalFunction):
         match = re.search(args[0], args[1])
         if match:
             return match.group(args[2])
+        return None
 
 class Subst(query_compile.EvalFunction):
     "Substitute leftmost non-overlapping occurrences of pattern by replacement."
@@ -724,10 +728,11 @@ class FindFirst(query_compile.EvalFunction):
         args = self.eval_args(context)
         values = args[1]
         if not values:
-            return
+            return None
         for value in sorted(values):
             if re.match(args[0], value):
                 return value
+        return None
 
 class JoinStr(query_compile.EvalFunction):
     "Join a sequence of strings to a single comma-separated string."
@@ -1457,8 +1462,7 @@ class FileLocationColumn(query_compile.EvalColumn):
         if context.posting.meta is not None:
             return '{}:{:d}:'.format(context.posting.meta.get("filename", "N/A"),
                                      context.posting.meta.get("lineno", 0))
-        else:
-            return '' # Unknown.
+        return '' # Unknown.
 
 class DateColumn(query_compile.EvalColumn):
     "The date of the parent transaction for this posting."

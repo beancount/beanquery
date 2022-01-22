@@ -6,17 +6,19 @@ import decimal
 import io
 import unittest
 import textwrap
+
 from decimal import Decimal
 
 from beancount.core.number import D
 from beancount.core import inventory
+from beancount.parser import cmptest
+from beancount.utils import misc_utils
+from beancount import loader
+
 from beanquery import query_parser
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query_execute as qx
-from beancount.parser import cmptest
-from beancount.utils import misc_utils
-from beancount import loader
 
 
 class QueryBase(cmptest.TestCase):
@@ -82,7 +84,7 @@ class QueryBase(cmptest.TestCase):
                                 expected_types, expected_rows, True)
 
 
-class CommonInputBase:
+class CommonInputBase(unittest.TestCase):
     INPUT = textwrap.dedent("""
 
     2010-01-01 open Assets:Bank:Checking
@@ -955,8 +957,8 @@ class TestExecuteFlatten(QueryBase):
 
     """
 
-    ## FIXME: Bring this back in.
-    def __test_flatten(self):
+    @unittest.skip('FIXME: Bring this back in')
+    def test_flatten(self):
         self.check_query(
             self.INPUT,
             """

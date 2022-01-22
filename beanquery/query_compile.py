@@ -237,6 +237,7 @@ OPERATORS = {
 
 ANY = object()
 
+# pylint: disable=abstract-method
 class EvalFunction(EvalNode):
     """Base class for all function objects."""
     __slots__ = ('operands',)
@@ -263,12 +264,12 @@ class EvalFunction(EvalNode):
                         index, type(self).__name__, operand.dtype, intype))
 
     def eval_args(self, context):
-        return [operand(context)
-                for operand in self.operands]
+        return [operand(context) for operand in self.operands]
 
 
 class EvalColumn(EvalNode):
     "Base class for all column accessors."
+
 
 class EvalAggregator(EvalFunction):
     "Base class for all aggregator evaluator types."
@@ -376,8 +377,13 @@ class CompilationEnvironment:
 
 
 class AttributeColumn(EvalColumn):
+    def __init__(self, name):
+        super().__init__(object)
+        self.name = name
+
     def __call__(self, row):
         return getattr(row, self.name)
+
 
 class ResultSetEnvironment(CompilationEnvironment):
     """An execution context that provides access to attributes from a result set.
@@ -606,7 +612,7 @@ def compile_group_by(group_by, c_targets, environ):
             # Process target references by index.
             if isinstance(column, int):
                 index = column - 1
-                if not (0 <= index < len(c_targets)):
+                if not 0 <= index < len(c_targets):
                     raise CompilationError(
                         "Invalid GROUP-BY column index {}".format(column))
 
@@ -665,6 +671,9 @@ def compile_group_by(group_by, c_targets, environ):
             # If the query is an aggregate query, check that all the targets are
             # aggregates.
             if all(aggregate_bools):
+                # pylint: disable=use-implicit-booleaness-not-comparison
+                # FIXME: shold we really be checking for the empty
+                # list or is checking for a false value enough?
                 assert group_indexes == []
             else:
                 # If some of the targets aren't aggregates, automatically infer
@@ -719,7 +728,7 @@ def compile_order_by(order_by, c_targets, environ):
         # Process target references by index.
         if isinstance(column, int):
             index = column - 1
-            if not (0 <= index < len(c_targets)):
+            if not 0 <= index < len(c_targets):
                 raise CompilationError(
                     "Invalid ORDER-BY column index {}".format(column))
 
@@ -994,6 +1003,7 @@ def compile_print(print_stmt, env_entries):
     return EvalPrint(c_from)
 
 
+# pylint: disable=redefined-builtin
 def compile(statement, targets_environ, postings_environ, entries_environ):
     """Prepare an AST any of the statement into an executable statement.
 
