@@ -150,7 +150,7 @@ class DispatchingShell(cmd.Cmd):
             if not match:
                 continue
             command_name = match.group(1)
-            setattr(self.__class__, 'help_{}'.format(command_name.lower()),
+            setattr(self.__class__, f'help_{command_name.lower()}',
                     lambda _, fun=func: print(textwrap.dedent(fun.__doc__).strip(),
                                               file=self.outfile))
 
@@ -209,26 +209,24 @@ class DispatchingShell(cmd.Cmd):
         "Get/set shell settings variables."
         if not line:
             for varname, value in sorted(self.vars.items()):
-                print('{}: {}'.format(varname, value), file=self.outfile)
+                print(f'{varname}: {value}', file=self.outfile)
         else:
             components = shlex.split(line)
             varname = components[0]
             if len(components) == 1:
                 try:
                     value = self.vars[varname]
-                    print('{}: {}'.format(varname, value), file=self.outfile)
+                    print(f'{varname}: {value}', file=self.outfile)
                 except KeyError:
-                    print("Variable '{}' does not exist.".format(varname),
-                          file=self.outfile)
+                    print(f"Variable '{varname}' does not exist.", file=self.outfile)
             elif len(components) == 2:
                 value = components[1]
                 try:
                     converted_value = self.vars_types[varname](value)
                     self.vars[varname] = converted_value
-                    print('{}: {}'.format(varname, converted_value), file=self.outfile)
+                    print(f'{varname}: {converted_value}', file=self.outfile)
                 except KeyError:
-                    print("Variable '{}' does not exist.".format(varname),
-                          file=self.outfile)
+                    print(f"Variable '{varname}' does not exist.", file=self.outfile)
             else:
                 print("Invalid number of arguments.", file=self.outfile)
 
@@ -243,7 +241,7 @@ class DispatchingShell(cmd.Cmd):
 
     def do_parse(self, line):
         "Just run the parser on the following command and print the output."
-        print("INPUT: {}".format(repr(line)), file=self.outfile)
+        print(f"INPUT: {line!r}", file=self.outfile)
         try:
             statement = self.parser.parse(line, True)
             print(statement, file=self.outfile)
@@ -261,13 +259,9 @@ class DispatchingShell(cmd.Cmd):
         Returns:
           Whatever the invoked method happens to return.
         """
-        try:
-            method = getattr(self, 'on_{}'.format(type(statement).__name__))
-        except AttributeError:
-            print("Internal error: statement '{}' is unsupported.".format(statement),
-                  file=self.outfile)
-        else:
-            return method(statement)
+        name = type(statement).__name__
+        method = getattr(self, f'on_{name}')
+        return method(statement)
 
     def default(self, line):
         """Default handling of lines which aren't recognized as native shell commands.
@@ -367,7 +361,7 @@ class BQLShell(DispatchingShell):
                                             self.env_postings,
                                             self.env_entries)
         except query_compile.CompilationError as exc:
-            print('ERROR: {}.'.format(str(exc).rstrip('.')), file=self.outfile)
+            print(f'ERROR: {exc}.', file=self.outfile)
             return
 
         with self.get_output() as out:
@@ -424,7 +418,7 @@ class BQLShell(DispatchingShell):
                                             self.env_postings,
                                             self.env_entries)
         except query_compile.CompilationError as exc:
-            print('ERROR: {}.'.format(str(exc).rstrip('.')), file=self.outfile)
+            print(f'ERROR: {exc}.', file=self.outfile)
             return
 
         # Execute it to obtain the result rows.
@@ -459,7 +453,7 @@ class BQLShell(DispatchingShell):
 
             else:
                 assert output_format not in _SUPPORTED_FORMATS
-                print("Unsupported output format: '{}'.".format(output_format),
+                print(f"Unsupported output format: '{output_format}'.",
                       file=self.outfile)
 
 
@@ -499,7 +493,7 @@ class BQLShell(DispatchingShell):
         """
         pr = lambda *args: print(*args, file=self.outfile)
         pr("Parsed statement:")
-        pr("  {}".format(explain.statement))
+        pr(f"  {explain.statement}")
         pr()
 
         # Compile the select statement and print it uot.
@@ -513,7 +507,7 @@ class BQLShell(DispatchingShell):
             return
 
         pr("Compiled query:")
-        pr("  {}".format(query))
+        pr(f"  {query}")
         pr()
         pr("Targets:")
         for c_target in query.c_targets:
@@ -543,7 +537,7 @@ class BQLShell(DispatchingShell):
                 print(name)
         elif name == "*":
             for name, query in sorted(custom_query_map.items()):
-                print('{}:'.format(name))
+                print(f'{name}:')
                 self.run_parser(query.query_string, default_close_date=query.date)
                 print()
                 print()
@@ -560,7 +554,7 @@ class BQLShell(DispatchingShell):
                 statement = self.parser.parse(query.query_string)
                 self.dispatch(statement)
             else:
-                print("ERROR: Query '{}' not found".format(name))
+                print(f"ERROR: Query '{name}' not found")
 
     def help_targets(self):
         template = textwrap.dedent("""
@@ -710,14 +704,14 @@ def generate_env_attributes(wrapper, field_dict, filter_pred=None):
     for name, column_cls in sorted(flat_items):
         if filter_pred and not filter_pred(column_cls):
             continue
-        docstring = column_cls.__doc__ or "[See class {}]".format(column_cls.__name__)
+        docstring = column_cls.__doc__ or f"[See class {column_cls.__name__}]"
         if issubclass(column_cls, query_compile.EvalColumn):
-            docstring += " Type: {}.".format(column_cls().dtype.__name__)
+            docstring += f" Type: {column_cls().dtype.__name__}."
             # if hasattr(column_cls, '__equivalent__'):
             #     docstring += " Attribute:{}.".format(column_cls.__equivalent__)
 
         text = re.sub('[ \t]+', ' ', docstring.strip().replace('\n', ' '))
-        doc = "'{}': {}".format(name, text)
+        doc = f"'{name}': {text}"
         oss.write(wrapper.fill(doc))
         oss.write('\n')
 
@@ -753,9 +747,9 @@ def print_statistics(entries, options_map, outfile):
     """
     num_directives, num_transactions, num_postings = summary_statistics(entries)
     if 'title' in options_map:
-        print('Input file: "{}"'.format(options_map['title']), file=outfile)
-    print("Ready with {} directives ({} postings in {} transactions).".format(
-        num_directives, num_postings, num_transactions),
+        print(f'''Input file: "{options_map['title']}"''', file=outfile)
+    print(f"Ready with {num_directives} directives",
+          f"({num_postings} postings in {num_transactions} transactions).",
           file=outfile)
 
 
