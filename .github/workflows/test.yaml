@@ -3,16 +3,17 @@ on:
   - push
   - pull_request
 jobs:
-  test:
+  test-v3:
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
         python: ['3.7', '3.8', '3.9', '3.10']
+        beancount: ['beancount==2.3.4', 'git+https://github.com/beancount/beancount#egg=beancount']
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python }}
-      - run: pip install -r requirements.txt pytest
+      - run: pip install ${{ matrix.beancount }} click ply python-dateutil pytest
       - run: python -m pytest beanquery
