@@ -7,6 +7,8 @@ import sys
 import textwrap
 import unittest
 
+import click.testing
+
 from beancount import loader
 from beancount.utils import test_utils
 from beancount.parser import printer
@@ -286,7 +288,17 @@ class TestRun(unittest.TestCase):
         self.assertRegex(output, 'Expenses:Home:Rent')
 
 
-class TestShell(test_utils.ClickTestCase):
+class ClickTestCase(unittest.TestCase):
+    """Base class for command-line program test cases."""
+
+    def run_with_args(self, function, *args):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(function, args, catch_exceptions=False)
+        self.assertEqual(result.exit_code, 0)
+        return result
+
+
+class TestShell(ClickTestCase):
 
     @test_utils.docfile
     def test_success(self, filename):
