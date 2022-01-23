@@ -107,13 +107,13 @@ class TestCompileAggregateChecks(unittest.TestCase):
         self.assertTrue(qc.is_aggregate(c_query))
 
         # Simple non-aggregate function.
-        c_query = qe.Length([qe.AccountColumn()])
+        c_query = qe.F('length', str)([qe.AccountColumn()])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 0), (len(columns), len(aggregates)))
         self.assertFalse(qc.is_aggregate(c_query))
 
         # Mix of column and aggregates (this is used to detect this illegal case).
-        c_query = qc.EvalAnd(qe.Length([qe.AccountColumn()]),
+        c_query = qc.EvalAnd(qe.F('length', str)([qe.AccountColumn()]),
                              qe.SumPosition([qe.PositionColumn()]))
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 1), (len(columns), len(aggregates)))
@@ -352,7 +352,7 @@ class TestCompileSelect(CompileSelectBase):
         # Test the wildcard expansion.
         query = self.compile("SELECT length(account), account as a, date;")
         self.assertEqual(
-            [qc.EvalTarget(qe.Length([qe.AccountColumn()]), 'length_account', False),
+            [qc.EvalTarget(qe.F('length', str)([qe.AccountColumn()]), 'length_account', False),
              qc.EvalTarget(qe.AccountColumn(), 'a', False),
              qc.EvalTarget(qe.DateColumn(), 'date', False)],
             query.c_targets)
