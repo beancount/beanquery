@@ -9,7 +9,6 @@ __license__ = "GNU GPLv2"
 
 import copy
 import datetime
-import decimal
 import re
 import textwrap
 
@@ -33,219 +32,141 @@ from beanquery import query_compile
 
 
 # Non-aggregating functions. These functionals maintain no state.
-
-class _Neg(query_compile.EvalFunction):
-    "Compute the negative value of the argument. This works on various types."
-    __intypes__ = None
-
-    def __init__(self, operands):
-        super().__init__(operands, self.__intypes__[0])
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return -args[0]
-
-class NegDecimal(_Neg):
-    __intypes__ = [Decimal]
-
-class NegAmount(_Neg):
-    __intypes__ = [amount.Amount]
-
-class NegPosition(_Neg):
-    __intypes__ = [position.Position]
-
-class NegInventory(_Neg):
-    __intypes__ = [inventory.Inventory]
+SIMPLE_FUNCTIONS = {}
 
 
-class AbsDecimal(query_compile.EvalFunction):
-    "Absolute value."
-    __intypes__ = [Decimal]
+def function(in_, out_, name=None, help=None):
+    if not isinstance(in_, list):
+        in_ = [in_]
+    def decorator(func):
+        class F(query_compile.EvalFunction):
+            __intypes__ = in_
+            def __init__(self, operands):
+                super().__init__(operands, out_)
+            def __call__(self, context):
+                args = self.eval_args(context)
+                return func(*args)
+        F.__doc__ = help if help is not None else func.__doc__
+        fname = name if name is not None else func.__name__
+        if in_ != [object]:
+            SIMPLE_FUNCTIONS[(fname, *in_)] = F
+        else:
+            SIMPLE_FUNCTIONS[fname] = F
+        return func
+    return decorator
 
-    def __init__(self, operands):
-        super().__init__(operands, Decimal)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return abs(args[0])
+def F(name, in_):
+    func = SIMPLE_FUNCTIONS.get((name, in_))
+    if func is not None:
+        return func
+    func = SIMPLE_FUNCTIONS.get(name)
+    if func is not None:
+        return func
+    raise KeyError
 
-class AbsPosition(query_compile.EvalFunction):
-    "Absolute value."
-    __intypes__ = [position.Position]
 
-    def __init__(self, operands):
-        super().__init__(operands, position.Position)
+@function(Decimal, Decimal)
+@function(amount.Amount, amount.Amount)
+@function(position.Position, position.Position)
+@function(inventory.Inventory, inventory.Inventory)
+def neg(x):
+    """Negative value."""
+    return -x
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return abs(args[0])
 
-class AbsInventory(query_compile.EvalFunction):
-    "Absolute value."
-    __intypes__ = [inventory.Inventory]
+@function(Decimal, Decimal, name='abs')
+@function(position.Position, position.Position, name='abs')
+@function(inventory.Inventory, inventory.Inventory, name='abs')
+def abs_(x):
+    """Absolute value."""
+    return abs(x)
 
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return abs(args[0])
+@function([Decimal, Decimal], Decimal)
+@function([Decimal, int], Decimal)
+def safediv(x, y):
+    """A division operation that traps division by zero exceptions and outputs zero instead."""
+    if y == 0:
+        return ZERO
+    return x / y
 
-class SafeDiv(query_compile.EvalFunction):
-    "A division operation that swallows dbz exceptions and outputs 0 instead."
-    __intypes__ = [Decimal, Decimal]
 
-    def __init__(self, operands):
-        super().__init__(operands, Decimal)
+@function(list, int)
+@function(set, int)
+@function(str, int)
+def length(x):
+    """Compute the length of the argument. This works on sequences."""
+    return len(x)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        try:
-            return args[0] / args[1]
-        except (decimal.DivisionByZero, decimal.InvalidOperation):
-            return ZERO
 
-class SafeDivInt(SafeDiv):
-    __intypes__ = [Decimal, int]
+@function(object, str, name='str')
+def str_(x):
+    """Convert the argument to a string."""
+    return repr(x)
 
-class Length(query_compile.EvalFunction):
-    "Compute the length of the argument. This works on sequences."
-    __intypes__ = [(list, set, str)]
 
-    def __init__(self, operands):
-        super().__init__(operands, int)
+@function([str, int], str)
+def maxwidth(x, n):
+    """Convert the argument to a substring. This can be used to ensure
+    maximum width. This will insert ellipsis ([...]) if necessary."""
+    return textwrap.shorten(x, width=n)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return len(args[0])
 
-class Str(query_compile.EvalFunction):
-    "Convert the argument to a string."
-    __intypes__ = [object]
+@function([str, int, int], str)
+def substr(string, start, end):
+    """Extract a substring of the argument."""
+    return string[start:end]
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return repr(args[0])
-
-class MaxWidth(query_compile.EvalFunction):
-    """Convert the argument to a substring. This can be used to ensure maximum width.
-    This will insert an ellipsis ([...]) if necessary.
-    """
-    __intypes__ = [str, int]
-
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        string, width = self.eval_args(context)
-        return textwrap.shorten(string, width=width)
-
-class SubStr(query_compile.EvalFunction):
-    "Extract a substring of the argument."
-    __intypes__ = [str, int, int]
-
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        string, start, end = self.eval_args(context)
-        return string[start:end]
-
-class SplitComp(query_compile.EvalFunction):
-    "Split a string and extract one of its components."
-    __intypes__ = [str, str, int]
-
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        string, delimiter, index = self.eval_args(context)
-        return string.split(delimiter)[index]
+@function([str, str, int], str)
+def splitcomp(string, delim, index):
+    """Split a string and extract one of its components."""
+    return string.split(delim)[index]
 
 
 # Operations on dates.
 
-class Year(query_compile.EvalFunction):
-    "Extract the year from a date."
-    __intypes__ = [datetime.date]
+@function(datetime.date, int)
+def year(x):
+    """Extract the year from a date."""
+    return x.year
 
-    def __init__(self, operands):
-        super().__init__(operands, int)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return args[0].year
+@function(datetime.date, int)
+def month(x):
+    """Extract the month from a date."""
+    return x.month
 
-class Month(query_compile.EvalFunction):
-    "Extract the month from a date."
-    __intypes__ = [datetime.date]
 
-    def __init__(self, operands):
-        super().__init__(operands, int)
+@function(datetime.date, int)
+def day(x):
+    """Extract the day from a date."""
+    return x.day
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return args[0].month
 
-class YearMonth(query_compile.EvalFunction):
-    "Extract the year and month from a date."
-    __intypes__ = [datetime.date]
+@function(datetime.date, datetime.date)
+def yearmonth(x):
+    """Extract the year and month from a date."""
+    return datetime.date(x.year, x.month, 1)
 
-    def __init__(self, operands):
-        super().__init__(operands, datetime.date)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        date = args[0]
-        return datetime.date(date.year, date.month, 1)
+@function(datetime.date, str)
+def quarter(x):
+    """Extract the quarter from a date."""
+    return '{:04d}-Q{:1d}'.format(x.year, (x.month - 1) // 3 + 1)
 
-class Quarter(query_compile.EvalFunction):
-    "Extract the quarter from a date."
-    __intypes__ = [datetime.date]
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
+@function(datetime.date, str)
+def weekday(x):
+    """Extract a 3-letter weekday from a date."""
+    return x.strftime('%a')
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        date = args[0]
-        return '{:04d}-Q{:1d}'.format(date.year, (date.month-1)//3+1)
 
-class Day(query_compile.EvalFunction):
-    "Extract the day from a date."
-    __intypes__ = [datetime.date]
-
-    def __init__(self, operands):
-        super().__init__(operands, int)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return args[0].day
-
-class Weekday(query_compile.EvalFunction):
-    "Extract a 3-letter weekday from a date."
-    __intypes__ = [datetime.date]
-
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return args[0].strftime('%a')
-
-class Today(query_compile.EvalFunction):
-    "Today's date"
-    __intypes__ = []
-
-    def __init__(self, operands):
-        super().__init__(operands, datetime.date)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return datetime.date.today()
+@function([], datetime.date)
+def today():
+    """Today's date"""
+    return datetime.date.today()
 
 
 # Operations on accounts.
@@ -918,21 +839,7 @@ class DateAdd(query_compile.EvalFunction):
 
 # FIXME: Why do I need to specify the arguments here? They are already derived
 # from the functions. Just fetch them from instead. Make the compiler better.
-SIMPLE_FUNCTIONS = {
-    ('neg', Decimal)                                     : NegDecimal,
-    ('neg', amount.Amount)                               : NegAmount,
-    ('neg', position.Position)                           : NegPosition,
-    ('neg', inventory.Inventory)                         : NegInventory,
-    ('abs', Decimal)                                     : AbsDecimal,
-    ('abs', position.Position)                           : AbsPosition,
-    ('abs', inventory.Inventory)                         : AbsInventory,
-    ('safediv', Decimal, Decimal)                        : SafeDiv,
-    ('safediv', Decimal, int)                            : SafeDivInt,
-    'length'                                             : Length,
-    'str'                                                : Str,
-    'maxwidth'                                           : MaxWidth,
-    'substr'                                             : SubStr,
-    'splitcomp'                                          : SplitComp,
+SIMPLE_FUNCTIONS.update({
     'root'                                               : Root,
     'parent'                                             : Parent,
     'leaf'                                               : Leaf,
@@ -954,13 +861,6 @@ SIMPLE_FUNCTIONS = {
     ('units', inventory.Inventory)                       : UnitsInventory,
     ('cost', position.Position)                          : CostPosition,
     ('cost', inventory.Inventory)                        : CostInventory,
-    'year'                                               : Year,
-    'month'                                              : Month,
-    'ymonth'                                             : YearMonth,
-    'quarter'                                            : Quarter,
-    'day'                                                : Day,
-    'weekday'                                            : Weekday,
-    'today'                                              : Today,
     ('date', int, int, int)                              : Date,
     ('date', str)                                        : ParseDate,
     'date_diff'                                          : DateDiff,
@@ -994,7 +894,7 @@ SIMPLE_FUNCTIONS = {
     'only'                                               : OnlyInventory,
     ('filter_currency', position.Position, str)          : FilterCurrencyPosition,
     ('filter_currency', inventory.Inventory, str)        : FilterCurrencyInventory,
-    }
+    })
 
 
 

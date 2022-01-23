@@ -6,9 +6,7 @@ import unittest
 from decimal import Decimal
 
 from beancount.core.number import D
-from beancount.core import inventory
 from beancount.core import position
-from beancount.core import amount
 from beancount.parser import parser
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
@@ -19,45 +17,9 @@ class TestCompileDataTypes(unittest.TestCase):
 
     def test_compile_EvalLength(self):
         with self.assertRaises(qc.CompilationError):
-            qe.Length([qc.EvalConstant(17)])
-        c_length = qe.Length([qc.EvalConstant('testing')])
+            qe.F('length', str)([qc.EvalConstant(17)])
+        c_length = qe.F('length', str)([qc.EvalConstant('testing')])
         self.assertEqual(int, c_length.dtype)
-
-    def test_compile_EvalYear(self):
-        with self.assertRaises(qc.CompilationError):
-            qe.Year([qc.EvalConstant(17)])
-        c_year = qe.Year([qc.EvalConstant(datetime.date.today())])
-        self.assertEqual(int, c_year.dtype)
-
-    def test_compile_EvalMonth(self):
-        with self.assertRaises(qc.CompilationError):
-            qe.Month([qc.EvalConstant(17)])
-        c_month = qe.Month([qc.EvalConstant(datetime.date.today())])
-        self.assertEqual(int, c_month.dtype)
-
-    def test_compile_EvalDay(self):
-        with self.assertRaises(qc.CompilationError):
-            qe.Day([qc.EvalConstant(17)])
-        c_day = qe.Day([qc.EvalConstant(datetime.date.today())])
-        self.assertEqual(int, c_day.dtype)
-
-    def test_compile_EvalUnits(self):
-        with self.assertRaises(qc.CompilationError):
-            qe.UnitsPosition([qc.EvalConstant(17)])
-        with self.assertRaises(qc.CompilationError):
-            qe.UnitsPosition([qc.EvalConstant(inventory.Inventory())])
-        c_units = qe.UnitsPosition(
-            [qc.EvalConstant(position.Position.from_string('100 USD'))])
-        self.assertEqual(amount.Amount, c_units.dtype)
-
-    def test_compile_EvalCost(self):
-        with self.assertRaises(qc.CompilationError):
-            qe.CostPosition([qc.EvalConstant(17)])
-        with self.assertRaises(qc.CompilationError):
-            qe.CostPosition([qc.EvalConstant(inventory.Inventory())])
-        c_cost = qe.CostPosition([qc.EvalConstant(
-            position.Position.from_string('100 USD'))])
-        self.assertEqual(amount.Amount, c_cost.dtype)
 
     def test_compile_EvalSum(self):
         with self.assertRaises(qc.CompilationError):

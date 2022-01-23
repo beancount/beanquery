@@ -16,6 +16,7 @@ disable=
   no-self-use,
   no-value-for-parameter,
   redefined-argument-from-local,
+  redefined-builtin,
   redefined-outer-name,
   similarities,
   too-many-lines,
