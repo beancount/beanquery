@@ -21,7 +21,6 @@ from beancount.parser import printer
 from beancount.core import data
 from beancount.utils import misc_utils
 from beancount.utils import pager
-from beancount.parser.version import VERSION
 from beancount import loader
 
 from beanquery import query_parser
@@ -747,7 +746,7 @@ _SUPPORTED_FORMATS = ('text', 'csv')
               help="Output filename.")
 @click.option('--no-errors', '-q', is_flag=True,
               help="Do not report errors.")
-@click.version_option(message=VERSION)
+@click.version_option()
 def main(filename, query, numberify, output_format, output, no_errors):
     """An interactive interpreter for the Beancount Query Language.
 
