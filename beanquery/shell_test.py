@@ -4,19 +4,118 @@ __license__ = "GNU GPLv2"
 import functools
 import re
 import sys
+import textwrap
 import unittest
 
 from beancount import loader
 from beancount.utils import test_utils
+from beancount.parser import printer
+
 from beanquery import shell
-from beanquery.test_utils import EXAMPLE_LEDGER_PATH
 
 
 @functools.lru_cache(None)
 def load():
-    """Load entries from the example ledger."""
-    entries, errors, options = loader.load_file(EXAMPLE_LEDGER_PATH)
-    assert not errors
+    entries, errors, options = loader.load_string(textwrap.dedent("""
+      2022-01-01 open Assets:Checking         USD
+      2022-01-01 open Assets:Federal:401k     IRAUSD
+      2022-01-01 open Assets:Gold             GLD
+      2022-01-01 open Assets:Vacation         VACHR
+      2022-01-01 open Assets:Vanguard:RGAGX   RGAGX
+      2022-01-01 open Expenses:Commissions    USD
+      2022-01-01 open Expenses:Food           USD
+      2022-01-01 open Expenses:Home:Rent      USD
+      2022-01-01 open Expenses:Taxes:401k     IRAUSD
+      2022-01-01 open Expenses:Taxes:Federal  USD
+      2022-01-01 open Expenses:Tests          USD
+      2022-01-01 open Expenses:Vacation       VACHR
+      2022-01-01 open Income:ACME             USD
+      2022-01-01 open Income:Gains            USD
+      2022-01-01 open Income:Vacation         VACHR
+
+      2022-01-01 * "ACME" "Salary"
+        Assets:Checking           10.00 USD
+        Income:ACME              -11.00 USD
+        Expenses:Taxes:Federal     1.00 USD
+        Assets:Federal:401k       -2.00 IRAUSD
+        Expenses:Taxes:401k        2.00 IRAUSD
+        Assets:Vacation               5 VACHR
+        Income:Vacation              -5 VACHR
+
+      2022-01-01 * "Rent"
+        Assets:Checking           42.00 USD
+        Expenses:Home:Rent        42.00 USD
+
+      2022-01-02 * "Holidays"
+        Assets:Vacation              -1 VACHR
+        Expenses:Vacation
+
+      2022-01-03 * "Test 01"
+        Assets:Checking            1.00 USD
+        Expenses:Tests
+
+      2022-01-04 * "My Fovorite Plase" "Eating out alone"
+        Assets:Checking            4.00 USD
+        Expenses:Food
+
+      2022-01-05 * "Invest"
+        Assets:Checking         -359.94 USD
+        Assets:Vanguard:RGAGX     2.086 RGAGX {172.55 USD}
+
+      2013-10-23 * "Buy Gold"
+        Assets:Checking        -1278.67 USD
+        Assets:Gold                   9 GLD {141.08 USD}
+        Expenses:Commissions          8.95 USD
+
+      2022-01-07 * "Sell Gold"
+        Assets:Gold                 -16 GLD {147.01 USD} @ 135.50 USD
+        Assets:Checking         2159.05 USD
+        Expenses:Commissions       8.95 USD
+        Income:Gains             184.16 USD
+
+      2022-01-08 * "Sell Gold"
+        Assets:Gold                 -16 GLD {147.01 USD} @ 135.50 USD
+        Assets:Checking         2159.05 USD
+        Expenses:Commissions       8.95 USD
+        Income:Gains             184.16 USD
+
+      2022-02-01 * "ACME" "Salary"
+        Assets:Checking           10.00 USD
+        Income:ACME              -11.00 USD
+        Expenses:Taxes:Federal     1.00 USD
+        Assets:Federal:401k       -2.00 IRAUSD
+        Expenses:Taxes:401k        2.00 IRAUSD
+        Assets:Vacation               5 VACHR
+        Income:Vacation              -5 VACHR
+
+      2022-02-01 * "Rent"
+        Assets:Checking           43.00 USD
+        Expenses:Home:Rent        43.00 USD
+
+      2022-02-02 * "Test 02"
+        Assets:Checking            2.00 USD
+        Expenses:Tests
+
+      2030-01-01 query "taxes" "
+        SELECT
+          date, description, position, balance
+        WHERE
+          account ~ 'Taxes'
+        ORDER BY date DESC
+        LIMIT 20"
+
+      2015-01-01 query "home" "
+        SELECT
+          last(date) as latest,
+          account,
+          sum(position) as total
+        WHERE
+          account ~ ':Home:'
+        GROUP BY account"
+
+    """))
+    if errors:
+        printer.print_errors(errors)
     return entries, errors, options
 
 
@@ -48,19 +147,17 @@ class TestUseCases(unittest.TestCase):
         SELECT DISTINCT account, open_date(account)
         ORDER BY account_sortkey(account);
         """
-        self.assertRegex(output, 'Assets:US:BofA:Checking *2013-01-01')
-        self.assertRegex(output, 'Equity:Opening-Balances *1980-05-12')
-        self.assertRegex(output, 'Expenses:Financial:Commissions *1980-05-12')
+        self.assertRegex(output, 'Assets:Checking *2022-01-01')
+        self.assertRegex(output, 'Income:ACME *2022-01-01')
 
     @runshell
     def test_commodities(self, output):
         """
         SELECT DISTINCT currency ORDER BY 1;
         """
-        self.assertRegex(output, 'RGAGX')
-        self.assertRegex(output, 'ITOT')
         self.assertRegex(output, 'USD')
         self.assertRegex(output, 'IRAUSD')
+        self.assertRegex(output, 'VACHR')
 
     @runshell
     def test_commodities_cost(self, output):
@@ -68,9 +165,6 @@ class TestUseCases(unittest.TestCase):
         SELECT DISTINCT cost_currency ORDER BY 1;
         """
         self.assertRegex(output, 'USD')
-        self.assertNotRegex(output, 'ITOT')
-        self.assertNotRegex(output, 'IRAUSD')
-        self.assertNotRegex(output, 'RGAGX')
 
     @runshell
     def test_commodities_pairs(self, output):
@@ -78,62 +172,58 @@ class TestUseCases(unittest.TestCase):
         SELECT DISTINCT currency, cost_currency ORDER BY 1, 2;
         """
         self.assertRegex(output, 'GLD *USD')
-        self.assertRegex(output, 'VEA *USD')
-        self.assertRegex(output, 'VACHR')
 
     @runshell
     def test_balances(self, output):
         """
         BALANCES AT cost;
         """
-        self.assertRegex(output, r'Liabilities:US:Chase:Slate *-\d+\.\d+ USD')
+        self.assertRegex(output, r'Assets:Gold *\d+\.\d+ USD')
 
     @runshell
     def test_balances_with_where(self, output):
         """
-        JOURNAL 'Vanguard:Cash';
+        JOURNAL 'Assets:Checking';
         """
-        self.assertRegex(output, 'Hoogle Payroll')
+        self.assertRegex(output, 'Salary')
 
     @runshell
     def test_balance_sheet(self, output):
         """
         BALANCES AT cost
-        FROM OPEN ON 2014-01-01 CLOSE ON 2015-01-01 CLEAR;
+        FROM OPEN ON 2022-01-02 CLOSE ON 2022-02-01 CLEAR;
         """
-        self.assertRegex(output, r'Assets:US:ETrade:Cash * \d+\.\d+ USD')
+        self.assertRegex(output, r'Assets:Gold * \d+\.\d+ USD')
 
     @runshell
     def test_income_statement(self, output):
         """
         SELECT account, cost(sum(position))
-        FROM OPEN ON 2014-01-01 CLOSE ON 2015-01-01
+        FROM OPEN ON 2022-01-01 CLOSE ON 2023-01-01
         WHERE account ~ '(Income|Expenses):*'
         GROUP BY account, account_sortkey(account)
         ORDER BY account_sortkey(account);
         """
         self.assertRegex(
-            output, 'Expenses:Taxes:Y2014:US:Federal:PreTax401k *17500.00 IRAUSD')
+            output, 'Expenses:Taxes:401k *4.00 IRAUSD')
 
     @runshell
     def test_journal(self, output):
         """
-        JOURNAL 'Assets:US:BofA:Checking'
-        FROM OPEN ON 2014-07-01 CLOSE ON 2014-10-01;
+        JOURNAL 'Assets:Checking'
+        FROM OPEN ON 2022-02-01 CLOSE ON 2022-03-01;
         """
-        self.assertRegex(
-            output, "2014-06-30 S *Opening balance for 'Assets:US:BofA:Checking'")
-        self.assertRegex(
-            output, "Transfering accumulated savings to other account")
+        self.assertRegex(output, "2022-01-31 S *Opening balance for 'Assets:Checking'")
+        self.assertRegex(output, "Test 02")
 
     @runshell
     def test_conversions(self, output):
         """
         SELECT date, payee, narration, position, balance
-        FROM OPEN ON 2014-07-01 CLOSE ON 2014-10-01
+        FROM OPEN ON 2022-01-01 CLOSE ON 2023-01-01
         WHERE flag = 'C'
         """
-        self.assertRegex(output, "2014-09-30 *Conversion for")
+        self.assertRegex(output, "2022-12-31 *Conversion for")
 
     @runshell
     def test_documents(self, output):
@@ -175,7 +265,7 @@ class TestRun(unittest.TestCase):
         RUN taxes
         """
         self.assertRegex(output, 'date +description +position +balance')
-        self.assertRegex(output, r'Hoogle \| Payroll')
+        self.assertRegex(output, r'ACME \| Salary')
 
     @runshell
     def test_run_custom__query_string(self, output):
@@ -183,7 +273,7 @@ class TestRun(unittest.TestCase):
         RUN "taxes"
         """
         self.assertRegex(output, 'date +description +position +balance')
-        self.assertRegex(output, r'Hoogle \| Payroll')
+        self.assertRegex(output, r'ACME \| Salary')
 
     @runshell
     def test_run_custom__all(self, output):
@@ -191,7 +281,7 @@ class TestRun(unittest.TestCase):
         RUN *
         """
         self.assertRegex(output, 'date +description +position +balance')
-        self.assertRegex(output, r'Hoogle \| Payroll')
+        self.assertRegex(output, r'ACME \| Salary')
         self.assertRegex(output, 'account +total')
         self.assertRegex(output, 'Expenses:Home:Rent')
 
