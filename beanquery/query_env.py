@@ -347,76 +347,46 @@ def inventory_cost(inv):
 
 
 @function([amount.Amount, str], amount.Amount, pass_context=True, name='convert')
-def convert_amount(context, amount_, currency):
-    """Coerce an amount to a particular currency."""
-    return convert.convert_amount(amount_, currency, context.price_map, None)
-
-
 @function([amount.Amount, str, datetime.date], amount.Amount, pass_context=True, name='convert')
-def convert_amount_with_date(context, amount_, currency, date):
+def convert_amount(context, amount_, currency, date=None):
     """Coerce an amount to a particular currency."""
     return convert.convert_amount(amount_, currency, context.price_map, date)
 
 
 @function([position.Position, str], amount.Amount, pass_context=True, name='convert')
-def convert_position(context, pos, currency):
-    """Coerce an amount to a particular currency."""
-    return convert.convert_position(pos, currency, context.price_map, None)
-
-
 @function([position.Position, str, datetime.date], amount.Amount, pass_context=True, name='convert')
-def convert_position_with_date(context, pos, currency, date):
+def convert_position(context, pos, currency, date=None):
     """Coerce an amount to a particular currency."""
     return convert.convert_position(pos, currency, context.price_map, date)
 
 
+# pylint: disable=line-too-long
 @function([inventory.Inventory, str], inventory.Inventory, pass_context=True, name='convert')
-def convert_inventory(context, inv, currency):
-    """Coerce an inventory to a particular currency."""
-    return inv.reduce(convert.convert_position, currency, context.price_map, None)
-
-
 @function([inventory.Inventory, str, datetime.date], inventory.Inventory, pass_context=True, name='convert')
-def convert_inventory_with_date(context, inv, currency, date):
+def convert_inventory(context, inv, currency, date=None):
     """Coerce an inventory to a particular currency."""
     return inv.reduce(convert.convert_position, currency, context.price_map, date)
 
 
 @function(position.Position, amount.Amount, pass_context=True, name='value')
-def position_value(context, pos):
-    """Convert a position to its cost currency at the market value."""
-    return convert.get_value(pos, context.price_map, None)
-
-
 @function([position.Position, datetime.date], amount.Amount, pass_context=True, name='value')
-def position_value_with_date(context, pos, date):
-    """Convert a position to its cost currency at the market value of a particular date."""
+def position_value(context, pos, date=None):
+    """Convert a position to its cost currency at the market value."""
     return convert.get_value(pos, context.price_map, date)
 
 
+# pylint: disable=line-too-long
 @function(inventory.Inventory, inventory.Inventory, pass_context=True, name='value')
-def inventory_value(context, inv):
-    """Coerce an inventory to its market value at the current date."""
-    return inv.reduce(convert.get_value, context.price_map, None)
-
-
 @function([inventory.Inventory, datetime.date], inventory.Inventory, pass_context=True, name='value')
-def value_inventory_with_date(context, inv, date):
-    """Coerce an inventory to its market value at a particular date."""
+def inventory_value(context, inv, date=None):
+    """Coerce an inventory to its market value."""
     return inv.reduce(convert.get_value, context.price_map, date)
 
 
 @function([str, str], Decimal, pass_context=True)
-def getprice(context, base, quote):
-    """Fetch a price for something at a particular date."""
-    pair = (base.upper(), quote.upper())
-    _, price = prices.get_price(context.price_map, pair, None)
-    return price
-
-
 @function([str, str, datetime.date], Decimal, pass_context=True, name='getprice')
-def getprice_with_date(context, base, quote, date):
-    """Fetch a price for something at a particular date."""
+def getprice(context, base, quote, date=None):
+    """Fetch a price."""
     pair = (base.upper(), quote.upper())
     _, price = prices.get_price(context.price_map, pair, date)
     return price
