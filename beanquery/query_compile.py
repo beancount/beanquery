@@ -273,8 +273,8 @@ class EvalColumn(EvalNode):
 class EvalAggregator(EvalFunction):
     "Base class for all aggregator evaluator types."
 
-    # We should not have to recurse any further because there should be no
-    # aggregations under an aggregation node.
+    def __init__(self, operands, dtype=None):
+        super().__init__(operands, dtype or operands[0].dtype)
 
     def allocate(self, allocator):
         """Allocate handles to store data for a node's aggregate storage.
@@ -287,7 +287,7 @@ class EvalAggregator(EvalFunction):
           allocator: An instance of Allocator, on which you can call allocate() to
             obtain a handle for a slot to store data on store objects later on.
         """
-        # Do nothing by default.
+        self.handle = allocator.allocate()
 
     def initialize(self, store):
         """Initialize this node's aggregate data. If the node is not an aggregate,
@@ -297,7 +297,7 @@ class EvalAggregator(EvalFunction):
         Args:
           store: An object indexable by handles appropriated during allocate().
         """
-        # Do nothing by default.
+        store[self.handle] = self.dtype()
 
     def update(self, store, context):
         """Evaluate this node. This is designed to recurse on its children.
@@ -330,7 +330,7 @@ class EvalAggregator(EvalFunction):
         Returns:
           The final aggregated value.
         """
-        # Return None by default.
+        return context.store[self.handle]
 
 
 class CompilationEnvironment:
