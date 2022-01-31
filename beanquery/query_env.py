@@ -35,7 +35,7 @@ from beanquery import query_compile
 SIMPLE_FUNCTIONS = {}
 
 
-def function(in_, out_, name=None, help=None):
+def function(in_, out_, pass_context=False, name=None, help=None):
     if not isinstance(in_, list):
         in_ = [in_]
     def decorator(func):
@@ -45,10 +45,12 @@ def function(in_, out_, name=None, help=None):
                 super().__init__(operands, out_)
             def __call__(self, context):
                 args = self.eval_args(context)
+                if pass_context:
+                    return func(context, *args)
                 return func(*args)
         F.__doc__ = help if help is not None else func.__doc__
         fname = name if name is not None else func.__name__
-        if in_ != [object]:
+        if any(x != object for x in in_):
             SIMPLE_FUNCTIONS[(fname, *in_)] = F
         else:
             SIMPLE_FUNCTIONS[fname] = F
@@ -171,204 +173,137 @@ def today():
 
 # Operations on accounts.
 
-class Root(query_compile.EvalFunction):
-    "Get the root name(s) of the account."
-    __intypes__ = [str, int]
+@function([str, int], str)
+def root(acc, n):
+    """Get the root name(s) of the account."""
+    return account.root(n, acc)
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return account.root(args[1], args[0])
+@function(str, str)
+def parent(acc):
+    """Get the parent name of the account."""
+    return account.parent(acc)
 
-class Parent(query_compile.EvalFunction):
-    "Get the parent name of the account."
-    __intypes__ = [str]
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
+@function(str, str)
+def leaf(acc):
+    """Get the name of the leaf subaccount."""
+    return account.leaf(acc)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return account.parent(args[0])
 
-class Leaf(query_compile.EvalFunction):
-    "Get the name of the leaf subaccount."
-    __intypes__ = [str]
+@function([str, str], str)
+def grep(pattern, string):
+    """Match a regular expression against a string and return only the matched portion."""
+    match = re.search(pattern, string)
+    if match:
+        return match.group(0)
+    return None
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return account.leaf(args[0])
+@function([str, str, int], str)
+def grepn(pattern, string, n):
+    """Match a pattern with subgroups against a string and return the subgroup at the index."""
+    match = re.search(pattern, string)
+    if match:
+        return match.group(n)
+    return None
 
-class Grep(query_compile.EvalFunction):
-    "Match a group against a string and return only the matched portion."
-    __intypes__ = [str, str]
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        match = re.search(args[0], args[1])
-        if match:
-            return match.group(0)
+@function([str, str, str], str)
+def subst(pattern, repl, string):
+    """Substitute leftmost non-overlapping occurrences of pattern by replacement."""
+    if pattern is None or repl is None or string is None:
         return None
+    return re.sub(pattern, repl, string)
 
-class GrepN(query_compile.EvalFunction):
-    "Match a pattern with subgroups against a string and return the subgroup at the index"
-    __intypes__ = [str, str, int]
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        match = re.search(args[0], args[1])
-        if match:
-            return match.group(args[2])
+@function(str, str)
+def upper(string):
+    """Convert string to uppercase."""
+    if string is None:
         return None
+    return string.upper()
 
-class Subst(query_compile.EvalFunction):
-    "Substitute leftmost non-overlapping occurrences of pattern by replacement."
-    __intypes__ = [str, str, str]
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
+@function(str, str)
+def lower(string):
+    """Convert string to lowercase."""
+    if string is None:
+        return None
+    return string.lower()
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        if any(arg is None for arg in args):
-            return None
-        return re.sub(args[0], args[1], args[2])
 
-class Upper(query_compile.EvalFunction):
-    "Convert string to uppercase"
-    __intypes__ = [str]
+@function(str, datetime.date, pass_context=True)
+def open_date(context, acc):
+    """Get the date of the open directive of the account."""
+    open_entry, _ = context.open_close_map[acc]
+    return open_entry.date if open_entry else None
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        if any(arg is None for arg in args):
-            return None
-        return args[0].upper()
+@function(str, datetime.date, pass_context=True)
+def close_date(context, acc):
+    """Get the date of the close directive of the account."""
+    _, close_entry = context.open_close_map[acc]
+    return close_entry.date if close_entry else None
 
-class Lower(query_compile.EvalFunction):
-    "Convert string to lowercase"
-    __intypes__ = [str]
 
-    def __init__(self, operands):
-        super().__init__(operands, str)
+@function(str, object, pass_context=True)
+def meta(context, key):
+    """Get some metadata key of the Posting."""
+    meta = context.posting.meta if context.posting else None
+    if meta is None:
+        return None
+    return meta.get(key, None)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        if any(arg is None for arg in args):
-            return None
-        return args[0].lower()
 
-class OpenDate(query_compile.EvalFunction):
-    "Get the date of the open directive of the account."
-    __intypes__ = [str]
+@function(str, object, pass_context=True)
+def entry_meta(context, key):
+    """Get some metadata key of the parent directive (Transaction)."""
+    meta = context.entry.meta
+    if meta is None:
+        return None
+    return meta.get(key, None)
 
-    def __init__(self, operands):
-        super().__init__(operands, datetime.date)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        open_entry, _ = context.open_close_map[args[0]]
-        return open_entry.date if open_entry else None
+@function(str, object, pass_context=True)
+def any_meta(context, key):
+    """Get metadata from the posting or its parent transaction's metadata if not present."""
 
-class CloseDate(query_compile.EvalFunction):
-    "Get the date of the close directive of the account."
-    __intypes__ = [str]
+    # Note: if the looked up key is explicitly defined in posting as None,
+    # we return it, rather than falling back to parent Transaction.
+    posting_meta = context.posting.meta
+    entry_meta = context.entry.meta
+    if posting_meta and key in posting_meta:
+        value = posting_meta[key]
+    elif entry_meta and key in entry_meta:
+        value = entry_meta[key]
+    else:
+        value = None
+    return value
 
-    def __init__(self, operands):
-        super().__init__(operands, datetime.date)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        _, close_entry = context.open_close_map[args[0]]
-        return close_entry.date if close_entry else None
+@function(str, dict, pass_context=True)
+def open_meta(context, acc):
+    """Get the metadata dict of the open directive of the account."""
+    open_entry, _ = context.open_close_map[acc]
+    return open_entry.meta
 
-class Meta(query_compile.EvalFunction):
-    "Get some metadata key of the Posting."
-    __intypes__ = [str]
 
-    def __init__(self, operands):
-        super().__init__(operands, object)
+@function(str, dict, pass_context=True)
+@function(str, dict, pass_context=True, name='commodity_meta')
+def currency_meta(context, curr):
+    """Get the metadata dict of the commodity directive of the currency."""
+    commodity_entry = context.commodity_map.get(curr, None)
+    if commodity_entry is None:
+        return {}
+    return commodity_entry.meta
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        meta = context.posting.meta if context.posting else None
-        if meta is None:
-            return None
-        return meta.get(args[0], None)
 
-class EntryMeta(query_compile.EvalFunction):
-    "Get some metadata key of the parent directive (Transaction)."
-    __intypes__ = [str]
-
-    def __init__(self, operands):
-        super().__init__(operands, object)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        meta = context.entry.meta
-        if meta is None:
-            return None
-        return meta.get(args[0], None)
-
-class AnyMeta(query_compile.EvalFunction):
-    "Get metadata from the posting or its parent transaction's metadata if not present."
-    __intypes__ = [str]
-
-    def __init__(self, operands):
-        super().__init__(operands, object)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        key = args[0]
-
-        # Note: if the looked up key is explicitly defined in posting as None,
-        # we return it, rather than falling back to parent Transaction.
-        posting_meta = context.posting.meta
-        entry_meta = context.entry.meta
-        if posting_meta and key in posting_meta:
-            value = posting_meta[key]
-        elif entry_meta and key in entry_meta:
-            value = entry_meta[key]
-        else:
-            value = None
-        return value
-
-class OpenMeta(query_compile.EvalFunction):
-    "Get the metadata dict of the open directive of the account."
-    __intypes__ = [str]
-
-    def __init__(self, operands):
-        super().__init__(operands, dict)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        open_entry, _ = context.open_close_map[args[0]]
-        return open_entry.meta
-
-class AccountSortKey(query_compile.EvalFunction):
-    "Get a string to sort accounts in order taking into account the types."
-    __intypes__ = [str]
-
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        index, name = account_types.get_account_sort_key(context.account_types, args[0])
-        return '{}-{}'.format(index, name)
+@function(str, str, pass_context=True)
+def account_sortkey(context, acc):
+    """Get a string to sort accounts in order taking into account the types."""
+    index, name = account_types.get_account_sort_key(context.account_types, acc)
+    return '{}-{}'.format(index, name)
 
 # Note: Don't provide this, because polymorphic multiplication on Amount,
 # Position, Inventory isn't supported yet.
@@ -384,518 +319,219 @@ class AccountSortKey(query_compile.EvalFunction):
 #         args = self.eval_args(context)
 #         return Decimal(account_types.get_account_sign(args[0], context.account_types))
 
-class CurrencyMeta(query_compile.EvalFunction):
-    "Get the metadata dict of the commodity directive of the currency."
-    __intypes__ = [str]
-
-    def __init__(self, operands):
-        super().__init__(operands, dict)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        commodity_entry = context.commodity_map.get(args[0], None)
-        if commodity_entry is None:
-            return {}
-        return commodity_entry.meta
-
-
 # Operation on inventories, positions and amounts.
 
-class UnitsPosition(query_compile.EvalFunction):
-    "Get the number of units of a position (stripping cost)."
-    __intypes__ = [position.Position]
 
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
+@function(position.Position, amount.Amount, name='units')
+def position_units(pos):
+    """Get the number of units of a position (stripping cost)."""
+    return convert.get_units(pos)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return args[0].units
 
-class UnitsInventory(query_compile.EvalFunction):
-    "Get the number of units of an inventory (stripping cost)."
-    __intypes__ = [inventory.Inventory]
+@function(inventory.Inventory, inventory.Inventory, name='units')
+def inventory_units(inv):
+    """Get the number of units of an inventory (stripping cost)."""
+    return inv.reduce(convert.get_units)
 
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return args[0].reduce(convert.get_units)
+@function(position.Position, amount.Amount, name='cost')
+def position_cost(pos):
+    """Get the cost of a position."""
+    return convert.get_cost(pos)
 
-class CostPosition(query_compile.EvalFunction):
-    "Get the cost of a position."
-    __intypes__ = [position.Position]
 
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
+@function(inventory.Inventory, inventory.Inventory, name='cost')
+def inventory_cost(inv):
+    """Get the cost of an inventory."""
+    return inv.reduce(convert.get_cost)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return convert.get_cost(args[0])
 
-class CostInventory(query_compile.EvalFunction):
-    "Get the cost of an inventory."
-    __intypes__ = [inventory.Inventory]
+@function([amount.Amount, str], amount.Amount, pass_context=True, name='convert')
+def convert_amount(context, amount_, currency):
+    """Coerce an amount to a particular currency."""
+    return convert.convert_amount(amount_, currency, context.price_map, None)
 
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return args[0].reduce(convert.get_cost)
+@function([amount.Amount, str, datetime.date], amount.Amount, pass_context=True, name='convert')
+def convert_amount_with_date(context, amount_, currency, date):
+    """Coerce an amount to a particular currency."""
+    return convert.convert_amount(amount_, currency, context.price_map, date)
 
 
-class ConvertAmount(query_compile.EvalFunction):
-    "Coerce an amount to a particular currency."
-    __intypes__ = [amount.Amount, str]
+@function([position.Position, str], amount.Amount, pass_context=True, name='convert')
+def convert_position(context, pos, currency):
+    """Coerce an amount to a particular currency."""
+    return convert.convert_position(pos, currency, context.price_map, None)
 
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        amount_, currency = args
-        return convert.convert_amount(amount_, currency, context.price_map, None)
+@function([position.Position, str, datetime.date], amount.Amount, pass_context=True, name='convert')
+def convert_position_with_date(context, pos, currency, date):
+    """Coerce an amount to a particular currency."""
+    return convert.convert_position(pos, currency, context.price_map, date)
 
-class ConvertAmountWithDate(query_compile.EvalFunction):
-    "Coerce an amount to a particular currency."
-    __intypes__ = [amount.Amount, str, datetime.date]
 
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
+@function([inventory.Inventory, str], inventory.Inventory, pass_context=True, name='convert')
+def convert_inventory(context, inv, currency):
+    """Coerce an inventory to a particular currency."""
+    return inv.reduce(convert.convert_position, currency, context.price_map, None)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        amount_, currency, date = args
-        return convert.convert_amount(amount_, currency, context.price_map, date)
 
+@function([inventory.Inventory, str, datetime.date], inventory.Inventory, pass_context=True, name='convert')
+def convert_inventory_with_date(context, inv, currency, date):
+    """Coerce an inventory to a particular currency."""
+    return inv.reduce(convert.convert_position, currency, context.price_map, date)
 
-class ConvertPosition(query_compile.EvalFunction):
-    "Coerce an amount to a particular currency."
-    __intypes__ = [position.Position, str]
 
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
+@function(position.Position, amount.Amount, pass_context=True, name='value')
+def position_value(context, pos):
+    """Convert a position to its cost currency at the market value."""
+    return convert.get_value(pos, context.price_map, None)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        pos, currency = args
-        return convert.convert_position(pos, currency, context.price_map, None)
 
-class ConvertPositionWithDate(query_compile.EvalFunction):
-    "Coerce an amount to a particular currency."
-    __intypes__ = [position.Position, str, datetime.date]
+@function([position.Position, datetime.date], amount.Amount, pass_context=True, name='value')
+def position_value_with_date(context, pos, date):
+    """Convert a position to its cost currency at the market value of a particular date."""
+    return convert.get_value(pos, context.price_map, date)
 
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        pos, currency, date = args
-        return convert.convert_position(pos, currency, context.price_map, date)
+@function(inventory.Inventory, inventory.Inventory, pass_context=True, name='value')
+def inventory_value(context, inv):
+    """Coerce an inventory to its market value at the current date."""
+    return inv.reduce(convert.get_value, context.price_map, None)
 
 
-class ValuePosition(query_compile.EvalFunction):
-    "Convert a position to its cost currency at the market value."
-    __intypes__ = [position.Position]
+@function([inventory.Inventory, datetime.date], inventory.Inventory, pass_context=True, name='value')
+def value_inventory_with_date(context, inv, date):
+    """Coerce an inventory to its market value at a particular date."""
+    return inv.reduce(convert.get_value, context.price_map, date)
 
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        pos = args[0]
-        return convert.get_value(pos, context.price_map, None)
+@function([str, str], Decimal, pass_context=True)
+def getprice(context, base, quote):
+    """Fetch a price for something at a particular date."""
+    pair = (base.upper(), quote.upper())
+    _, price = prices.get_price(context.price_map, pair, None)
+    return price
 
-class ValuePositionWithDate(query_compile.EvalFunction):
-    "Convert a position to its cost currency at the market value of a particular date."
-    __intypes__ = [position.Position, datetime.date]
 
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
+@function([str, str, datetime.date], Decimal, pass_context=True, name='getprice')
+def getprice_with_date(context, base, quote, date):
+    """Fetch a price for something at a particular date."""
+    pair = (base.upper(), quote.upper())
+    _, price = prices.get_price(context.price_map, pair, date)
+    return price
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        pos, date = args
-        return convert.get_value(pos, context.price_map, date)
 
-
-class ConvertInventory(query_compile.EvalFunction):
-    "Coerce an inventory to a particular currency."
-    __intypes__ = [inventory.Inventory, str]
-
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        inv, currency = args
-        return inv.reduce(convert.convert_position, currency, context.price_map, None)
-
-class ConvertInventoryWithDate(query_compile.EvalFunction):
-    "Coerce an inventory to a particular currency."
-    __intypes__ = [inventory.Inventory, str, datetime.date]
-
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        inv, currency, date = args
-        return inv.reduce(convert.convert_position, currency, context.price_map, date)
-
-
-class ValueInventory(query_compile.EvalFunction):
-    "Coerce an inventory to its market value at the current date."
-    __intypes__ = [inventory.Inventory]
-
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        inv = args[0]
-        return inv.reduce(convert.get_value, context.price_map, None)
-
-class ValueInventoryWithDate(query_compile.EvalFunction):
-    "Coerce an inventory to its market value at a particular date."
-    __intypes__ = [inventory.Inventory, datetime.date]
-
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        inv, date = args
-        return inv.reduce(convert.get_value, context.price_map, date)
-
-
-class Price(query_compile.EvalFunction):
-    "Fetch a price for something at a particular date"
-    __intypes__ = [str, str]
-
-    def __init__(self, operands):
-        super().__init__(operands, Decimal)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        base, quote = args
-        pair = (base.upper(), quote.upper())
-        _, price = prices.get_price(context.price_map, pair, None)
-        return price
-
-class PriceWithDate(query_compile.EvalFunction):
-    "Fetch a price for something at a particular date"
-    __intypes__ = [str, str, datetime.date]
-
-    def __init__(self, operands):
-        super().__init__(operands, Decimal)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        base, quote, date = args
-        pair = (base.upper(), quote.upper())
-        _, price = prices.get_price(context.price_map, pair, date)
-        return price
-
-
-class Number(query_compile.EvalFunction):
-    "Extract the number from an Amount."
-    __intypes__ = [amount.Amount]
-
-    def __init__(self, operands):
-        super().__init__(operands, Decimal)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return args[0].number
-
-class Currency(query_compile.EvalFunction):
-    "Extract the currency from an Amount."
-    __intypes__ = [amount.Amount]
-
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return args[0].currency
-
-class GetItemStr(query_compile.EvalFunction):
-    "Get the string value of a dict. The value is always converted to a string."
-    __intypes__ = [dict, str]
-
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        value = args[0].get(args[1])
-        if value is None:
-            value = ''
-        elif not isinstance(value, str):
-            value = str(value)
-        return value
-
-class FindFirst(query_compile.EvalFunction):
-    "Filter a string sequence by regular expression and return the first match."
-    __intypes__ = [str, set]
-
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        values = args[1]
-        if not values:
-            return None
-        for value in sorted(values):
-            if re.match(args[0], value):
-                return value
+@function(amount.Amount, Decimal)
+def number(x):
+    """Extract the number from an Amount."""
+    return x.number
+
+
+@function(amount.Amount, str)
+@function(amount.Amount, str, name='commodity')
+def currency(x):
+    """Extract the currency from an Amount."""
+    return x.currency
+
+
+@function([dict, str], str, name='getitem')
+def getitem_(x, key):
+    """Get the string value of a dict. The value is always converted to a string."""
+    value = x.get(key)
+    if value is None:
+        value = ''
+    elif not isinstance(value, str):
+        value = str(value)
+    return value
+
+
+@function([str, set], str)
+def findfirst(pattern, values):
+    """Filter a string sequence by regular expression and return the first match."""
+    if not values:
         return None
-
-class JoinStr(query_compile.EvalFunction):
-    "Join a sequence of strings to a single comma-separated string."
-    __intypes__ = [set]
-
-    def __init__(self, operands):
-        super().__init__(operands, str)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        values = args[0]
-        return ','.join(values)
+    for value in sorted(values):
+        if re.match(pattern, value):
+            return value
+    return None
 
 
-class OnlyInventory(query_compile.EvalFunction):
-    "Get one currency's amount from the inventory."
-    __intypes__ = [str, inventory.Inventory]
-
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
-
-    def __call__(self, context):
-        currency, inventory_ = self.eval_args(context)
-        return inventory_.get_currency_units(currency)
+@function(set, str)
+def joinstr(values):
+    """Join a sequence of strings to a single comma-separated string."""
+    return ','.join(values)
 
 
-class EmptyInventory(query_compile.EvalFunction):
-    "Determine whether the inventiry is empty."
-    __intypes__ = [inventory.Inventory]
-
-    def __init__(self, operands):
-        super().__init__(operands, bool)
-
-    def __call__(self, context):
-        inventory_, = self.eval_args(context)
-        return inventory_.is_empty()
+@function([str, inventory.Inventory], amount.Amount, name='only')
+def only_inventory(currency, inventory_):
+    """Get one currency's amount from the inventory."""
+    return inventory_.get_currency_units(currency)
 
 
-class FilterCurrencyPosition(query_compile.EvalFunction):
-    "Filter an inventory to just the specified currency."
-    __intypes__ = [position.Position, str]
-
-    def __init__(self, operands):
-        super().__init__(operands, position.Position)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        pos, currency = args
-        return pos if pos.units.currency == currency else None
-
-class FilterCurrencyInventory(query_compile.EvalFunction):
-    "Filter an inventory to just the specified currency."
-    __intypes__ = [inventory.Inventory, str]
-
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        inv, currency = args
-        return inventory.Inventory(pos
-                                   for pos in inv
-                                   if pos.units.currency == currency)
+@function(inventory.Inventory, bool, name='empty')
+def empty_inventory(inventory_):
+    """Determine whether the inventiry is empty."""
+    return inventory_.is_empty()
 
 
-class PosSignDecimal(query_compile.EvalFunction):
-    "Correct sign of an Amount based on the usual balance of associated account."
-    __intypes__ = [Decimal, str]
+@function([position.Position, str], position.Position, name='filter_currency')
+def filter_currency_position(pos, currency):
+    """Filter an inventory to just the specified currency."""
+    return pos if pos.units.currency == currency else None
 
-    def __init__(self, operands):
-        super().__init__(operands, Decimal)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        num, account = args
-        sign = account_types.get_account_sign(account, context.account_types)
-        return num if sign >= 0  else -num
+@function([inventory.Inventory, str], inventory.Inventory, name='filter_currency')
+def filter_currency_inventory(inv, currency):
+    """Filter an inventory to just the specified currency."""
+    return inventory.Inventory(pos for pos in inv if pos.units.currency == currency)
 
-class PosSignAmount(query_compile.EvalFunction):
-    "Correct sign of an Amount based on the usual balance of associated account."
-    __intypes__ = [amount.Amount, str]
 
-    def __init__(self, operands):
-        super().__init__(operands, amount.Amount)
+@function([Decimal, str], Decimal, pass_context=True)
+@function([amount.Amount, str], amount.Amount, pass_context=True)
+@function([position.Position, str], position.Position, pass_context=True)
+@function([inventory.Inventory, str], inventory.Inventory, pass_context=True)
+def possign(context, x, account):
+    """Correct sign of an Amount based on the usual balance of associated account."""
+    sign = account_types.get_account_sign(account, context.account_types)
+    return x if sign >= 0  else -x
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        amt, account = args
-        sign = account_types.get_account_sign(account, context.account_types)
-        return amt if sign >= 0  else -amt
 
-class PosSignPosition(query_compile.EvalFunction):
-    "Correct sign of an Amount based on the usual balance of associated account."
-    __intypes__ = [position.Position, str]
+@function([object, object], object)
+def coalesce(*args):
+    """Return the first non-null argument."""
+    for arg in args:
+        if arg is not None:
+            return arg
+    return None
 
-    def __init__(self, operands):
-        super().__init__(operands, position.Position)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        pos, account = args
-        sign = account_types.get_account_sign(account, context.account_types)
-        return pos if sign >= 0  else -pos
+@function([int, int, int], datetime.date, name='date')
+def date_from_ymd(year, month, day):
+    """Construct a date with year, month, day arguments."""
+    return datetime.date(year, month, day)
 
-class PosSignInventory(query_compile.EvalFunction):
-    "Correct sign of an Amount based on the usual balance of associated account."
-    __intypes__ = [inventory.Inventory, str]
 
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
+@function(str, datetime.date, name='date')
+def date_from_str(string):
+    """Parse date from string."""
+    return parse_date_liberally(string)
 
-    def __call__(self, context):
-        args = self.eval_args(context)
-        inv, account = args
-        sign = account_types.get_account_sign(account, context.account_types)
-        return inv if sign >= 0  else -inv
 
-class Coalesce(query_compile.EvalFunction):
-    "Return the first non-null argument"
-    __intypes__ = [object, object]
-
-    def __init__(self, operands):
-        super().__init__(operands, object)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        for arg in args:
-            if arg is not None:
-                return arg
+@function([datetime.date, datetime.date], int)
+def date_diff(x, y):
+    """Calculates the difference (in days) between two dates."""
+    if x is None or y is None:
         return None
-
-class Date(query_compile.EvalFunction):
-    "Construct a date with year, month, day arguments"
-    __intypes__ = [int, int, int]
-
-    def __init__(self, operands):
-        super().__init__(operands, datetime.date)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        year, month, day = args
-        return datetime.date(year, month, day)
-
-class ParseDate(query_compile.EvalFunction):
-    "Construct a date with year, month, day arguments"
-    __intypes__ = [str]
-
-    def __init__(self, operands):
-        super().__init__(operands, datetime.date)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        return parse_date_liberally(args[0])
+    return (x - y).days
 
 
-class DateDiff(query_compile.EvalFunction):
-    "Calculates the difference (in days) between two dates"
-    __intypes__ = [datetime.date, datetime.date]
-
-    def __init__(self, operands):
-        super().__init__(operands, int)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        if args[0] is None or args[1] is None:
-            return None
-        return (args[0] - args[1]).days
-
-
-class DateAdd(query_compile.EvalFunction):
-    "Adds/subtracts number of days from the given date"
-    __intypes__ = [datetime.date, int]
-
-    def __init__(self, operands):
-        super().__init__(operands, datetime.date)
-
-    def __call__(self, context):
-        args = self.eval_args(context)
-        if args[0] is None or args[1] is None:
-            return None
-        return args[0] + datetime.timedelta(days=args[1])
-
-
-# FIXME: Why do I need to specify the arguments here? They are already derived
-# from the functions. Just fetch them from instead. Make the compiler better.
-SIMPLE_FUNCTIONS.update({
-    'root'                                               : Root,
-    'parent'                                             : Parent,
-    'leaf'                                               : Leaf,
-    'grep'                                               : Grep,
-    'grepn'                                              : GrepN,
-    'subst'                                              : Subst,
-    'upper'                                              : Upper,
-    'lower'                                              : Lower,
-    'open_date'                                          : OpenDate,
-    'close_date'                                         : CloseDate,
-    'meta'                                               : Meta,
-    'entry_meta'                                         : EntryMeta,
-    'any_meta'                                           : AnyMeta,
-    'open_meta'                                          : OpenMeta,
-    'currency_meta'                                      : CurrencyMeta,
-    'commodity_meta'                                     : CurrencyMeta,  # Redundant.
-    'account_sortkey'                                    : AccountSortKey,
-    ('units', position.Position)                         : UnitsPosition,
-    ('units', inventory.Inventory)                       : UnitsInventory,
-    ('cost', position.Position)                          : CostPosition,
-    ('cost', inventory.Inventory)                        : CostInventory,
-    ('date', int, int, int)                              : Date,
-    ('date', str)                                        : ParseDate,
-    'date_diff'                                          : DateDiff,
-    'date_add'                                           : DateAdd,
-    ('convert', amount.Amount, str)                      : ConvertAmount,
-    ('convert', amount.Amount, str, datetime.date)       : ConvertAmountWithDate,
-    ('convert', position.Position, str)                  : ConvertPosition,
-    ('convert', position.Position, str, datetime.date)   : ConvertPositionWithDate,
-    ('convert', inventory.Inventory, str)                : ConvertInventory,
-    ('convert', inventory.Inventory, str, datetime.date) : ConvertInventoryWithDate,
-    ('value', position.Position)                         : ValuePosition,
-    ('value', position.Position, datetime.date)          : ValuePositionWithDate,
-    ('value', inventory.Inventory)                       : ValueInventory,
-    ('value', inventory.Inventory, datetime.date)        : ValueInventoryWithDate,
-    ('getprice', str, str)                               : Price,
-    ('getprice', str, str, datetime.date)                : PriceWithDate,
-    'number'                                             : Number,
-    'currency'                                           : Currency,
-    'commodity'                                          : Currency,  # Redundant.
-    'getitem'                                            : GetItemStr,
-    'findfirst'                                          : FindFirst,
-    'joinstr'                                            : JoinStr,
-    ('possign', Decimal, str)                            : PosSignDecimal,
-    ('possign', amount.Amount, str)                      : PosSignAmount,
-    ('possign', position.Position, str)                  : PosSignPosition,
-    ('possign', inventory.Inventory, str)                : PosSignInventory,
-    'coalesce'                                           : Coalesce,
-
-    'empty'                                              : EmptyInventory,
-    # FIXME: 'only' should be removed.
-    'only'                                               : OnlyInventory,
-    ('filter_currency', position.Position, str)          : FilterCurrencyPosition,
-    ('filter_currency', inventory.Inventory, str)        : FilterCurrencyInventory,
-    })
-
+@function([datetime.date, int], datetime.date)
+def date_add(x, y):
+    """Adds/subtracts number of days from the given date."""
+    if x is None or y is None:
+        return None
+    return x + datetime.timedelta(days=y)
 
 
 # Aggregating functions. These instances themselves both make the computation
