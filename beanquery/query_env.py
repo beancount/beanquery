@@ -268,18 +268,13 @@ def entry_meta(context, key):
 @function(str, object, pass_context=True)
 def any_meta(context, key):
     """Get metadata from the posting or its parent transaction's metadata if not present."""
-
-    # Note: if the looked up key is explicitly defined in posting as None,
-    # we return it, rather than falling back to parent Transaction.
-    posting_meta = context.posting.meta
-    entry_meta = context.entry.meta
-    if posting_meta and key in posting_meta:
-        value = posting_meta[key]
-    elif entry_meta and key in entry_meta:
-        value = entry_meta[key]
-    else:
-        value = None
-    return value
+    marker = object()
+    for meta in context.posting.meta, context.entry.meta:
+        if meta is not None:
+            value = meta.get(key, marker)
+            if value is not marker:
+                return value
+    return None
 
 
 @function(str, dict, pass_context=True)
