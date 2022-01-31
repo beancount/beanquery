@@ -250,7 +250,7 @@ def close_date(context, acc):
 @function(str, object, pass_context=True)
 def meta(context, key):
     """Get some metadata key of the Posting."""
-    meta = context.posting.meta if context.posting else None
+    meta = context.posting.meta
     if meta is None:
         return None
     return meta.get(key, None)
