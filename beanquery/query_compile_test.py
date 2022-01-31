@@ -78,7 +78,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
                     qc.EvalNot(qc.EvalEqual(qe.DateColumn(),
                                             qc.EvalConstant(datetime.date(2014, 1, 1)))),
                     # Aggregation node deep in the tree.
-                    qe.Sum([qc.EvalConstant(1)]))))
+                    qe.SumInt([qc.EvalConstant(1)]))))
         self.assertEqual((2, 1), (len(columns), len(aggregates)))
 
     def test_get_columns_and_aggregates(self):

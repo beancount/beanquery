@@ -22,11 +22,9 @@ class TestCompileDataTypes(unittest.TestCase):
         self.assertEqual(int, c_length.dtype)
 
     def test_compile_Sum(self):
-        with self.assertRaises(qc.CompilationError):
-            qe.Sum([qc.EvalConstant('testing')])
-        c_sum = qe.Sum([qc.EvalConstant(17)])
+        c_sum = qe.SumInt([qc.EvalConstant(17)])
         self.assertEqual(int, c_sum.dtype)
-        c_sum = qe.Sum([qc.EvalConstant(D('17.'))])
+        c_sum = qe.SumDecimal([qc.EvalConstant(D('17.'))])
         self.assertEqual(Decimal, c_sum.dtype)
 
     def test_compile_Count(self):

@@ -495,98 +495,78 @@ def date_add(x, y):
     return x + datetime.timedelta(days=y)
 
 
-# Aggregating functions. These instances themselves both make the computation
-# and manage state for a single iteration.
+# Aggregate functions.
+AGGREGATE_FUNCTIONS = {}
 
+
+def aggregator(intypes, name=None):
+    def decorator(cls):
+        cls.__intypes__ = intypes
+        fname = name if name is not None else cls.__name__
+        if object in intypes:
+            AGGREGATE_FUNCTIONS[fname] = cls
+        else:
+            AGGREGATE_FUNCTIONS[(fname, *intypes)] = cls
+        return cls
+    return decorator
+
+
+@aggregator([object], name='count')
 class Count(query_compile.EvalAggregator):
-    "Count the number of occurrences of the argument."
-    __intypes__ = [object]
-
+    """Count the number of occurrences of the argument."""
     def __init__(self, operands):
         super().__init__(operands, int)
 
-    def allocate(self, allocator):
-        self.handle = allocator.allocate()
-
-    def initialize(self, store):
-        store[self.handle] = 0
-
-    def update(self, store, unused_ontext):
+    def update(self, store, _):
         store[self.handle] += 1
 
-    def __call__(self, context):
-        return context.store[self.handle]
 
+@aggregator([int], name='sum')
+@aggregator([Decimal], name='sum')
 class Sum(query_compile.EvalAggregator):
-    "Calculate the sum of the numerical argument."
-    __intypes__ = [(int, float, Decimal)]
-
-    def __init__(self, operands):
-        super().__init__(operands, operands[0].dtype)
-
-    def allocate(self, allocator):
-        self.handle = allocator.allocate()
-
-    def initialize(self, store):
-        store[self.handle] = self.dtype()
-
+    """Calculate the sum of the numerical argument."""
     def update(self, store, context):
         value = self.eval_args(context)[0]
         if value is not None:
             store[self.handle] += value
 
-    def __call__(self, context):
-        return context.store[self.handle]
 
-class SumBase(query_compile.EvalAggregator):
-
+@aggregator([amount.Amount], name='sum')
+class SumAmount(query_compile.EvalAggregator):
+    """Calculate the sum of the amount. The result is an Inventory."""
     def __init__(self, operands):
         super().__init__(operands, inventory.Inventory)
-
-    def allocate(self, allocator):
-        self.handle = allocator.allocate()
-
-    def initialize(self, store):
-        store[self.handle] = inventory.Inventory()
-
-    def __call__(self, context):
-        return context.store[self.handle]
-
-class SumAmount(SumBase):
-
-    "Calculate the sum of the amount. The result is an Inventory."
-    __intypes__ = [amount.Amount]
 
     def update(self, store, context):
         value = self.eval_args(context)[0]
         store[self.handle].add_amount(value)
 
-class SumPosition(SumBase):
-    "Calculate the sum of the position. The result is an Inventory."
-    __intypes__ = [position.Position]
+
+@aggregator([position.Position], name='sum')
+class SumPosition(query_compile.EvalAggregator):
+    """Calculate the sum of the position. The result is an Inventory."""
+    def __init__(self, operands):
+        super().__init__(operands, inventory.Inventory)
 
     def update(self, store, context):
         value = self.eval_args(context)[0]
         store[self.handle].add_position(value)
 
-class SumInventory(SumBase):
-    "Calculate the sum of the inventories. The result is an Inventory."
-    __intypes__ = [inventory.Inventory]
+
+@aggregator([inventory.Inventory], name='sum')
+class SumInventory(query_compile.EvalAggregator):
+    """Calculate the sum of the inventories. The result is an Inventory."""
+    def __init__(self, operands):
+        super().__init__(operands, inventory.Inventory)
 
     def update(self, store, context):
         value = self.eval_args(context)[0]
         store[self.handle].add_inventory(value)
 
+
+@aggregator([object], name='first')
 class First(query_compile.EvalAggregator):
-    "Keep the first of the values seen."
-    __intypes__ = [object]
-
-    def __init__(self, operands):
-        super().__init__(operands, operands[0].dtype)
-
-    def allocate(self, allocator):
-        self.handle = allocator.allocate()
-
+    """Keep the first of the values seen."""
     def initialize(self, store):
         store[self.handle] = None
 
@@ -595,19 +575,10 @@ class First(query_compile.EvalAggregator):
             value = self.eval_args(context)[0]
             store[self.handle] = value
 
-    def __call__(self, context):
-        return context.store[self.handle]
 
+@aggregator([object], name='last')
 class Last(query_compile.EvalAggregator):
-    "Keep the last of the values seen."
-    __intypes__ = [object]
-
-    def __init__(self, operands):
-        super().__init__(operands, operands[0].dtype)
-
-    def allocate(self, allocator):
-        self.handle = allocator.allocate()
-
+    """Keep the last of the values seen."""
     def initialize(self, store):
         store[self.handle] = None
 
@@ -615,19 +586,10 @@ class Last(query_compile.EvalAggregator):
         value = self.eval_args(context)[0]
         store[self.handle] = value
 
-    def __call__(self, context):
-        return context.store[self.handle]
 
+@aggregator([object], name='min')
 class Min(query_compile.EvalAggregator):
-    "Compute the minimum of the values."
-    __intypes__ = [object]
-
-    def __init__(self, operands):
-        super().__init__(operands, operands[0].dtype)
-
-    def allocate(self, allocator):
-        self.handle = allocator.allocate()
-
+    """Compute the minimum of the values."""
     def initialize(self, store):
         store[self.handle] = None
 
@@ -637,45 +599,18 @@ class Min(query_compile.EvalAggregator):
         if cur_value is None or value < cur_value:
             store[self.handle] = value
 
-    def __call__(self, context):
-        return context.store[self.handle]
 
+@aggregator([object], name='max')
 class Max(query_compile.EvalAggregator):
-    "Compute the maximum of the values."
-    __intypes__ = [object]
-
-    def __init__(self, operands):
-        super().__init__(operands, operands[0].dtype)
-
-    def allocate(self, allocator):
-        self.handle = allocator.allocate()
-
+    """Compute the maximum of the values."""
     def initialize(self, store):
         store[self.handle] = None
 
     def update(self, store, context):
         value = self.eval_args(context)[0]
-        value = self.eval_args(context)[0]
         cur_value = store[self.handle]
         if cur_value is None or value > cur_value:
             store[self.handle] = value
-
-    def __call__(self, context):
-        return context.store[self.handle]
-
-AGGREGATOR_FUNCTIONS = {
-    ('sum', amount.Amount)       : SumAmount,
-    ('sum', position.Position)   : SumPosition,
-    ('sum', inventory.Inventory) : SumInventory,
-    'sum'                        : Sum,
-    'count'                      : Count,
-    'first'                      : First,
-    'last'                       : Last,
-    'min'                        : Min,
-    'max'                        : Max,
-    }
-
-
 
 
 # Column accessors for entries.
@@ -1266,7 +1201,7 @@ class TargetsEnvironment(FilterPostingsEnvironment):
     """
     context_name = 'SELECT list'
     functions = copy.copy(FilterPostingsEnvironment.functions)
-    functions.update(AGGREGATOR_FUNCTIONS)
+    functions.update(AGGREGATE_FUNCTIONS)
 
     # The list of columns that a wildcard will expand into.
     wildcard_columns = 'date flag payee narration position'.split()
