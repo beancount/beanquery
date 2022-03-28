@@ -711,11 +711,11 @@ def compile_order_by(order_by, c_targets, environ):
     Returns:
       A tuple of
        new_targets: A list of new compiled target nodes.
-       order_indexes: A list of integer indexes to be used for processing ordering.
+       order_spec: A list of (integer indexes, sort order) tuples.
     """
     new_targets = copy.copy(c_targets)
     c_target_expressions = [c_target.c_expr for c_target in c_targets]
-    order_indexes = []
+    order_spec = []
 
     # Compile order-by expressions and resolve them to their targets if
     # possible. A ORDER-BY column may be one of the following:
@@ -728,7 +728,7 @@ def compile_order_by(order_by, c_targets, environ):
     # inserted into the list of targets as invisible targets.
     targets_name_map = {target.name: index
                         for index, target in enumerate(c_targets)}
-    for column in order_by.columns:
+    for column, descending in order_by:
         index = None
 
         # Process target references by index.
@@ -763,9 +763,9 @@ def compile_order_by(order_by, c_targets, environ):
                     c_target_expressions.append(c_expr)
 
         assert index is not None, "Internal error, could not index order-by reference."
-        order_indexes.append(index)
+        order_spec.append((index, descending))
 
-    return (new_targets[len(c_targets):], order_indexes)
+    return (new_targets[len(c_targets):], order_spec)
 
 
 # A compile FROM clause.
@@ -819,7 +819,7 @@ def compile_from(from_clause, environ):
 #     this list of indexes should always cover all non-aggregates in 'c_targets'.
 #     And this list may well include some invisible columns if only specified in
 #     the GROUP BY clause.
-#   order_indexes: A list of integers that describe which targets to order by.
+#   order_spec: A list of (integer indexes, sort order) tuples.
 #     This list may refer to either aggregates or non-aggregates.
 #   limit: An optional integer used to cut off the number of result rows returned.
 #   distinct: An optional boolean that requests we should uniquify the result rows.
@@ -827,7 +827,7 @@ def compile_from(from_clause, environ):
 #     row for each currency present in an accumulated and output inventory.
 EvalQuery = collections.namedtuple('EvalQuery', ('c_targets c_from c_where '
                                                  'group_indexes having_index '
-                                                 'order_indexes ordering '
+                                                 'order_spec '
                                                  'limit distinct flatten'))
 
 def compile_select(select, targets_environ, postings_environ, entries_environ):
@@ -889,15 +889,13 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
 
     # Process the ORDER-BY clause.
     if select.order_by is not None:
-        (new_targets, order_indexes) = compile_order_by(select.order_by,
+        (new_targets, order_spec) = compile_order_by(select.order_by,
                                                         c_targets,
                                                         environ_target)
         if new_targets:
             c_targets.extend(new_targets)
-        ordering = select.order_by.ordering
     else:
-        order_indexes = None
-        ordering = None
+        order_spec = None
 
     # If this is an aggregate query (it groups, see list of indexes), check that
     # the set of non-aggregates match exactly the group indexes. This should
@@ -924,8 +922,7 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
                      c_where,
                      group_indexes,
                      having_index,
-                     order_indexes,
-                     ordering,
+                     order_spec,
                      select.limit,
                      select.distinct,
                      select.flatten)

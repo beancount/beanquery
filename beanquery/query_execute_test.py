@@ -872,6 +872,82 @@ class TestExecuteOptions(QueryBase):
                 ])
 
 
+class TestOrderBy(QueryBase):
+    data = """
+
+    2022-03-28 * "Test"
+      Assets:Tests  1.00 USD
+        aa: 1
+        bb: 1
+      Assets:Tests  2.00 USD
+        aa: 1
+        bb: 2
+      Assets:Tests  3.00 USD
+        aa: 2
+      Assets:Tests  4.00 USD
+        aa: 2
+        bb: 1
+      Expenses:Tests
+
+    """
+
+    def test_order_by_asc_asc(self):
+        self.check_query(self.data,
+            """SELECT account, meta('aa') AS a, meta('bb') AS b ORDER BY 2, 3""",
+            [
+                ('account', str), ('a', object), ('b', object)
+            ],
+            [
+                ('Expenses:Tests', None, None),
+                ('Assets:Tests', 1, 1),
+                ('Assets:Tests', 1, 2),
+                ('Assets:Tests', 2, None),
+                ('Assets:Tests', 2, 1),
+            ])
+
+    def test_order_by_asc_desc(self):
+        self.check_query(self.data,
+            """SELECT account, meta('aa') AS a, meta('bb') AS b ORDER BY 2, 3 DESC""",
+            [
+                ('account', str), ('a', object), ('b', object)
+            ],
+            [
+                ('Expenses:Tests', None, None),
+                ('Assets:Tests', 1, 2),
+                ('Assets:Tests', 1, 1),
+                ('Assets:Tests', 2, 1),
+                ('Assets:Tests', 2, None),
+            ])
+
+    def test_order_by_desc_asc(self):
+        self.check_query(self.data,
+            """SELECT account, meta('aa') AS a, meta('bb') AS b ORDER BY 2 DESC, 3""",
+            [
+                ('account', str), ('a', object), ('b', object)
+            ],
+            [
+                ('Assets:Tests', 2, None),
+                ('Assets:Tests', 2, 1),
+                ('Assets:Tests', 1, 1),
+                ('Assets:Tests', 1, 2),
+                ('Expenses:Tests', None, None),
+            ])
+
+    def test_order_by_desc_desc(self):
+        self.check_query(self.data,
+            """SELECT account, meta('aa') AS a, meta('bb') AS b ORDER BY 2 DESC, 3 DESC""",
+            [
+                ('account', str), ('a', object), ('b', object)
+            ],
+            [
+                ('Assets:Tests', 2, 1),
+                ('Assets:Tests', 2, None),
+                ('Assets:Tests', 1, 2),
+                ('Assets:Tests', 1, 1),
+                ('Expenses:Tests', None, None),
+            ])
+
+
 class TestArithmeticFunctions(QueryBase):
 
     # You need some transactions in order to eval a simple arithmetic op.

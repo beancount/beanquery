@@ -5,6 +5,7 @@ __license__ = "GNU GPLv2"
 
 import collections
 import datetime
+import enum
 import io
 import re
 
@@ -117,9 +118,18 @@ GroupBy = cmptuple('GroupBy', 'columns having')
 # An ORDER BY clause.
 #
 # Attributes:
-#   columns: A list of group-by expressions, simple Column() or otherwise.
-#   ordering: None, or 'ASC' or 'DESC' to specify the sorting order.
-OrderBy = cmptuple('OrderBy', 'columns ordering')
+#   column: order-by expression, simple Column() or otherwise.
+#   ordering: The sort order as an Ordering enum value.
+OrderBy = cmptuple('OrderBy', 'column ordering')
+
+class Ordering(enum.IntEnum):
+    # The enum values are chosen in this way to be able to use them
+    # directly as the reverse parameter to the list sort() method.
+    ASC = 0
+    DESC = 1
+
+    def __repr__(self):
+        return "%s.%s" % (self.__class__.__name__, self.name)
 
 # An PIVOT BY clause.
 #
@@ -458,9 +468,22 @@ class SelectParser(Lexer):
     def p_order_by(self, p):
         """
         order_by : empty
-                 | ORDER BY expr_index_list ordering
+                 | ORDER BY order_expr_list
         """
-        p[0] = None if len(p) == 2 else OrderBy(p[3], p[4])
+        p[0] = p[3] if len(p) == 4 else None
+
+    def p_order_expr_list(self, p):
+        """
+        order_expr_list : order_expr
+                        | order_expr_list COMMA order_expr
+        """
+        p[0] = self.handle_comma_separated_list(p)
+
+    def p_order_expr(self, p):
+        """
+        order_expr : expr_index ordering
+        """
+        p[0] = OrderBy(p[1], Ordering[p[2] or 'ASC'])
 
     def p_ordering(self, p):
         """

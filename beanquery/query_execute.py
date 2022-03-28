@@ -263,7 +263,7 @@ def execute_query(query, entries, options_map):
     result_indexes = [index
                       for index, c_target in enumerate(query.c_targets)
                       if c_target.name]
-    order_indexes = query.order_indexes
+    order_spec = query.order_spec
 
     # Figure out if we need to compute balance.
     uses_balance = any(uses_balance_column(c_expr)
@@ -378,8 +378,14 @@ def execute_query(query, entries, options_map):
             rows.append(values)
 
     # Order results if requested.
-    if order_indexes is not None:
-        rows.sort(key=nullitemgetter(*order_indexes), reverse=(query.ordering == 'DESC'))
+    if order_spec is not None:
+        # Process the order-by clauses grouped by their ordering direction.
+        for reverse, spec in itertools.groupby(reversed(order_spec), key=operator.itemgetter(1)):
+            indexes = reversed([i[0] for i in spec])
+            # The rows may contain None values: nullitemgetter()
+            # replaces these with a special value that compares
+            # smaller than anything else.
+            rows.sort(key=nullitemgetter(*indexes), reverse=reverse)
 
     # Extract final results, in sorted order.
     result_rows = [ResultRow._make(row[index] for index in result_indexes) for row in rows]
