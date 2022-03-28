@@ -165,33 +165,53 @@ def uses_balance_column(c_expr):
             any(uses_balance_column(c_node) for c_node in c_expr.childnodes()))
 
 
-_MIN_VALUES = {
-    int: 0,
-    float: 0.0,
-    str: '',
-    Decimal: number.ZERO,
-    datetime.date: datetime.date.min,
-}
+class NullType:
+    """An object that compares smaller than anything.
 
-def row_sortkey(order_indexes, values, c_exprs):
-    """Generate a sortkey for the given values.
+    An instance of this class is used to replace None in BQL query
+    results in sort keys to obtain sorting semantics similar to SQL
+    where NULL is sortet at the beginning.
 
-    Args:
-      order_indexes: The indexes by which the rows should be sorted.
-      values: The computed values in the row.
-      c_exprs: The matching c_expr's.
-    Returns:
-      A tuple, the sortkey.
     """
-    if order_indexes is None:
-        return None
-    key = []
-    for index in order_indexes:
-        value = values[index]
-        key.append(_MIN_VALUES.get(c_exprs[index].dtype, None)
-                   if value is None
-                   else value)
-    return tuple(key)
+    __slots__ = ()
+
+    def __repr__(self):
+        return 'NULL'
+
+    __str__ = __repr__
+
+    def __lt__(self, other):
+        # Make sure that instances of this class compare equal.
+        if isinstance(other, NullType):
+            return False
+        return True
+
+    def __gt__(self, other):
+        # Make sure that instances of this class compare equal.
+        if isinstance(other, NullType):
+            return True
+        return False
+
+
+NULL = NullType()
+
+
+def nullitemgetter(item, *items):
+    """An itemgetter() that replaces None values with NULL."""
+    if items:
+        items = (item, ) + items
+        def func(obj):
+            r = []
+            for i in items:
+                value = obj[i]
+                r.append(value if value is not None else NULL)
+            return tuple(r)
+        return func
+    # pylint: disable=function-redefined
+    def func(obj):
+        value = obj[item]
+        return value if value is not None else NULL
+    return func
 
 
 def create_row_context(entries, options_map):
@@ -260,7 +280,7 @@ def execute_query(query, entries, options_map):
 
     # Dispatch between the non-aggregated queries and aggregated queries.
     c_where = query.c_where
-    schwartz_rows = []
+    rows = []
 
     # Precompute a list of expressions to be evaluated.
     c_target_exprs = [c_target.c_expr for c_target in query.c_targets]
@@ -268,7 +288,7 @@ def execute_query(query, entries, options_map):
     if query.group_indexes is None:
         # This is a non-aggregated query.
 
-        # Iterate over all the postings once and produce schwartzian rows.
+        # Iterate over all the postings once.
         for entry in misc_utils.filter_type(filt_entries, data.Transaction):
             context.entry = entry
             for posting in entry.postings:
@@ -281,11 +301,7 @@ def execute_query(query, entries, options_map):
                     # Evaluate all the values.
                     values = [c_expr(context) for c_expr in c_target_exprs]
 
-                    # Compute result and sort-key objects.
-                    result = ResultRow._make(values[index]
-                                             for index in result_indexes)
-                    sortkey = row_sortkey(order_indexes, values, c_target_exprs)
-                    schwartz_rows.append((sortkey, result))
+                    rows.append(values)
     else:
         # This is an aggregated query.
 
@@ -337,7 +353,7 @@ def execute_query(query, entries, options_map):
                     for c_expr in c_aggregate_exprs:
                         c_expr.update(store, context)
 
-        # Iterate over all the aggregations to produce the schwartzian rows.
+        # Iterate over all the aggregations.
         for key, store in agg_store.items():
             key_iter = iter(key)
             values = []
@@ -359,19 +375,14 @@ def execute_query(query, entries, options_map):
                 if not values[query.having_index]:
                     continue
 
-            # Compute result and sort-key objects.
-            result = ResultRow._make(values[index]
-                                     for index in result_indexes)
-            sortkey = row_sortkey(order_indexes, values, c_target_exprs)
-            schwartz_rows.append((sortkey, result))
+            rows.append(values)
 
     # Order results if requested.
     if order_indexes is not None:
-        schwartz_rows.sort(key=operator.itemgetter(0),
-                           reverse=(query.ordering == 'DESC'))
+        rows.sort(key=nullitemgetter(*order_indexes), reverse=(query.ordering == 'DESC'))
 
-    # Extract final results, in sorted order at this point.
-    result_rows = [x[1] for x in schwartz_rows]
+    # Extract final results, in sorted order.
+    result_rows = [ResultRow._make(row[index] for index in result_indexes) for row in rows]
 
     # Apply distinct.
     if query.distinct:
