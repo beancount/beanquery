@@ -9,9 +9,6 @@ import datetime
 import itertools
 import operator
 
-from decimal import Decimal
-
-from beancount.core import number
 from beancount.core import data
 from beancount.core import position
 from beancount.core import inventory

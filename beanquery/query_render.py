@@ -224,7 +224,7 @@ class DecimalRenderer(ColumnRenderer):
         self.num_values = 0
         self.dists = collections.defaultdict(distribution.Distribution)
 
-    # pylint: disable=arguments-differ
+    # pylint: disable=arguments-renamed
     def update(self, number, key=None):
         if number is None:
             return
@@ -265,7 +265,7 @@ class DecimalRenderer(ColumnRenderer):
         return self.total_width
 
     # FIXME: 'key' is being ignored here. It shouldn't. This is likely problematic.
-    # pylint: disable=arguments-differ,unused-argument
+    # pylint: disable=arguments-renamed,unused-argument
     def format(self, number, key=None):
         if self.total_width == 0:
             return ''
