@@ -249,19 +249,6 @@ class EvalFunction(EvalNode):
         assert isinstance(operands, list), "Internal error: invalid type for operands."
         self.operands = operands
 
-        # Check the data types
-        if len(operands) != len(self.__intypes__):
-            raise CompilationError(
-                "Invalid number of arguments for {}: found {} expected {}".format(
-                    type(self).__name__, len(operands), len(self.__intypes__)))
-
-        # Check each of the types.
-        for index, (operand, intype) in enumerate(zip(operands, self.__intypes__)):
-            if not issubclass(operand.dtype, intype):
-                raise CompilationError(
-                    "Invalid type for argument {} of {}: found {} expected {}".format(
-                        index, type(self).__name__, operand.dtype, intype))
-
     def eval_args(self, context):
         return [operand(context) for operand in self.operands]
 
