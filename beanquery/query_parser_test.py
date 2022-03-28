@@ -485,25 +485,32 @@ class TestSelectOrderBy(QueryParserTestBase):
 
     def test_orderby_one(self):
         self.assertParse(qSelect(qp.Wildcard(),
-                                 order_by=qp.OrderBy([qp.Column('a')], None)),
+                                 order_by=[qp.OrderBy(qp.Column('a'), qp.Ordering.ASC)]),
                          "SELECT * ORDER BY a;")
 
     def test_orderby_many(self):
         self.assertParse(qSelect(qp.Wildcard(),
-                                 order_by=qp.OrderBy([qp.Column('a'),
-                                                      qp.Column('b'),
-                                                      qp.Column('c')], None)),
+                                 order_by=[qp.OrderBy(qp.Column('a'), qp.Ordering.ASC),
+                                           qp.OrderBy(qp.Column('b'), qp.Ordering.ASC),
+                                           qp.OrderBy(qp.Column('c'), qp.Ordering.ASC)]),
                          "SELECT * ORDER BY a, b, c;")
 
     def test_orderby_asc(self):
         self.assertParse(qSelect(qp.Wildcard(),
-                                 order_by=qp.OrderBy([qp.Column('a')], 'ASC')),
+                                 order_by=[qp.OrderBy(qp.Column('a'), qp.Ordering.ASC)]),
                          "SELECT * ORDER BY a ASC;")
 
     def test_orderby_desc(self):
         self.assertParse(qSelect(qp.Wildcard(),
-                                 order_by=qp.OrderBy([qp.Column('a')], 'DESC')),
+                                 order_by=[qp.OrderBy(qp.Column('a'), qp.Ordering.DESC)]),
                          "SELECT * ORDER BY a DESC;")
+
+    def test_orderby_many_asc_desc(self):
+        self.assertParse(qSelect(qp.Wildcard(),
+                                 order_by=[qp.OrderBy(qp.Column('a'), qp.Ordering.ASC),
+                                           qp.OrderBy(qp.Column('b'), qp.Ordering.DESC),
+                                           qp.OrderBy(qp.Column('c'), qp.Ordering.ASC)]),
+                         "SELECT * ORDER BY a ASC, b DESC, c;")
 
 
 class TestSelectPivotBy(QueryParserTestBase):

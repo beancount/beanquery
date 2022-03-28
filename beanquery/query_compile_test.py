@@ -251,7 +251,7 @@ class CompileSelectBase(unittest.TestCase):
                       expected_simple_indexes,
                       expected_aggregate_indexes,
                       expected_group_indexes,
-                      expected_order_indexes):
+                      expected_order_spec):
         """Check the four lists of indexes for comparison.
 
         Args:
@@ -259,7 +259,7 @@ class CompileSelectBase(unittest.TestCase):
           expected_simple_indexes: The expected visible non-aggregate indexes.
           expected_aggregate_indexes: The expected visible aggregate indexes.
           expected_group_indexes: The expected group_indexes.
-          expected_order_indexes: The expected order_indexes.
+          expected_order_spec: The expected order_spec.
         Raises:
           AssertionError: if the check fails.
         """
@@ -280,8 +280,8 @@ class CompileSelectBase(unittest.TestCase):
             set(query.group_indexes) if query.group_indexes is not None else None)
 
         self.assertEqual(
-            set(expected_order_indexes) if expected_order_indexes is not None else None,
-            set(query.order_indexes) if query.order_indexes is not None else None)
+            set(expected_order_spec) if expected_order_spec is not None else None,
+            set(query.order_spec) if query.order_spec is not None else None)
 
     def assertCompile(self, expected, query, debug=False):
         """Assert parsed and compiled contents from 'query' is 'expected'.
@@ -465,7 +465,7 @@ class TestCompileSelectGroupBy(CompileSelectBase):
         # Non-aggregates.
         query = self.compile("SELECT account, length(account);")
         self.assertEqual(None, query.group_indexes)
-        self.assertEqual(None, query.order_indexes)
+        self.assertEqual(None, query.order_spec)
 
         # Aggregates only.
         query = self.compile("SELECT first(account), last(account);")
@@ -523,20 +523,20 @@ class TestCompileSelectOrderBy(CompileSelectBase):
           SELECT account, sum(number) GROUP BY account ORDER BY account;
         """)
         self.assertEqual([0], query.group_indexes)
-        self.assertEqual([0], query.order_indexes)
+        self.assertEqual([(0, False)], query.order_spec)
 
     def test_compile_order_by_simple_2(self):
         query = self.compile("""
           SELECT account, length(narration) GROUP BY account, 2 ORDER BY 1, 2;
         """)
         self.assertEqual([0, 1], query.group_indexes)
-        self.assertEqual([0, 1], query.order_indexes)
+        self.assertEqual([(0, False), (1, False)], query.order_spec)
 
         query = self.compile("""
           SELECT account, length(narration) as l GROUP BY account, l ORDER BY l;
         """)
         self.assertEqual([0, 1], query.group_indexes)
-        self.assertEqual([1], query.order_indexes)
+        self.assertEqual([(1, False)], query.order_spec)
 
     def test_compile_order_by_create_non_agg(self):
         with self.assertRaises(qc.CompilationError):
@@ -553,7 +553,7 @@ class TestCompileSelectOrderBy(CompileSelectBase):
           SELECT account, year(date) GROUP BY 1, 2 ORDER BY 2;
         """)
         self.assertEqual([0, 1], query.group_indexes)
-        self.assertEqual([1], query.order_indexes)
+        self.assertEqual([(1, False)], query.order_spec)
 
         # We detect similarity between order-by and targets yet.
         self.compile("""
@@ -566,7 +566,7 @@ class TestCompileSelectOrderBy(CompileSelectBase):
           SELECT account, length(account)
           ORDER BY length(account);
         """)
-        self.assertEqual([1], query.order_indexes)
+        self.assertEqual([(1, False)], query.order_spec)
 
     def test_compile_order_by_reference_invisible(self):
         # So this is an interesting case: the grouping expression is an
@@ -582,32 +582,32 @@ class TestCompileSelectOrderBy(CompileSelectBase):
           ORDER BY length(account);
         """)
         self.assertEqual([2], query.group_indexes)
-        self.assertEqual([2], query.order_indexes)
+        self.assertEqual([(2, False)], query.order_spec)
 
     def test_compile_order_by_aggregate(self):
         query = self.compile("""
           SELECT account, first(narration) GROUP BY account ORDER BY 2;
         """)
         self.assertEqual([0], query.group_indexes)
-        self.assertEqual([1], query.order_indexes)
+        self.assertEqual([(1, False)], query.order_spec)
 
         query = self.compile("""
           SELECT account, first(narration) as f GROUP BY account ORDER BY f;
         """)
         self.assertEqual([0], query.group_indexes)
-        self.assertEqual([1], query.order_indexes)
+        self.assertEqual([(1, False)], query.order_spec)
 
         query = self.compile("""
           SELECT account, first(narration) GROUP BY account ORDER BY sum(number);
         """)
         self.assertEqual([0], query.group_indexes)
-        self.assertEqual([2], query.order_indexes)
+        self.assertEqual([(2, False)], query.order_spec)
 
         query = self.compile("""
           SELECT account GROUP BY account ORDER BY sum(number);
         """)
         self.assertEqual([0], query.group_indexes)
-        self.assertEqual([1], query.order_indexes)
+        self.assertEqual([(1, False)], query.order_spec)
 
 
 class TestTranslationJournal(CompileSelectBase):
@@ -700,7 +700,7 @@ class TestTranslationBalance(CompileSelectBase):
                            qp.Function('account_sortkey', [qp.Column(name='account')])],
                           None)
 
-    order_by = qp.OrderBy([qp.Function('account_sortkey', [qp.Column('account')])], None)
+    order_by = [qp.OrderBy(qp.Function('account_sortkey', [qp.Column('account')]), qp.Ordering.ASC)]
 
     def test_balance(self):
         balance = self.parse("BALANCES;")
