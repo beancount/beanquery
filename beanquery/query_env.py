@@ -1268,7 +1268,7 @@ class FilterPostingsEnvironment(query_compile.CompilationEnvironment):
 class TargetsEnvironment(FilterPostingsEnvironment):
     """An execution context that provides access to attributes on Postings.
     """
-    context_name = 'targets/column'
+    context_name = 'SELECT list'
     functions = copy.copy(FilterPostingsEnvironment.functions)
     functions.update(AGGREGATOR_FUNCTIONS)
 
