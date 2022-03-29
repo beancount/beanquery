@@ -361,19 +361,18 @@ class CompilationEnvironment:
         Args:
           name: A string, the name of the function to access.
         """
-        try:
-            key = tuple([name] + [operand.dtype for operand in operands])
-            return self.functions[key](operands)
-        except KeyError:
-            # If not found with the operands, try just looking it up by name.
-            try:
-                return self.functions[name](operands)
-            except KeyError as exc:
-                signature = '{}({})'.format(name,
-                                            ', '.join(operand.dtype.__name__
-                                                      for operand in operands))
-                raise CompilationError("Invalid function '{}' in {} context".format(
-                    signature, self.context_name)) from exc
+        key = tuple([name] + [operand.dtype for operand in operands])
+        func = self.functions.get(key)
+        if func is not None:
+            return func(operands)
+
+        # If not found with the operands, try just looking it up by name.
+        func = self.functions.get(name)
+        if func is not None:
+            return func(operands)
+
+        sig = '{}({})'.format(name, ', '.join(operand.dtype.__name__ for operand in operands))
+        raise CompilationError('Unknown function "{sig}" in {self.context_name}')
 
 
 class AttributeColumn(EvalColumn):
@@ -406,31 +405,29 @@ def compile_expression(expr, environ):
     Returns:
       The root node of a bound expression.
     """
-    # Convert column references to the context.
+
+    if expr is None:
+        return None
+
     if isinstance(expr, query_parser.Column):
-        c_expr = environ.get_column(expr.name)
+        return environ.get_column(expr.name)
 
-    elif isinstance(expr, query_parser.Function):
-        c_operands = [compile_expression(operand, environ)
-                      for operand in expr.operands]
-        c_expr = environ.get_function(expr.fname, c_operands)
+    if isinstance(expr, query_parser.Function):
+        operands = [compile_expression(operand, environ) for operand in expr.operands]
+        return environ.get_function(expr.fname, operands)
 
-    elif isinstance(expr, query_parser.UnaryOp):
-        node_type = OPERATORS[type(expr)]
-        c_expr = node_type(compile_expression(expr.operand, environ))
+    if isinstance(expr, query_parser.UnaryOp):
+        op = OPERATORS[type(expr)]
+        return op(compile_expression(expr.operand, environ))
 
-    elif isinstance(expr, query_parser.BinaryOp):
-        node_type = OPERATORS[type(expr)]
-        c_expr = node_type(compile_expression(expr.left, environ),
-                           compile_expression(expr.right, environ))
+    if isinstance(expr, query_parser.BinaryOp):
+        op = OPERATORS[type(expr)]
+        return op(compile_expression(expr.left, environ), compile_expression(expr.right, environ))
 
-    elif isinstance(expr, query_parser.Constant):
-        c_expr = EvalConstant(expr.value)
+    if isinstance(expr, query_parser.Constant):
+        return EvalConstant(expr.value)
 
-    else:
-        assert False, "Invalid expression to compile: {}".format(expr)
-
-    return c_expr
+    assert False, f"invalid expression: {expr}"
 
 
 def get_columns_and_aggregates(node):
@@ -449,6 +446,7 @@ def get_columns_and_aggregates(node):
     aggregates = []
     _get_columns_and_aggregates(node, columns, aggregates)
     return columns, aggregates
+
 
 def _get_columns_and_aggregates(node, columns, aggregates):
     """Walk down a tree of nodes and fetch the column accessors and aggregates.
@@ -547,23 +545,19 @@ def compile_targets(targets, environ):
         target_names.add(target_name)
         c_targets.append(EvalTarget(c_expr, target_name, is_aggregate(c_expr)))
 
-    # Figure out if this query is an aggregate query and check validity of each
-    # target's aggregation type.
-    for index, c_target in enumerate(c_targets):
-        columns, aggregates = get_columns_and_aggregates(c_target.c_expr)
+        columns, aggregates = get_columns_and_aggregates(c_expr)
 
         # Check for mixed aggregates and non-aggregates.
         if columns and aggregates:
             raise CompilationError(
                 "Mixed aggregates and non-aggregates are not allowed")
 
-        if aggregates:
-            # Check for aggregates of aggregates.
-            for aggregate in aggregates:
-                for child in aggregate.childnodes():
-                    if is_aggregate(child):
-                        raise CompilationError(
-                            "Aggregates of aggregates are not allowed")
+        # Check for aggregates of aggregates.
+        for aggregate in aggregates:
+            for child in aggregate.childnodes():
+                if is_aggregate(child):
+                    raise CompilationError(
+                        "Aggregates of aggregates are not allowed")
 
     return c_targets
 
@@ -602,8 +596,7 @@ def compile_group_by(group_by, c_targets, environ):
         #
         # References by name are converted to indexes. New expressions are
         # inserted into the list of targets as invisible targets.
-        targets_name_map = {target.name: index
-                            for index, target in enumerate(c_targets)}
+        targets_name_map = {target.name: index for index, target in enumerate(c_targets)}
         for column in group_by.columns:
             index = None
 
@@ -713,6 +706,9 @@ def compile_order_by(order_by, c_targets, environ):
        new_targets: A list of new compiled target nodes.
        order_spec: A list of (integer indexes, sort order) tuples.
     """
+    if not order_by:
+        return [], None
+
     new_targets = copy.copy(c_targets)
     c_target_expressions = [c_target.c_expr for c_target in c_targets]
     order_spec = []
@@ -726,8 +722,7 @@ def compile_order_by(order_by, c_targets, environ):
     #
     # References by name are converted to indexes. New expressions are
     # inserted into the list of targets as invisible targets.
-    targets_name_map = {target.name: index
-                        for index, target in enumerate(c_targets)}
+    targets_name_map = {target.name: index for index, target in enumerate(c_targets)}
     for column, descending in order_by:
         index = None
 
@@ -765,7 +760,7 @@ def compile_order_by(order_by, c_targets, environ):
         assert index is not None, "Internal error, could not index order-by reference."
         order_spec.append((index, descending))
 
-    return (new_targets[len(c_targets):], order_spec)
+    return new_targets[len(c_targets):], order_spec
 
 
 # A compile FROM clause.
@@ -776,7 +771,7 @@ def compile_order_by(order_by, c_targets, environ):
 EvalFrom = collections.namedtuple('EvalFrom', 'c_expr open close clear')
 
 def compile_from(from_clause, environ):
-    """Compiled a From clause as provided by the parser, in the given environment.
+    """Compiled a FROM clause as provided by the parser, in the given environment.
 
     Args:
       select: An instance of query_parser.Select.
@@ -784,28 +779,24 @@ def compile_from(from_clause, environ):
     Returns:
       An instance of Query, ready to be executed.
     """
-    if from_clause is not None:
-        c_expression = (compile_expression(from_clause.expression, environ)
-                        if from_clause.expression is not None
-                        else None)
+    if from_clause is None:
+        return None
 
-        # Check that the from clause does not contain aggregates.
-        if c_expression is not None and is_aggregate(c_expression):
-            raise CompilationError("Aggregates are not allowed in from clause")
+    c_expression = compile_expression(from_clause.expression, environ)
 
-        if (isinstance(from_clause.open, datetime.date) and
-            isinstance(from_clause.close, datetime.date) and
-            from_clause.open > from_clause.close):
-            raise CompilationError("Invalid dates: CLOSE date must follow OPEN date")
+    # Check that the FROM clause does not contain aggregates.
+    if c_expression is not None and is_aggregate(c_expression):
+        raise CompilationError("Aggregates are not allowed in FROM clause")
 
-        c_from = EvalFrom(c_expression,
-                          from_clause.open,
-                          from_clause.close,
-                          from_clause.clear)
-    else:
-        c_from = None
+    if (isinstance(from_clause.open, datetime.date) and
+        isinstance(from_clause.close, datetime.date) and
+        from_clause.open > from_clause.close):
+        raise CompilationError("Invalid dates: CLOSE date must follow OPEN date")
 
-    return c_from
+    return EvalFrom(c_expression,
+                    from_clause.open,
+                    from_clause.close,
+                    from_clause.clear)
 
 
 # A compiled query, ready for execution.
@@ -845,57 +836,35 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
       An instance of EvalQuery, ready to be executed.
     """
 
-    # Process the FROM clause and figure out the execution environment for the
-    # targets and the where clause.
-    from_clause = select.from_clause
-    if isinstance(from_clause, query_parser.Select):
-        c_from = None
-        environ_target = ResultSetEnvironment()
-        environ_where = ResultSetEnvironment()
+    if isinstance(select.from_clause, query_parser.Select):
+        raise CompilationError("Nested SELECT are not supported yet")
 
-        # Remove this when we add support for nested queries.
-        raise CompilationError("Queries from nested SELECT are not supported yet")
-
-    if from_clause is None or isinstance(from_clause, query_parser.From):
-        # Bind the from clause contents.
-        c_from = compile_from(from_clause, entries_environ)
-        environ_target = targets_environ
-        environ_where = postings_environ
-
-    else:
-        raise CompilationError("Unexpected from clause in AST: {}".format(from_clause))
+    # Bind the FROM clause expressions.
+    c_from = compile_from(select.from_clause, entries_environ)
 
     # Compile the targets.
-    c_targets = compile_targets(select.targets, environ_target)
+    c_targets = compile_targets(select.targets, targets_environ)
 
     # Bind the WHERE expression to the execution environment.
-    if select.where_clause is not None:
-        c_where = compile_expression(select.where_clause, environ_where)
+    c_where = compile_expression(select.where_clause, postings_environ)
 
-        # Aggregates are disallowed in this clause. Check for this.
-        # NOTE: This should never trigger if the compilation environment does not
-        # contain any aggregate. Just being manic and safe here.
-        if is_aggregate(c_where):
-            raise CompilationError("Aggregates are disallowed in WHERE clause")
-    else:
-        c_where = None
+    # Check that the FROM clause does not contain aggregates. This
+    # should never trigger if the compilation environment does not
+    # contain any aggregate.
+    if c_where is not None and is_aggregate(c_where):
+        raise CompilationError("Aggregates are not allowed in WHERE clause")
 
     # Process the GROUP-BY clause.
     new_targets, group_indexes, having_index = compile_group_by(select.group_by,
                                                                 c_targets,
-                                                                environ_target)
-    if new_targets:
-        c_targets.extend(new_targets)
+                                                                targets_environ)
+    c_targets.extend(new_targets)
 
     # Process the ORDER-BY clause.
-    if select.order_by is not None:
-        (new_targets, order_spec) = compile_order_by(select.order_by,
-                                                        c_targets,
-                                                        environ_target)
-        if new_targets:
-            c_targets.extend(new_targets)
-    else:
-        order_spec = None
+    new_targets, order_spec = compile_order_by(select.order_by,
+                                               c_targets,
+                                               targets_environ)
+    c_targets.extend(new_targets)
 
     # If this is an aggregate query (it groups, see list of indexes), check that
     # the set of non-aggregates match exactly the group indexes. This should
@@ -1029,12 +998,8 @@ def compile(statement, targets_environ, postings_environ, entries_environ):
         statement = transform_journal(statement)
 
     if isinstance(statement, query_parser.Select):
-        c_query = compile_select(statement,
-                                 targets_environ, postings_environ, entries_environ)
-    elif isinstance(statement, query_parser.Print):
-        c_query = compile_print(statement, entries_environ)
-    else:
-        raise CompilationError(
-            "Cannot compile a statement of type '{}'".format(type(statement)))
+        return compile_select(statement, targets_environ, postings_environ, entries_environ)
+    if isinstance(statement, query_parser.Print):
+        return compile_print(statement, entries_environ)
 
-    return c_query
+    raise CompilationError("Cannot compile a statement of type '{}'".format(type(statement)))
