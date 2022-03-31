@@ -1,10 +1,11 @@
 Version 0.1 (unreleased)
 ------------------------
 
-- Implemented the ``HAVING`` clause for aggregate queries.
+- The ``HAVING`` clause for aggregate queries is now supported.
 
-- Added the ``empty()`` BQL function to determine whether an Inventory
-  object as returned by the ``sum()`` aggregate function is empty.
+- The ``empty()`` BQL function to determine whether an Inventory
+  object as returned by the ``sum()`` aggregate function is empty has
+  been added.
 
 - ``NULL`` values in ``SORT BY`` clause are now always considered to
   be smaller than any other values.  This may results in rows to be
