@@ -1079,5 +1079,44 @@ class TestExecuteFlatten(QueryBase):
                 ])
 
 
+class TestOutputNames(QueryBase):
+
+    data = """
+      2020-01-01 open Assets:Bank
+      2020-01-01 open Assets:Receivable
+      2020-01-01 open Income:Sponsorship
+
+      2020-03-01 * "Sponsorship from A"
+        invoice: "A01"
+        Assets:Receivable      100.00 USD
+        Income:Sponsorship    -100.00 USD
+
+      2020-03-01 * "Sponsorship from B"
+        invoice: "B01"
+        Assets:Receivable       30.00 USD
+        Income:Sponsorship     -30.00 USD
+
+      2020-03-10 * "Payment from A"
+        invoice: "A01"
+        Assets:Bank            100.00 USD
+        Assets:Receivable     -100.00 USD
+    """
+
+    def test_output_names(self):
+        self.check_query(self.data, """
+          SELECT
+            entry_meta('invoice') AS invoice,
+            sum(position) AS balance
+          WHERE
+            root(account, 2) = 'Assets:Receivable'
+          GROUP BY
+            invoice
+          HAVING
+            not empty(balance);
+        """,
+        [('invoice', object), ('balance', inventory.Inventory)],
+        [('B01', inventory.from_string("30.00 USD"))])
+
+
 if __name__ == '__main__':
     unittest.main()

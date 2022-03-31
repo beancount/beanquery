@@ -24,3 +24,7 @@ Version 0.1 (unreleased)
   behavior, the query should be written::
 
     SELECT date, narration ORDER BY date DESC, narration DESC
+
+- Output names defined with ``SELECT ... AS`` can now be used in the
+  ``WHERE`` and ``HAVING`` clauses in addition to the ``GROUP BY`` and
+  ``ORDER BY`` clauses where they were already supported.

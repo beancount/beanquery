@@ -189,12 +189,11 @@ class TestCompileDataTypes(unittest.TestCase):
 
 class TestCompileMisc(unittest.TestCase):
 
-    def test_find_unique_names(self):
-        self.assertEqual('date', qc.find_unique_name('date', {}))
-        self.assertEqual('date', qc.find_unique_name('date', {'account', 'number'}))
-        self.assertEqual('date_1', qc.find_unique_name('date', {'date', 'number'}))
-        self.assertEqual('date_2',
-                         qc.find_unique_name('date', {'date', 'date_1', 'date_3'}))
+    def test_unique_name(self):
+        self.assertEqual('date', qc.unique_name('date', {}))
+        self.assertEqual('date', qc.unique_name('date', {'account', 'number'}))
+        self.assertEqual('date_1', qc.unique_name('date', {'date', 'number'}))
+        self.assertEqual('date_2', qc.unique_name('date', {'date', 'date_1', 'date_3'}))
 
 
 class CompileSelectBase(unittest.TestCase):
@@ -349,10 +348,9 @@ class TestCompileSelect(CompileSelectBase):
                             for target in query.c_targets))
 
     def test_compile_targets_named(self):
-        # Test the wildcard expansion.
-        query = self.compile("SELECT length(account), account as a, date;")
+        query = self.compile("SELECT length(account) AS l, account AS a, date;")
         self.assertEqual(
-            [qc.EvalTarget(qe.F('length', str)([qe.AccountColumn()]), 'length_account', False),
+            [qc.EvalTarget(qe.F('length', str)([qe.AccountColumn()]), 'l', False),
              qc.EvalTarget(qe.AccountColumn(), 'a', False),
              qc.EvalTarget(qe.DateColumn(), 'date', False)],
             query.c_targets)
@@ -608,6 +606,19 @@ class TestCompileSelectOrderBy(CompileSelectBase):
         """)
         self.assertEqual([0], query.group_indexes)
         self.assertEqual([(1, False)], query.order_spec)
+
+
+class TestCompileSelectNamed(CompileSelectBase):
+
+    def test_compile_select_where_name(self):
+        query = self.compile("""
+          SELECT date AS d WHERE d = 2022-03-30;
+        """)
+
+    def test_compile_select_having_name(self):
+        query = self.compile("""
+          SELECT sum(position) AS s GROUP BY year HAVING not empty(s);
+        """)
 
 
 class TestTranslationJournal(CompileSelectBase):
