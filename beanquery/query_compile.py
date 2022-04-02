@@ -371,7 +371,7 @@ class CompilationEnvironment:
             return func(operands)
 
         sig = '{}({})'.format(name, ', '.join(operand.dtype.__name__ for operand in operands))
-        raise CompilationError('Unknown function "{sig}" in {self.context_name}')
+        raise CompilationError(f'Unknown function "{sig}" in {self.context_name}')
 
 
 class AttributeColumn(EvalColumn):
