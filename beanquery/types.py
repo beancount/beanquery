@@ -2,6 +2,9 @@ class AnyType:
     """As written on the tin."""
     __slots__ = ()
 
+    # Used in the repr() of function and operators.
+    __name__ = '*'
+
     def __eq__(self, other):
         """Compares equal to any other type."""
         return isinstance(other, type)

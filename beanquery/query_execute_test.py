@@ -15,7 +15,7 @@ from beancount.parser import cmptest
 from beancount.utils import misc_utils
 from beancount import loader
 
-from beanquery import query_parser
+from beanquery import query_parser as qp
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query_execute as qx
@@ -32,7 +32,7 @@ class QueryBase(cmptest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self.parser = query_parser.Parser()
+        self.parser = qp.Parser()
 
     def parse(self, bql_string):
         """Parse a query.
@@ -124,7 +124,7 @@ class CommonInputBase(unittest.TestCase):
         self.context = qx.create_row_context(self.entries, self.options_map)
 
 
-class TestTypes(QueryBase):
+class TestFundamentals(QueryBase):
 
     def setUp(self):
         super().setUp()
@@ -237,6 +237,41 @@ class TestTypes(QueryBase):
         self.assertResult("SELECT date(meta('date'))", datetime.date(2022, 4, 5))
         self.assertResult("SELECT date(meta('null'))", None, datetime.date)
         self.assertResult("SELECT date(meta('missing'))", None, datetime.date)
+
+    def test_operators(self):
+        # add
+        self.assertResult("SELECT 1 + 1", 2)
+        self.assertResult("SELECT 1.0 + 1", Decimal(2))
+        self.assertResult("SELECT 1.0 + 2.00", Decimal(3))
+        self.assertError ("SELECT 1970-01-01 + 2022-04-01")
+        # sub
+        self.assertResult("SELECT 1 - 1", 0)
+        self.assertResult("SELECT 1.0 - 1", Decimal(0))
+        self.assertResult("SELECT 1.0 - 2.00", Decimal(-1))
+        self.assertError ("SELECT 1 - 2022-04-01")
+        # mul
+        self.assertResult("SELECT 2 * 2", 4)
+        self.assertResult("SELECT 2.0 * 2", Decimal(4))
+        self.assertResult("SELECT 2 * 2.0", Decimal(4))
+        self.assertResult("SELECT 2.0 * 2.0", Decimal(4))
+        # div
+        self.assertResult("SELECT 4 / 2", Decimal(2))
+        self.assertResult("SELECT 4.0 / 2", Decimal(2))
+        self.assertResult("SELECT 4 / 2.0", Decimal(2))
+        self.assertResult("SELECT 4.0 / 2.0", Decimal(2))
+        # match
+        self.assertResult("SELECT 'foobarbaz' ~ 'bar'", True)
+        self.assertResult("SELECT 'foobarbaz' ~ 'quz'", False)
+        # and
+        self.assertResult("SELECT 1 and FALSE", False)
+        self.assertResult("SELECT 'something' and FALSE", False)
+        self.assertResult("SELECT 1.0 and FALSE", False)
+        # or
+        self.assertResult("SELECT FALSE or 1", True)
+        self.assertResult("SELECT FALSE or 'something'", True)
+        self.assertResult("SELECT FALSE or 1.0", True)
+        # not
+        self.assertResult("SELECT not TRUE", False)
 
     def test_functions(self):
         # round
@@ -395,9 +430,13 @@ class TestFilterEntries(CommonInputBase, QueryBase):
 class TestExecutePrint(CommonInputBase, QueryBase):
 
     def test_print_with_filter(self):
-        statement = qc.EvalPrint(qc.EvalFrom(qc.EvalEqual(qe.YearEntryColumn(),
-                                                          qc.EvalConstant(2012)),
-                                             None, None, None))
+        statement = qc.EvalPrint(
+            qc.EvalFrom(
+                qc.Operator(qp.Equal, [
+                    qe.YearEntryColumn(),
+                    qc.EvalConstant(2012),
+                ]),
+                None, None, None))
         oss = io.StringIO()
         qx.execute_print(statement, self.entries, self.options_map, oss)
 
@@ -440,10 +479,10 @@ class TestBalanceColumn(unittest.TestCase):
         c_simple_not = qe.AccountColumn()
         self.assertFalse(qx.uses_balance_column(c_simple_not))
 
-        c_subexpr = qc.EvalEqual(qe.BalanceColumn(), qc.EvalConstant(2012))
-        self.assertTrue(qx.uses_balance_column(c_subexpr))
+        # c_subexpr = qc.Operator(qp.Equal, [qe.BalanceColumn(), qc.EvalConstant(2012)])
+        # self.assertTrue(qx.uses_balance_column(c_subexpr))
 
-        c_subexpr_not = qc.EvalEqual(qe.AccountColumn(), qc.EvalConstant('Assets'))
+        c_subexpr_not = qc.Operator(qp.Equal, [qe.AccountColumn(), qc.EvalConstant('Assets')])
         self.assertFalse(qx.uses_balance_column(c_subexpr_not))
 
 

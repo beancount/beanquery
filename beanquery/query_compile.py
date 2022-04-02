@@ -103,11 +103,6 @@ class EvalUnaryOp(EvalNode):
     def __call__(self, context):
         return self.operator(self.operand(context))
 
-class EvalNot(EvalUnaryOp):
-
-    def __init__(self, operand):
-        super().__init__(operator.not_, operand, bool)
-
 
 class EvalBinaryOp(EvalNode):
     __slots__ = ('left', 'right', 'operator')
@@ -121,66 +116,8 @@ class EvalBinaryOp(EvalNode):
     def __call__(self, context):
         return self.operator(self.left(context), self.right(context))
 
-class EvalEqual(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        super().__init__(operator.eq, left, right, bool)
-
-class EvalAnd(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        super().__init__(operator.and_, left, right, bool)
-
-class EvalOr(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        super().__init__(operator.or_, left, right, bool)
-
-class EvalGreater(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        super().__init__(operator.gt, left, right, bool)
-
-class EvalGreaterEq(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        super().__init__(operator.ge, left, right, bool)
-
-class EvalLess(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        super().__init__(operator.lt, left, right, bool)
-
-class EvalLessEq(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        super().__init__(operator.le, left, right, bool)
-
-class EvalMatch(EvalBinaryOp):
-
-    @staticmethod
-    def match(left, right):
-        if left is None or right is None:
-            return False
-        return bool(re.search(right, left, re.IGNORECASE))
-
-    def __init__(self, left, right):
-        super().__init__(self.match, left, right, bool)
-        if right.dtype != str:
-            raise CompilationError(
-                "Invalid data type for RHS of match: '{}'; must be a string".format(
-                    right.dtype))
-
-class EvalContains(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        super().__init__(operator.contains, left, right, bool)
-
-    def __call__(self, context):
-        # Note: we need to reverse the arguments.
-        arg_left = self.left(context)
-        arg_right = self.right(context)
-        return self.operator(arg_right, arg_left)
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
 
 
 # Note: We ought to implement implicit type promotion here,
@@ -190,52 +127,123 @@ class EvalContains(EvalBinaryOp):
 # We need to rewrite the evaluator to support types in order to do this
 # properly.
 
-class EvalMul(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        f = lambda x, y: Decimal(x * y)
-        super().__init__(f, left, right, Decimal)
-
-class EvalDiv(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        f = lambda x, y: Decimal(x / y)
-        super().__init__(f, left, right, Decimal)
-
-class EvalAdd(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        f = lambda x, y: Decimal(x + y)
-        super().__init__(f, left, right, Decimal)
-
-class EvalSub(EvalBinaryOp):
-
-    def __init__(self, left, right):
-        f = lambda x, y: Decimal(x - y)
-        super().__init__(f, left, right, Decimal)
+OPERATORS = collections.defaultdict(list)
 
 
-# Interpreter nodes.
-OPERATORS = {
-    query_parser.Not: EvalNot,
-    query_parser.Equal: EvalEqual,
-    query_parser.Match: EvalMatch,
-    query_parser.And: EvalAnd,
-    query_parser.Or: EvalOr,
-    query_parser.Greater: EvalGreater,
-    query_parser.GreaterEq: EvalGreaterEq,
-    query_parser.Less: EvalLess,
-    query_parser.LessEq: EvalLessEq,
-    query_parser.Contains: EvalContains,
-    query_parser.Mul: EvalMul,
-    query_parser.Div: EvalDiv,
-    query_parser.Add: EvalAdd,
-    query_parser.Sub: EvalSub,
-    }
+def unaryop(op, intypes, outtype):
+    def decorator(func):
+        class Op(EvalUnaryOp):
+            __intypes__ = intypes
+            def __init__(self, operand):
+                super().__init__(func, operand, outtype)
+        Op.__name__ = f'{op.__name__}[{intypes[0].__name__}]'
+        OPERATORS[op].append(Op)
+        return func
+    return decorator
+
+
+def binaryop(op, intypes, outtype):
+    def decorator(func):
+        class Op(EvalBinaryOp):
+            __intypes__ = intypes
+            def __init__(self, left, right):
+                super().__init__(func, left, right, outtype)
+        Op.__name__ = f'{op.__name__}[{intypes[0].__name__},{intypes[1].__name__}]'
+        OPERATORS[op].append(Op)
+        return func
+    return decorator
+
+
+def Operator(op, operands):
+    op = types.function_lookup(OPERATORS, op, operands)
+    if op is not None:
+        return op(*operands)
+    raise KeyError
+
+
+unaryop(query_parser.Not, [types.Any], bool)(operator.not_)
+
+
+@binaryop(query_parser.Mul, [Decimal, Decimal], Decimal)
+@binaryop(query_parser.Mul, [Decimal, int], Decimal)
+@binaryop(query_parser.Mul, [int, Decimal], Decimal)
+@binaryop(query_parser.Mul, [int, int], int)
+def _mul(x, y):
+    return x * y
+
+
+@binaryop(query_parser.Div, [Decimal, Decimal], Decimal)
+@binaryop(query_parser.Div, [Decimal, int], Decimal)
+@binaryop(query_parser.Div, [int, Decimal], Decimal)
+def _div(x, y):
+    return x / y
+
+
+@binaryop(query_parser.Div, [int, int], Decimal)
+def _div_int(x, y):
+    return Decimal(x) / y
+
+
+@binaryop(query_parser.Add, [Decimal, Decimal], Decimal)
+@binaryop(query_parser.Add, [Decimal, int], Decimal)
+@binaryop(query_parser.Add, [int, Decimal], Decimal)
+@binaryop(query_parser.Add, [int, int], int)
+def _add(x, y):
+    return x + y
+
+
+@binaryop(query_parser.Sub, [Decimal, Decimal], Decimal)
+@binaryop(query_parser.Sub, [Decimal, int], Decimal)
+@binaryop(query_parser.Sub, [int, Decimal], Decimal)
+@binaryop(query_parser.Sub, [int, int], int)
+def _sub(x, y):
+    return x - y
 
 
 
-ANY = object()
+@binaryop(query_parser.Match, [str, str], bool)
+def _match(x, y):
+    if x is None or y is None:
+        return False
+    return bool(re.search(y, x, re.IGNORECASE))
+
+
+@binaryop(query_parser.Contains, [object, list], bool)
+def _contains(x, y):
+    return operator.contains(y, x)
+
+
+_comparisons = [
+    (query_parser.Equal, operator.eq),
+    (query_parser.Greater, operator.gt),
+    (query_parser.GreaterEq, operator.ge),
+    (query_parser.Less, operator.lt),
+    (query_parser.LessEq, operator.le),
+]
+
+_intypes = [
+    [int, int],
+    [Decimal, int],
+    [int, Decimal],
+    [Decimal, Decimal],
+    [datetime.date, datetime.date],
+    [str, str],
+]
+
+for node, op in _comparisons:
+    for intypes in _intypes:
+        binaryop(node, intypes, bool)(op)
+
+
+@binaryop(query_parser.And, [types.Any, types.Any], bool)
+def _and(x, y):
+    return bool(x) and bool(y)
+
+
+@binaryop(query_parser.Or, [types.Any, types.Any], bool)
+def _or(x, y):
+    return bool(x) or bool(y)
+
 
 # pylint: disable=abstract-method
 class EvalFunction(EvalNode):
@@ -395,12 +403,22 @@ def compile_expression(expr, environ):
         return environ.get_function(expr.fname, operands)
 
     if isinstance(expr, query_parser.UnaryOp):
-        op = OPERATORS[type(expr)]
-        return op(compile_expression(expr.operand, environ))
+        operand = compile_expression(expr.operand, environ)
+        op = types.function_lookup(OPERATORS, type(expr), [operand])
+        if op is not None:
+            return op(operand)
+        raise CompilationError(
+            f'Operator {type(expr).__name__.lower()}({operand.dtype.__name__}) not supported')
 
     if isinstance(expr, query_parser.BinaryOp):
-        op = OPERATORS[type(expr)]
-        return op(compile_expression(expr.left, environ), compile_expression(expr.right, environ))
+        left = compile_expression(expr.left, environ)
+        right = compile_expression(expr.right, environ)
+        op = types.function_lookup(OPERATORS, type(expr), [left, right])
+        if op is not None:
+            return op(left, right)
+        raise CompilationError(
+            f'Operator {type(expr).__name__.lower()}('
+            f'{left.dtype.__name__}, {right.dtype.__name__}) not supported')
 
     if isinstance(expr, query_parser.Constant):
         return EvalConstant(expr.value)
