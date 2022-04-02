@@ -135,6 +135,28 @@ class TestSelectExpression(QueryParserTestBase):
             qSelect([qp.Target(qp.Constant(datetime.date(1972, 5, 28)), None)]),
             "SELECT #'May 28, 1972';")
 
+    def test_expr_constant_list(self):
+        self.assertParse(
+            # This is not a list
+            qSelect([qp.Target(qp.Constant(1), None)]),
+            "SELECT (1);")
+
+        self.assertParse(
+            qSelect([qp.Target(qp.Constant([1]), None)]),
+            "SELECT (1, );")
+
+        self.assertParse(
+            qSelect([qp.Target(qp.Constant([1, 2]), None)]),
+            "SELECT (1, 2);")
+
+        self.assertParse(
+            qSelect([qp.Target(qp.Constant([1, 2]), None)]),
+            "SELECT (1, 2, );")
+
+        self.assertParse(
+            qSelect([qp.Target(qp.Constant(['x', 'y', 'z']), None)]),
+            "SELECT ('x', 'y', 'z');")
+
     def test_expr_column(self):
         self.assertParse(
             qSelect([qp.Target(qp.Column('date'), None)]),
