@@ -244,10 +244,14 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 1.0 + 1", Decimal(2))
         self.assertResult("SELECT 1.0 + 2.00", Decimal(3))
         self.assertError ("SELECT 1970-01-01 + 2022-04-01")
+        self.assertResult("SELECT 2022-04-01 + 1", datetime.date(2022, 4, 2))
+        self.assertResult("SELECT 1 + 2022-04-01", datetime.date(2022, 4, 2))
         # sub
         self.assertResult("SELECT 1 - 1", 0)
         self.assertResult("SELECT 1.0 - 1", Decimal(0))
         self.assertResult("SELECT 1.0 - 2.00", Decimal(-1))
+        self.assertResult("SELECT 2022-04-01 - 1", datetime.date(2022, 3, 31))
+        self.assertResult("SELECT 2022-04-01 - 2022-03-31", 1)
         self.assertError ("SELECT 1 - 2022-04-01")
         # mul
         self.assertResult("SELECT 2 * 2", 4)
