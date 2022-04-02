@@ -340,20 +340,27 @@ class CompilationEnvironment:
     # The name of the context.
     context_name = None
 
-    # Maps of names to evaluators for columns and functions.
-    columns = None
-    functions = None
+    # Maps of names to evaluators for output names, columns, and functions.
+    names = {}
+    columns = {}
+    functions = {}
 
     def get_column(self, name):
         """Return a column accessor for the given named column.
         Args:
           name: A string, the name of the column to access.
         """
-        try:
-            return self.columns[name]()
-        except KeyError as exc:
-            raise CompilationError("Invalid column name '{}' in {} context.".format(
-                name, self.context_name)) from exc
+        expr = self.names.get(name)
+        if expr is not None:
+            # Expression evaluatoes may keep state (for example
+            # aggregate functions) thus we need to return a copy.
+            return copy.copy(expr)
+
+        column = self.columns.get(name)
+        if column is not None:
+            return column()
+
+        raise CompilationError(f'Unknown column "{name}" in {self.context_name}')
 
     def get_function(self, name, operands):
         """Return a function accessor for the given named function.
@@ -491,7 +498,7 @@ def is_hashable_type(node):
     return not issubclass(node.dtype, inventory.Inventory)
 
 
-def find_unique_name(name, allocated_set):
+def unique_name(name, allocated_set):
     """Come up with a unique name for 'name' amongst 'allocated_set'.
 
     Args:
@@ -524,9 +531,15 @@ def compile_targets(targets, environ):
     Args:
       targets: A list of target expressions from the parser.
       environ: A compilation context for the targets.
+
     Returns:
-      A list of compiled target expressions with resolved names.
+      A tuple containing list of compiled expressions and a dictionary
+      mapping explicit output names assigned with the AS keyword to
+      compiled extpressions.
+
     """
+    names = {}
+
     # Bind the targets expressions to the execution context.
     if isinstance(targets, query_parser.Wildcard):
         # Insert the full list of available columns.
@@ -538,11 +551,19 @@ def compile_targets(targets, environ):
     target_names = set()
     for target in targets:
         c_expr = compile_expression(target.expression, environ)
-        target_name = find_unique_name(
-            target.name or query_parser.get_expression_name(target.expression),
-            target_names)
-        target_names.add(target_name)
-        c_targets.append(EvalTarget(c_expr, target_name, is_aggregate(c_expr)))
+        if target.name:
+            # The target as an explicit output name: make sure that it
+            # does not collied with any other output name.
+            name = target.name
+            if name in target_names:
+                raise CompilationError(f'Duplicate output name "{name}" in SELECT list')
+            # Keep track of explicit output names.
+            names[name] = c_expr
+        else:
+            # Otherwise generate an unique output name.
+            name = unique_name(query_parser.get_expression_name(target.expression), target_names)
+        target_names.add(name)
+        c_targets.append(EvalTarget(c_expr, name, is_aggregate(c_expr)))
 
         columns, aggregates = get_columns_and_aggregates(c_expr)
 
@@ -558,7 +579,7 @@ def compile_targets(targets, environ):
                     raise CompilationError(
                         "Aggregates of aggregates are not allowed")
 
-    return c_targets
+    return c_targets, names
 
 
 def compile_group_by(group_by, c_targets, environ):
@@ -842,7 +863,9 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
     c_from = compile_from(select.from_clause, entries_environ)
 
     # Compile the targets.
-    c_targets = compile_targets(select.targets, targets_environ)
+    c_targets, output_names = compile_targets(select.targets, targets_environ)
+    targets_environ.names = output_names
+    postings_environ.names = output_names
 
     # Bind the WHERE expression to the execution environment.
     c_where = compile_expression(select.where_clause, postings_environ)
