@@ -200,6 +200,25 @@ def _sub(x, y):
     return x - y
 
 
+@binaryop(query_parser.Add, [datetime.date, int], datetime.date)
+def _add_date_int(x, y):
+    return x + datetime.timedelta(days=y)
+
+
+@binaryop(query_parser.Add, [int, datetime.date], datetime.date)
+def _add_date_int(x, y):
+    return y + datetime.timedelta(days=x)
+
+
+@binaryop(query_parser.Sub, [datetime.date, int], datetime.date)
+def _sub_date_int(x, y):
+    return x - datetime.timedelta(days=y)
+
+
+@binaryop(query_parser.Sub, [datetime.date, datetime.date], int)
+def _sub_date_date(x, y):
+    return (x - y).days
+
 
 @binaryop(query_parser.Match, [str, str], bool)
 def _match(x, y):
