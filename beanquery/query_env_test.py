@@ -15,13 +15,13 @@ from beanquery import query
 
 class TestCompileDataTypes(unittest.TestCase):
 
-    def test_compile_EvalLength(self):
-        with self.assertRaises(qc.CompilationError):
-            qe.F('length', str)([qc.EvalConstant(17)])
-        c_length = qe.F('length', str)([qc.EvalConstant('testing')])
+    def test_compile_Length(self):
+        c_length = qe.Function('length', [qc.EvalConstant(17)])
+        self.assertEqual(None, c_length)
+        c_length = qe.Function('length', [qc.EvalConstant('testing')])
         self.assertEqual(int, c_length.dtype)
 
-    def test_compile_EvalSum(self):
+    def test_compile_Sum(self):
         with self.assertRaises(qc.CompilationError):
             qe.Sum([qc.EvalConstant('testing')])
         c_sum = qe.Sum([qc.EvalConstant(17)])
@@ -29,15 +29,15 @@ class TestCompileDataTypes(unittest.TestCase):
         c_sum = qe.Sum([qc.EvalConstant(D('17.'))])
         self.assertEqual(Decimal, c_sum.dtype)
 
-    def test_compile_EvalCount(self):
+    def test_compile_Count(self):
         c_count = qe.Count([qc.EvalConstant(17)])
         self.assertEqual(int, c_count.dtype)
 
-    def test_compile_EvalFirst(self):
+    def test_compile_First(self):
         c_first = qe.First([qc.EvalConstant(17.)])
         self.assertEqual(float, c_first.dtype)
 
-    def test_compile_EvalLast(self):
+    def test_compile_Last(self):
         c_last = qe.Last([qc.EvalConstant(17.)])
         self.assertEqual(float, c_last.dtype)
 
@@ -67,11 +67,10 @@ class TestCompileDataTypes(unittest.TestCase):
             (qe.NarrationEntryColumn, str),
             (qe.TagsEntryColumn, set),
             (qe.LinksEntryColumn, set),
-            ]
+        ]
         for cls, dtype in class_types:
             instance = cls()
             self.assertEqual(dtype, instance.dtype)
-
 
 
 class TestEnv(unittest.TestCase):

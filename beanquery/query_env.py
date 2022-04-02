@@ -58,14 +58,11 @@ def function(in_, out_, pass_context=False, name=None, help=None):
     return decorator
 
 
-def F(name, in_):
-    func = SIMPLE_FUNCTIONS.get((name, in_))
+def Function(name, args):
+    func = SIMPLE_FUNCTIONS.get((name, *[x.dtype for x in args])) or SIMPLE_FUNCTIONS.get(name)
     if func is not None:
-        return func
-    func = SIMPLE_FUNCTIONS.get(name)
-    if func is not None:
-        return func
-    raise KeyError
+        return func(args)
+    return None
 
 
 @function(Decimal, Decimal)
