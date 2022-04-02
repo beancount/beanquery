@@ -216,7 +216,6 @@ class EvalSub(EvalBinaryOp):
 
 # Interpreter nodes.
 OPERATORS = {
-    query_parser.Constant: EvalConstant,
     query_parser.Not: EvalNot,
     query_parser.Equal: EvalEqual,
     query_parser.Match: EvalMatch,
