@@ -18,31 +18,41 @@ class TestCompileExpression(unittest.TestCase):
             qc.compile_expression(qp.Column('invalid'), qe.TargetsEnvironment())
 
     def test_expr_column(self):
-        self.assertEqual(qe.FilenameColumn(),
-                         qc.compile_expression(qp.Column('filename'),
-                                               qe.TargetsEnvironment()))
+        self.assertEqual(
+            qe.FilenameColumn(),
+            qc.compile_expression(
+                qp.Column('filename'),
+                qe.TargetsEnvironment()))
 
     def test_expr_function(self):
-        self.assertEqual(qe.Function('sum', [qe.PositionColumn()]),
-                         qc.compile_expression(qp.Function('sum', [qp.Column('position')]),
-                                               qe.TargetsEnvironment()))
+        self.assertEqual(
+            qe.SumPosition([qe.PositionColumn()]),
+            qc.compile_expression(
+                qp.Function('sum', [qp.Column('position')]),
+                qe.TargetsEnvironment()))
 
     def test_expr_unaryop(self):
-        self.assertEqual(qc.EvalNot(qe.AccountColumn()),
-                         qc.compile_expression(qp.Not(qp.Column('account')),
-                                               qe.TargetsEnvironment()))
+        self.assertEqual(
+            qc.Operator(qp.Not, [qe.AccountColumn()]),
+            qc.compile_expression(
+                qp.Not(qp.Column('account')),
+                qe.TargetsEnvironment()))
 
     def test_expr_binaryop(self):
-        self.assertEqual(qc.EvalEqual(qe.DateColumn(),
-                                      qc.EvalConstant(datetime.date(2014, 1, 1))),
-                         qc.compile_expression(
-                             qp.Equal(qp.Column('date'),
-                                      qp.Constant(datetime.date(2014, 1, 1))),
-                             qe.TargetsEnvironment()))
+        self.assertEqual(
+            qc.Operator(qp.Equal, [
+                qe.DateColumn(),
+                qc.EvalConstant(datetime.date(2014, 1, 1))
+            ]),
+            qc.compile_expression(
+                qp.Equal(qp.Column('date'), qp.Constant(datetime.date(2014, 1, 1))),
+                qe.TargetsEnvironment()))
 
     def test_expr_constant(self):
-        self.assertEqual(qc.EvalConstant(D(17)),
-                         qc.compile_expression(qp.Constant(D(17)), qe.TargetsEnvironment()))
+        self.assertEqual(
+            qc.EvalConstant(D(17)),
+            qc.compile_expression(
+                qp.Constant(D(17)), qe.TargetsEnvironment()))
 
 
 class TestCompileExpressionDataTypes(unittest.TestCase):
@@ -63,22 +73,42 @@ class TestCompileAggregateChecks(unittest.TestCase):
 
     def test_is_aggregate_derived(self):
         columns, aggregates = qc.get_columns_and_aggregates(
-            qc.EvalAnd(
-                qc.EvalEqual(qe.PositionColumn(), qc.EvalConstant(42)),
-                qc.EvalOr(
-                    qc.EvalNot(qc.EvalEqual(qe.DateColumn(),
-                                            qc.EvalConstant(datetime.date(2014, 1, 1)))),
-                    qc.EvalConstant(False))))
+            qc.Operator(qp.And, [
+                qc.Operator(qp.Equal, [
+                    qe.LineNoColumn(),
+                    qc.EvalConstant(42),
+                ]),
+                qc.Operator(qp.Or, [
+                    qc.Operator(qp.Not, [
+                        qc.Operator(qp.Equal, [
+                            qe.DateColumn(),
+                            qc.EvalConstant(datetime.date(2014, 1, 1)),
+                        ]),
+                    ]),
+                    qc.EvalConstant(False),
+                ]),
+            ]))
         self.assertEqual((2, 0), (len(columns), len(aggregates)))
 
         columns, aggregates = qc.get_columns_and_aggregates(
-            qc.EvalAnd(
-                qc.EvalEqual(qe.PositionColumn(), qc.EvalConstant(42)),
-                qc.EvalOr(
-                    qc.EvalNot(qc.EvalEqual(qe.DateColumn(),
-                                            qc.EvalConstant(datetime.date(2014, 1, 1)))),
+            qc.Operator(qp.And, [
+                qc.Operator(qp.Equal, [
+                    qe.LineNoColumn(),
+                    qc.EvalConstant(42),
+                ]),
+                qc.Operator(qp.Or, [
+                    qc.Operator(qp.Not, [
+                        qc.Operator(qp.Not, [
+                            qc.Operator(qp.Equal, [
+                                qe.DateColumn(),
+                                qc.EvalConstant(datetime.date(2014, 1, 1)),
+                            ]),
+                        ]),
+                    ]),
                     # Aggregation node deep in the tree.
-                    qe.SumInt([qc.EvalConstant(1)]))))
+                    qe.SumInt([qc.EvalConstant(1)]),
+                ]),
+            ]))
         self.assertEqual((2, 1), (len(columns), len(aggregates)))
 
     def test_get_columns_and_aggregates(self):
@@ -89,7 +119,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
         self.assertFalse(qc.is_aggregate(c_query))
 
         # Multiple columns.
-        c_query = qc.EvalAnd(qe.PositionColumn(), qe.DateColumn())
+        c_query = qc.Operator(qp.And, [qe.PositionColumn(), qe.DateColumn()])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((2, 0), (len(columns), len(aggregates)))
         self.assertFalse(qc.is_aggregate(c_query))
@@ -101,7 +131,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
         self.assertTrue(qc.is_aggregate(c_query))
 
         # Multiple aggregates.
-        c_query = qc.EvalAnd(qe.First([qe.AccountColumn()]), qe.Last([qe.AccountColumn()]))
+        c_query = qc.Operator(qp.And, [qe.First([qe.DateColumn()]), qe.Last([qe.FlagColumn()])])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((0, 2), (len(columns), len(aggregates)))
         self.assertTrue(qc.is_aggregate(c_query))
@@ -113,8 +143,10 @@ class TestCompileAggregateChecks(unittest.TestCase):
         self.assertFalse(qc.is_aggregate(c_query))
 
         # Mix of column and aggregates (this is used to detect this illegal case).
-        c_query = qc.EvalAnd(qe.Function('length', [qe.AccountColumn()]),
-                             qe.SumPosition([qe.PositionColumn()]))
+        c_query = qc.Operator(qp.And, [
+            qe.Function('length', [qe.AccountColumn()]),
+            qe.SumPosition([qe.PositionColumn()]),
+        ])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 1), (len(columns), len(aggregates)))
         self.assertTrue(qc.is_aggregate(c_query))
@@ -122,7 +154,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
 
 class TestCompileDataTypes(unittest.TestCase):
 
-    def test_compile_EvalConstant(self):
+    def test_compile_Constant(self):
         c_int = qc.EvalConstant(17)
         self.assertEqual(int, c_int.dtype)
 
@@ -132,59 +164,57 @@ class TestCompileDataTypes(unittest.TestCase):
         c_str = qc.EvalConstant("Assets:Checking")
         self.assertEqual(str, c_str.dtype)
 
-    def test_compile_EvalNot(self):
-        c_not = qc.EvalNot(qc.EvalConstant(17))
+    def test_compile_Not(self):
+        c_not = qc.Operator(qp.Not, [qc.EvalConstant(17)])
         self.assertEqual(bool, c_not.dtype)
 
-    def test_compile_EvalEqual(self):
-        c_equal = qc.EvalEqual(qc.EvalConstant(17), qc.EvalConstant(18))
+    def test_compile_Equal(self):
+        c_equal = qc.Operator(qp.Equal, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_equal.dtype)
 
-    def test_compile_EvalGreater(self):
-        c_gt = qc.EvalGreater(qc.EvalConstant(17), qc.EvalConstant(18))
+    def test_compile_Greater(self):
+        c_gt = qc.Operator(qp.Greater, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_gt.dtype)
 
-    def test_compile_EvalGreaterEq(self):
-        c_ge = qc.EvalGreaterEq(qc.EvalConstant(17), qc.EvalConstant(18))
+    def test_compile_GreaterEq(self):
+        c_ge = qc.Operator(qp.GreaterEq, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_ge.dtype)
 
-    def test_compile_EvalLess(self):
-        c_lt = qc.EvalLess(qc.EvalConstant(17), qc.EvalConstant(18))
+    def test_compile_Less(self):
+        c_lt = qc.Operator(qp.Less, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_lt.dtype)
 
-    def test_compile_EvalLessEq(self):
-        c_le = qc.EvalLessEq(qc.EvalConstant(17), qc.EvalConstant(18))
+    def test_compile_LessEq(self):
+        c_le = qc.Operator(qp.LessEq, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_le.dtype)
 
-    def test_compile_EvalMatch(self):
-        with self.assertRaises(qc.CompilationError):
-            qc.EvalMatch(qc.EvalConstant('testing'), qc.EvalConstant(18))
-        c_equal = qc.EvalMatch(qc.EvalConstant('testing'), qc.EvalConstant('test.*'))
-        self.assertEqual(bool, c_equal.dtype)
+    def test_compile_Match(self):
+        c_match = qc.Operator(qp.Match, [qc.EvalConstant('abc'), qc.EvalConstant('b')])
+        self.assertEqual(bool, c_match.dtype)
 
-    def test_compile_EvalAnd(self):
-        c_and = qc.EvalAnd(qc.EvalConstant(17), qc.EvalConstant(18))
+    def test_compile_And(self):
+        c_and = qc.Operator(qp.And, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_and.dtype)
 
-    def test_compile_EvalOr(self):
-        c_or = qc.EvalOr(qc.EvalConstant(17), qc.EvalConstant(18))
+    def test_compile_Or(self):
+        c_or = qc.Operator(qp.Or, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_or.dtype)
 
-    def test_compile_EvalMul(self):
-        c_plus = qc.EvalMul(qc.EvalConstant(17), qc.EvalConstant(18))
+    def test_compile_Mul(self):
+        c_plus = qc.Operator(qp.Mul, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        self.assertEqual(int, c_plus.dtype)
+
+    def test_compile_Div(self):
+        c_plus = qc.Operator(qp.Div, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(Decimal, c_plus.dtype)
 
-    def test_compile_EvalDiv(self):
-        c_plus = qc.EvalDiv(qc.EvalConstant(17), qc.EvalConstant(18))
-        self.assertEqual(Decimal, c_plus.dtype)
+    def test_compile_Add(self):
+        c_plus = qc.Operator(qp.Add, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        self.assertEqual(int, c_plus.dtype)
 
-    def test_compile_EvalAdd(self):
-        c_plus = qc.EvalAdd(qc.EvalConstant(17), qc.EvalConstant(18))
-        self.assertEqual(Decimal, c_plus.dtype)
-
-    def test_compile_EvalSub(self):
-        c_plus = qc.EvalSub(qc.EvalConstant(17), qc.EvalConstant(18))
-        self.assertEqual(Decimal, c_plus.dtype)
+    def test_compile_Sub(self):
+        c_plus = qc.Operator(qp.Sub, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        self.assertEqual(int, c_plus.dtype)
 
 
 class TestCompileMisc(unittest.TestCase):
@@ -750,10 +780,14 @@ class TestCompilePrint(CompileSelectBase):
         self.assertCompile(qc.EvalPrint(None), "PRINT;")
 
     def test_print_from(self):
-        self.assertCompile(qc.EvalPrint(
-            qc.EvalFrom(qc.EvalEqual(qe.YearEntryColumn(), qc.EvalConstant(2014)),
-                        None, None, None)
-            ), "PRINT FROM year = 2014;")
+        self.assertCompile(
+            qc.EvalPrint(
+                qc.EvalFrom(
+                    qc.Operator(qp.Equal, [
+                        qe.YearEntryColumn(),
+                        qc.EvalConstant(2014),
+                    ]), None, None, None)),
+            """PRINT FROM year = 2014;""")
 
 
 if __name__ == '__main__':
