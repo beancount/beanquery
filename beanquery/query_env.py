@@ -31,29 +31,28 @@ from beancount.utils.date_utils import parse_date_liberally
 from beanquery import query_compile
 
 
-# Non-aggregating functions. These functionals maintain no state.
+# Non-aggregating functions.
 SIMPLE_FUNCTIONS = {}
 
 
-def function(in_, out_, pass_context=False, name=None, help=None):
-    if not isinstance(in_, list):
-        in_ = [in_]
+def function(intypes, outtype, pass_context=False, name=None):
     def decorator(func):
-        class F(query_compile.EvalFunction):
-            __intypes__ = in_
+        class Func(query_compile.EvalFunction):
+            __intypes__ = intypes
             def __init__(self, operands):
-                super().__init__(operands, out_)
+                super().__init__(operands, outtype)
             def __call__(self, context):
                 args = self.eval_args(context)
                 if pass_context:
                     return func(context, *args)
                 return func(*args)
-        F.__doc__ = help if help is not None else func.__doc__
         fname = name if name is not None else func.__name__
-        if any(x != object for x in in_):
-            SIMPLE_FUNCTIONS[(fname, *in_)] = F
+        Func.__name__ = fname
+        Func.__doc__ = func.__doc__
+        if object in intypes:
+            SIMPLE_FUNCTIONS[fname] = Func
         else:
-            SIMPLE_FUNCTIONS[fname] = F
+            SIMPLE_FUNCTIONS[(fname, *intypes)] = Func
         return func
     return decorator
 
@@ -65,18 +64,18 @@ def Function(name, args):
     return None
 
 
-@function(Decimal, Decimal)
-@function(amount.Amount, amount.Amount)
-@function(position.Position, position.Position)
-@function(inventory.Inventory, inventory.Inventory)
+@function([Decimal], Decimal)
+@function([amount.Amount], amount.Amount)
+@function([position.Position], position.Position)
+@function([inventory.Inventory], inventory.Inventory)
 def neg(x):
     """Negative value."""
     return -x
 
 
-@function(Decimal, Decimal, name='abs')
-@function(position.Position, position.Position, name='abs')
-@function(inventory.Inventory, inventory.Inventory, name='abs')
+@function([Decimal], Decimal, name='abs')
+@function([position.Position], position.Position, name='abs')
+@function([inventory.Inventory], inventory.Inventory, name='abs')
 def abs_(x):
     """Absolute value."""
     return abs(x)
@@ -91,15 +90,15 @@ def safediv(x, y):
     return x / y
 
 
-@function(list, int)
-@function(set, int)
-@function(str, int)
+@function([list], int)
+@function([set], int)
+@function([str], int)
 def length(x):
     """Compute the length of the argument. This works on sequences."""
     return len(x)
 
 
-@function(object, str, name='str')
+@function([object], str, name='str')
 def str_(x):
     """Convert the argument to a string."""
     return repr(x)
@@ -126,37 +125,37 @@ def splitcomp(string, delim, index):
 
 # Operations on dates.
 
-@function(datetime.date, int)
+@function([datetime.date], int)
 def year(x):
     """Extract the year from a date."""
     return x.year
 
 
-@function(datetime.date, int)
+@function([datetime.date], int)
 def month(x):
     """Extract the month from a date."""
     return x.month
 
 
-@function(datetime.date, int)
+@function([datetime.date], int)
 def day(x):
     """Extract the day from a date."""
     return x.day
 
 
-@function(datetime.date, datetime.date)
+@function([datetime.date], datetime.date)
 def yearmonth(x):
     """Extract the year and month from a date."""
     return datetime.date(x.year, x.month, 1)
 
 
-@function(datetime.date, str)
+@function([datetime.date], str)
 def quarter(x):
     """Extract the quarter from a date."""
     return '{:04d}-Q{:1d}'.format(x.year, (x.month - 1) // 3 + 1)
 
 
-@function(datetime.date, str)
+@function([datetime.date], str)
 def weekday(x):
     """Extract a 3-letter weekday from a date."""
     return x.strftime('%a')
@@ -176,13 +175,13 @@ def root(acc, n):
     return account.root(n, acc)
 
 
-@function(str, str)
+@function([str], str)
 def parent(acc):
     """Get the parent name of the account."""
     return account.parent(acc)
 
 
-@function(str, str)
+@function([str], str)
 def leaf(acc):
     """Get the name of the leaf subaccount."""
     return account.leaf(acc)
@@ -214,7 +213,7 @@ def subst(pattern, repl, string):
     return re.sub(pattern, repl, string)
 
 
-@function(str, str)
+@function([str], str)
 def upper(string):
     """Convert string to uppercase."""
     if string is None:
@@ -222,7 +221,7 @@ def upper(string):
     return string.upper()
 
 
-@function(str, str)
+@function([str], str)
 def lower(string):
     """Convert string to lowercase."""
     if string is None:
@@ -230,21 +229,21 @@ def lower(string):
     return string.lower()
 
 
-@function(str, datetime.date, pass_context=True)
+@function([str], datetime.date, pass_context=True)
 def open_date(context, acc):
     """Get the date of the open directive of the account."""
     open_entry, _ = context.open_close_map[acc]
     return open_entry.date if open_entry else None
 
 
-@function(str, datetime.date, pass_context=True)
+@function([str], datetime.date, pass_context=True)
 def close_date(context, acc):
     """Get the date of the close directive of the account."""
     _, close_entry = context.open_close_map[acc]
     return close_entry.date if close_entry else None
 
 
-@function(str, object, pass_context=True)
+@function([str], object, pass_context=True)
 def meta(context, key):
     """Get some metadata key of the Posting."""
     meta = context.posting.meta
@@ -253,7 +252,7 @@ def meta(context, key):
     return meta.get(key, None)
 
 
-@function(str, object, pass_context=True)
+@function([str], object, pass_context=True)
 def entry_meta(context, key):
     """Get some metadata key of the parent directive (Transaction)."""
     meta = context.entry.meta
@@ -262,7 +261,7 @@ def entry_meta(context, key):
     return meta.get(key, None)
 
 
-@function(str, object, pass_context=True)
+@function([str], object, pass_context=True)
 def any_meta(context, key):
     """Get metadata from the posting or its parent transaction's metadata if not present."""
     marker = object()
@@ -274,15 +273,15 @@ def any_meta(context, key):
     return None
 
 
-@function(str, dict, pass_context=True)
+@function([str], dict, pass_context=True)
 def open_meta(context, acc):
     """Get the metadata dict of the open directive of the account."""
     open_entry, _ = context.open_close_map[acc]
     return open_entry.meta
 
 
-@function(str, dict, pass_context=True)
-@function(str, dict, pass_context=True, name='commodity_meta')
+@function([str], dict, pass_context=True)
+@function([str], dict, pass_context=True, name='commodity_meta')
 def currency_meta(context, curr):
     """Get the metadata dict of the commodity directive of the currency."""
     commodity_entry = context.commodity_map.get(curr, None)
@@ -291,7 +290,7 @@ def currency_meta(context, curr):
     return commodity_entry.meta
 
 
-@function(str, str, pass_context=True)
+@function([str], str, pass_context=True)
 def account_sortkey(context, acc):
     """Get a string to sort accounts in order taking into account the types."""
     index, name = account_types.get_account_sort_key(context.account_types, acc)
@@ -314,25 +313,25 @@ def account_sortkey(context, acc):
 # Operation on inventories, positions and amounts.
 
 
-@function(position.Position, amount.Amount, name='units')
+@function([position.Position], amount.Amount, name='units')
 def position_units(pos):
     """Get the number of units of a position (stripping cost)."""
     return convert.get_units(pos)
 
 
-@function(inventory.Inventory, inventory.Inventory, name='units')
+@function([inventory.Inventory], inventory.Inventory, name='units')
 def inventory_units(inv):
     """Get the number of units of an inventory (stripping cost)."""
     return inv.reduce(convert.get_units)
 
 
-@function(position.Position, amount.Amount, name='cost')
+@function([position.Position], amount.Amount, name='cost')
 def position_cost(pos):
     """Get the cost of a position."""
     return convert.get_cost(pos)
 
 
-@function(inventory.Inventory, inventory.Inventory, name='cost')
+@function([inventory.Inventory], inventory.Inventory, name='cost')
 def inventory_cost(inv):
     """Get the cost of an inventory."""
     return inv.reduce(convert.get_cost)
@@ -360,7 +359,7 @@ def convert_inventory(context, inv, currency, date=None):
     return inv.reduce(convert.convert_position, currency, context.price_map, date)
 
 
-@function(position.Position, amount.Amount, pass_context=True, name='value')
+@function([position.Position], amount.Amount, pass_context=True, name='value')
 @function([position.Position, datetime.date], amount.Amount, pass_context=True, name='value')
 def position_value(context, pos, date=None):
     """Convert a position to its cost currency at the market value."""
@@ -368,7 +367,7 @@ def position_value(context, pos, date=None):
 
 
 # pylint: disable=line-too-long
-@function(inventory.Inventory, inventory.Inventory, pass_context=True, name='value')
+@function([inventory.Inventory], inventory.Inventory, pass_context=True, name='value')
 @function([inventory.Inventory, datetime.date], inventory.Inventory, pass_context=True, name='value')
 def inventory_value(context, inv, date=None):
     """Coerce an inventory to its market value."""
@@ -384,14 +383,14 @@ def getprice(context, base, quote, date=None):
     return price
 
 
-@function(amount.Amount, Decimal)
+@function([amount.Amount], Decimal)
 def number(x):
     """Extract the number from an Amount."""
     return x.number
 
 
-@function(amount.Amount, str)
-@function(amount.Amount, str, name='commodity')
+@function([amount.Amount], str)
+@function([amount.Amount], str, name='commodity')
 def currency(x):
     """Extract the currency from an Amount."""
     return x.currency
@@ -419,7 +418,7 @@ def findfirst(pattern, values):
     return None
 
 
-@function(set, str)
+@function([set], str)
 def joinstr(values):
     """Join a sequence of strings to a single comma-separated string."""
     return ','.join(values)
@@ -431,7 +430,7 @@ def only_inventory(currency, inventory_):
     return inventory_.get_currency_units(currency)
 
 
-@function(inventory.Inventory, bool, name='empty')
+@function([inventory.Inventory], bool, name='empty')
 def empty_inventory(inventory_):
     """Determine whether the inventiry is empty."""
     return inventory_.is_empty()
@@ -474,7 +473,7 @@ def date_from_ymd(year, month, day):
     return datetime.date(year, month, day)
 
 
-@function(str, datetime.date, name='date')
+@function([str], datetime.date, name='date')
 def date_from_str(string):
     """Parse date from string."""
     return parse_date_liberally(string)
