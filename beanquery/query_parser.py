@@ -625,16 +625,42 @@ class SelectParser(Lexer):
         """
         p[0] = self.handle_comma_separated_list(p)
 
+    def p_literal(self, p):
+        """
+        literal : NULL
+                | boolean
+                | INTEGER
+                | DECIMAL
+                | STRING
+                | DATE
+        """
+        p[0] = p[1]
+
+    def p_literal_list(self, p):
+        """
+        literals_list : literal COMMA
+        """
+        p[0] = [p[1]]
+
+    def p_literal_list_many(self, p):
+        """
+        literals_list : literals_list literal
+                      | literals_list literal COMMA
+        """
+        p[0] = p[1] + [p[2]]
+
     def p_constant(self, p):
         """
-        constant : NULL
-                 | boolean
-                 | INTEGER
-                 | DECIMAL
-                 | STRING
-                 | DATE
+        constant : literal
+                 | list
         """
         p[0] = Constant(p[1] if p[1] != 'NULL' else None)
+
+    def p_list(self, p):
+        """
+        list : LPAREN literals_list RPAREN
+        """
+        p[0] = p[2]
 
     def p_boolean(self, p):
         """
