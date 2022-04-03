@@ -331,30 +331,34 @@ def close_date(context, acc):
 @function([str], object, pass_context=True)
 def meta(context, key):
     """Get some metadata key of the Posting."""
-    meta = context.posting.meta
-    if meta is None:
-        return None
-    return meta.get(key, None)
+    try:
+        return context.posting.meta[key]
+    except (AttributeError, KeyError):
+        pass
+    return None
 
 
 @function([str], object, pass_context=True)
 def entry_meta(context, key):
     """Get some metadata key of the parent directive (Transaction)."""
-    meta = context.entry.meta
-    if meta is None:
-        return None
-    return meta.get(key, None)
+    try:
+        return context.entry.meta[key]
+    except (AttributeError, KeyError):
+        pass
+    return None
 
 
 @function([str], object, pass_context=True)
 def any_meta(context, key):
     """Get metadata from the posting or its parent transaction's metadata if not present."""
-    marker = object()
-    for meta in context.posting.meta, context.entry.meta:
-        if meta is not None:
-            value = meta.get(key, marker)
-            if value is not marker:
-                return value
+    try:
+        return context.posting.meta[key]
+    except (AttributeError, KeyError):
+        pass
+    try:
+        return context.entry.meta[key]
+    except (AttributeError, KeyError):
+        pass
     return None
 
 
