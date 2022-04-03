@@ -8,16 +8,12 @@ import io
 import logging
 import os
 import re
+import readline
 import sys
 import shlex
 import textwrap
 import traceback
 from os import path
-
-try:
-    import readline
-except ImportError:
-    readline = None
 
 import click
 
@@ -45,46 +41,6 @@ def nullcontext(result):
     yield result
 
 
-def load_history(filename):
-    """Load the shell's past history.
-
-    Args:
-      filename: A string, the name of the file containing the shell history.
-    """
-    readline.parse_and_bind("tab:complete")
-    if hasattr(readline, "read_history_file"):
-        try:
-            readline.read_history_file(filename)
-        except IOError:
-            # Don't error on absent file.
-            pass
-        atexit.register(save_history, filename)
-
-
-def save_history(filename):
-    """Save the shell history. This should be invoked on exit.
-
-    Args:
-      filename: A string, the name of the file to save the history to.
-    """
-    readline.write_history_file(filename)
-
-
-def get_history(max_entries):
-    """Return the history in the readline buffer.
-
-    Args:
-      max_entries: An integer, the maximum number of entries to return.
-    Returns:
-      A list of string, the previous history of commands.
-    """
-    num_entries = readline.get_current_history_length()
-    assert num_entries >= 0
-    start = max(0, num_entries - max_entries)
-    return [readline.get_history_item(index+1)
-            for index in range(start, num_entries)]
-
-
 def convert_bool(string):
     """Convert a string to a boolean.
 
@@ -98,9 +54,6 @@ def convert_bool(string):
 
 class DispatchingShell(cmd.Cmd):
     """A usable convenient shell for interpreting commands, with history."""
-
-    # The maximum number of entries.
-    max_entries = 64
 
     # Header for parsed commands.
     doc_header = "Shell utility commands (type help <topic>):"
@@ -116,8 +69,15 @@ class DispatchingShell(cmd.Cmd):
           default_format: A string, the default output format.
         """
         super().__init__()
-        if is_interactive and readline is not None:
-            load_history(path.expanduser(HISTORY_FILENAME))
+        if is_interactive:
+            readline.parse_and_bind("tab: complete")
+            history_filepath = path.expanduser(HISTORY_FILENAME)
+            try:
+                readline.read_history_file(history_filepath)
+                readline.set_history_length(2048)
+            except FileNotFoundError:
+                pass
+            atexit.register(readline.write_history_file, history_filepath)
         self.is_interactive = is_interactive
         self.parser = parser
         self.initialize_vars(default_format, do_numberify)
@@ -189,7 +149,7 @@ class DispatchingShell(cmd.Cmd):
                 super().cmdloop(intro)
                 break
             except KeyboardInterrupt:
-                print('\n(Interrupted)', file=self.outfile)
+                print('\n(interrupted)', file=self.outfile)
 
     def parseline(self, line):
         """Override command line parsing for case insensitive commands lookup."""
@@ -198,11 +158,17 @@ class DispatchingShell(cmd.Cmd):
             cmd = cmd.lower()
         return cmd, arg, line
 
-    def do_history(self, _):
+    def do_history(self, line):
         "Print the command-line history statement."
-        if readline is not None:
-            for index, line in enumerate(get_history(self.max_entries)):
-                print(line, file=self.outfile)
+        num_entries = readline.get_current_history_length()
+        try:
+            max_entries = int(line)
+            start = max(0, num_entries - max_entries)
+        except ValueError:
+            start = 0
+        for index in range(start, num_entries):
+            line = readline.get_history_item(index + 1)
+            print(line, file=self.outfile)
 
     def do_clear(self, _):
         "Clear the history."
