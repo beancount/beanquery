@@ -71,6 +71,13 @@ class DispatchingShell(cmd.Cmd):
         super().__init__()
         if is_interactive:
             readline.parse_and_bind("tab: complete")
+            # Readline is used to complete command names, which are
+            # strictly alphanumeric strings, and named query
+            # identifiers, which may contain any ascii characters. To
+            # enable completion of the latter, reduce the set of
+            # completion word delimiters to the shell default. Notably
+            # remove "-" from the delimiters list setup by Python.
+            readline.set_completer_delims(" \t\n\"\\'`@$><=;|&{(")
             history_filepath = path.expanduser(HISTORY_FILENAME)
             try:
                 readline.read_history_file(history_filepath)
@@ -282,7 +289,7 @@ class BQLShell(DispatchingShell):
         self.loadfun = loadfun
         self.entries = None
         self.errors = None
-        self.options_map = None
+        self.options = None
 
         self.env_targets = query_env.TargetsEnvironment()
         self.env_entries = query_env.FilterEntriesEnvironment()
@@ -291,6 +298,16 @@ class BQLShell(DispatchingShell):
     def do_reload(self, _line=None):
         "Reload the Beancount input file."
         self.entries, self.errors, self.options = self.loadfun()
+
+        # Extract a mapping of the custom queries from the list of entries.
+        self.named_queries = {}
+        for entry in self.entries:
+            if not isinstance(entry, data.Query):
+                continue
+            x = self.named_queries.setdefault(entry.name, entry)
+            if x is not entry:
+                logging.warning("Duplicate query name '%s'", entry.name)
+
         if self.is_interactive:
             print_statistics(self.entries, self.options, self.outfile)
 
@@ -303,18 +320,16 @@ class BQLShell(DispatchingShell):
 
     def do_run(self, line):
         "Run a named query defined in the Beancount input file."
-        custom_query_map = create_custom_query_map(self.entries)
 
         line = line.rstrip('; \t')
         if not line:
             # List the available queries.
-            for name in sorted(custom_query_map):
-                print(name)
+            print('\n'.join(name for name in sorted(self.named_queries)))
             return
 
         if line == "*":
             # Execute all.
-            for name, query in sorted(custom_query_map.items()):
+            for name, query in sorted(self.named_queries.items()):
                 print(f'{name}:')
                 self.run_parser(query.query_string, default_close_date=query.date)
                 print()
@@ -326,16 +341,14 @@ class BQLShell(DispatchingShell):
             print("ERROR: Too many arguments for 'run' command.")
             return
 
-        query = custom_query_map.get(name)
+        query = self.named_queries.get(name)
         if not query:
-            # Lookup best query match using name as prefix
-            queries = [q for q in custom_query_map if q.startswith(name)]
-            if len(queries) == 1:
-                name = queries[0]
-                query = custom_query_map[name]
-        if not query:
-            return print(f"ERROR: Query '{name}' not found.")
+            print(f"ERROR: Query '{name}' not found.")
+            return
         self.dispatch(self.parser.parse(query.query_string))
+
+    def complete_run(self, text, _line, _begidx, _endidx):
+        return [name for name in self.named_queries if name.startswith(text)]
 
     def on_Print(self, print_stmt):
         """
@@ -712,24 +725,6 @@ def print_statistics(entries, options, outfile):
     print(f"Ready with {num_directives} directives",
           f"({num_postings} postings in {num_transactions} transactions).",
           file=outfile)
-
-
-def create_custom_query_map(entries):
-    """Extract a mapping of the custom queries from the list of entries.
-
-    Args:
-      entries: A list of entries.
-    Returns:
-      A map of query-name strings to Query directives.
-    """
-    query_map = {}
-    for entry in entries:
-        if not isinstance(entry, data.Query):
-            continue
-        if entry.name in query_map:
-            logging.warning("Duplicate query: %s", entry.name)
-        query_map[entry.name] = entry
-    return query_map
 
 
 _SUPPORTED_FORMATS = ('text', 'csv')
