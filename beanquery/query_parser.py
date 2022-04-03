@@ -70,12 +70,6 @@ Journal = collections.namedtuple('Journal', 'account summary_func from_clause')
 #   from_clause: An instance of 'From', or None if absent.
 Print = collections.namedtuple('Print', 'from_clause')
 
-# Explains a command (prints out AST for debugging).
-#
-# Attributes:
-#   statement: An instance of a compiled statement to explain.
-Explain = collections.namedtuple('Explain', 'statement')
-
 # A parsed SELECT column or target.
 #
 # Attributes:
@@ -201,7 +195,6 @@ class Lexer:
 
     # List of reserved keywords.
     keywords = {
-        'EXPLAIN',
         'SELECT', 'AS', 'FROM', 'WHERE', 'OPEN', 'CLOSE', 'CLEAR', 'ON',
         'BALANCES', 'JOURNAL', 'PRINT', 'AT',
         'GROUP', 'BY', 'HAVING', 'ORDER', 'DESC', 'ASC', 'PIVOT',
@@ -666,10 +659,6 @@ class Parser(SelectParser):
     def p_regular_statement(self, p):
         "top_statement : statement delimiter"
         p[0] = p[1]
-
-    def p_explain_statement(self, p):
-        "top_statement : EXPLAIN statement delimiter"
-        p[0] = Explain(p[2])
 
     def p_statement(self, p):
         """

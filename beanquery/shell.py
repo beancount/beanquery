@@ -350,6 +350,41 @@ class BQLShell(DispatchingShell):
     def complete_run(self, text, _line, _begidx, _endidx):
         return [name for name in self.named_queries if name.startswith(text)]
 
+    def do_explain(self, line):
+        """Compile and print a compiled statement for debugging."""
+
+        pr = lambda *args: print(*args, file=self.outfile)
+
+        try:
+            statement = self.parser.parse(line)
+        except query_parser.ParseError as exc:
+            pr(str(exc).rstrip('.'))
+            return
+
+        pr("Parsed statement:")
+        pr(f"  {statement}")
+        pr()
+
+        # Compile the statement and print it uot.
+        try:
+            query = query_compile.compile(statement, self.env_targets,
+                                          self.env_postings, self.env_entries)
+        except query_compile.CompilationError as exc:
+            pr(str(exc).rstrip('.'))
+            return
+
+        pr("Compiled query:")
+        pr(f"  {query}")
+        pr()
+
+        pr("Targets:")
+        for c_target in query.c_targets:
+            pr("  '{}'{}: {}".format(
+                c_target.name or '(invisible)',
+                ' (aggregate)' if query_compile.is_aggregate(c_target.c_expr) else '',
+                c_target.c_expr.dtype.__name__))
+        pr()
+
     def on_Print(self, print_stmt):
         """
         Print entries in Beancount format.
@@ -499,36 +534,6 @@ class BQLShell(DispatchingShell):
         See the SELECT query help for more details on the FROM clause.
         """
         return self.on_Select(balance)
-
-    def on_Explain(self, explain):
-        """
-        Compile and print a compiled statement for debugging.
-        """
-        pr = lambda *args: print(*args, file=self.outfile)
-        pr("Parsed statement:")
-        pr(f"  {explain.statement}")
-        pr()
-
-        # Compile the select statement and print it uot.
-        try:
-            query = query_compile.compile(explain.statement,
-                                          self.env_targets,
-                                          self.env_postings,
-                                          self.env_entries)
-        except query_compile.CompilationError as exc:
-            pr(str(exc).rstrip('.'))
-            return
-
-        pr("Compiled query:")
-        pr(f"  {query}")
-        pr()
-        pr("Targets:")
-        for c_target in query.c_targets:
-            pr("  '{}'{}: {}".format(
-                c_target.name or '(invisible)',
-                ' (aggregate)' if query_compile.is_aggregate(c_target.c_expr) else '',
-                c_target.c_expr.dtype.__name__))
-        pr()
 
     def help_targets(self):
         template = textwrap.dedent("""

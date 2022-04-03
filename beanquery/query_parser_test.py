@@ -651,25 +651,5 @@ class TestExpressionName(QueryParserTestBase):
             qp.And(qp.Column('account'), qp.Column('date'))))
 
 
-class TestExplain(QueryParserTestBase):
-
-    def test_explain_select(self):
-        self.assertParse(qp.Explain(
-            qSelect([qp.Target(qp.Column('date'), None),
-                     qp.Target(qp.Column('account'), None)],
-                    where_clause=qp.Match(qp.Column('account'), qp.Constant('etrade')))
-            ), "EXPLAIN SELECT date, account WHERE account ~ 'etrade';")
-
-    def test_explain_balances(self):
-        self.assertParse(qp.Explain(
-            qp.Balances('cost', None, None)
-            ), "EXPLAIN BALANCES AT cost;")
-
-    def test_explain_journal(self):
-        self.assertParse(qp.Explain(
-            qp.Journal('Assets:ETrade', 'units', None)
-            ), "EXPLAIN JOURNAL 'Assets:ETrade' AT units;")
-
-
 if __name__ == '__main__':
     unittest.main()
