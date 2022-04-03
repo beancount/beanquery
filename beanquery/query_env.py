@@ -42,7 +42,7 @@ def function(intypes, outtype, pass_context=False, name=None):
             def __init__(self, operands):
                 super().__init__(operands, outtype)
             def __call__(self, context):
-                args = self.eval_args(context)
+                args = [operand(context) for operand in self.operands]
                 if pass_context:
                     return func(context, *args)
                 return func(*args)
@@ -526,7 +526,7 @@ class Count(query_compile.EvalAggregator):
 class Sum(query_compile.EvalAggregator):
     """Calculate the sum of the numerical argument."""
     def update(self, store, context):
-        value = self.eval_args(context)[0]
+        value = self.operands[0](context)
         if value is not None:
             store[self.handle] += value
 
@@ -538,7 +538,7 @@ class SumAmount(query_compile.EvalAggregator):
         super().__init__(operands, inventory.Inventory)
 
     def update(self, store, context):
-        value = self.eval_args(context)[0]
+        value = self.operands[0](context)
         store[self.handle].add_amount(value)
 
 
@@ -549,7 +549,7 @@ class SumPosition(query_compile.EvalAggregator):
         super().__init__(operands, inventory.Inventory)
 
     def update(self, store, context):
-        value = self.eval_args(context)[0]
+        value = self.operands[0](context)
         store[self.handle].add_position(value)
 
 
@@ -560,7 +560,7 @@ class SumInventory(query_compile.EvalAggregator):
         super().__init__(operands, inventory.Inventory)
 
     def update(self, store, context):
-        value = self.eval_args(context)[0]
+        value = self.operands[0](context)
         store[self.handle].add_inventory(value)
 
 
@@ -572,7 +572,7 @@ class First(query_compile.EvalAggregator):
 
     def update(self, store, context):
         if store[self.handle] is None:
-            value = self.eval_args(context)[0]
+            value = self.operands[0](context)
             store[self.handle] = value
 
 
@@ -583,7 +583,7 @@ class Last(query_compile.EvalAggregator):
         store[self.handle] = None
 
     def update(self, store, context):
-        value = self.eval_args(context)[0]
+        value = self.operands[0](context)
         store[self.handle] = value
 
 
@@ -594,9 +594,9 @@ class Min(query_compile.EvalAggregator):
         store[self.handle] = None
 
     def update(self, store, context):
-        value = self.eval_args(context)[0]
-        cur_value = store[self.handle]
-        if cur_value is None or value < cur_value:
+        value = self.operands[0](context)
+        cur = store[self.handle]
+        if cur is None or value < cur:
             store[self.handle] = value
 
 
@@ -607,9 +607,9 @@ class Max(query_compile.EvalAggregator):
         store[self.handle] = None
 
     def update(self, store, context):
-        value = self.eval_args(context)[0]
-        cur_value = store[self.handle]
-        if cur_value is None or value > cur_value:
+        value = self.operands[0](context)
+        cur = store[self.handle]
+        if cur is None or value > cur:
             store[self.handle] = value
 
 
@@ -796,7 +796,7 @@ class MatchAccount(query_compile.EvalFunction):
         super().__init__(operands, bool)
 
     def __call__(self, context):
-        pattern = self.eval_args(context)[0]
+        pattern = self.operands[0](context)
         search = re.compile(pattern, re.IGNORECASE).search
         return any(search(account) for account in getters.get_entry_accounts(context.entry))
 

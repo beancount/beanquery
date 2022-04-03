@@ -246,11 +246,7 @@ class EvalFunction(EvalNode):
 
     def __init__(self, operands, dtype):
         super().__init__(dtype)
-        assert isinstance(operands, list), "Internal error: invalid type for operands."
         self.operands = operands
-
-    def eval_args(self, context):
-        return [operand(context) for operand in self.operands]
 
 
 class EvalColumn(EvalNode):
