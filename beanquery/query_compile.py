@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from beancount.core import inventory
 from beanquery import query_parser
+from beanquery import types
 
 
 # A global constant which sets whether we support inferred/implicit group-by
@@ -343,13 +344,8 @@ class CompilationEnvironment:
         Args:
           name: A string, the name of the function to access.
         """
-        key = tuple([name] + [operand.dtype for operand in operands])
-        func = self.functions.get(key)
-        if func is not None:
-            return func(operands)
 
-        # If not found with the operands, try just looking it up by name.
-        func = self.functions.get(name)
+        func = types.function_lookup(self.functions, name, operands)
         if func is not None:
             return func(operands)
 

@@ -23,7 +23,7 @@ class TestCompileExpression(unittest.TestCase):
                                                qe.TargetsEnvironment()))
 
     def test_expr_function(self):
-        self.assertEqual(qe.SumPosition([qe.PositionColumn()]),
+        self.assertEqual(qe.Function('sum', [qe.PositionColumn()]),
                          qc.compile_expression(qp.Function('sum', [qp.Column('position')]),
                                                qe.TargetsEnvironment()))
 

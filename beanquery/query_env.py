@@ -7,6 +7,7 @@ Define new columns and functions here.
 __copyright__ = "Copyright (C) 2014-2017  Martin Blais"
 __license__ = "GNU GPLv2"
 
+import collections
 import copy
 import datetime
 import re
@@ -29,10 +30,11 @@ from beancount.core import prices
 from beancount.utils.date_utils import parse_date_liberally
 
 from beanquery import query_compile
+from beanquery import types
 
 
 # Non-aggregating functions.
-SIMPLE_FUNCTIONS = {}
+SIMPLE_FUNCTIONS = collections.defaultdict(list)
 
 
 def function(intypes, outtype, pass_context=False, name=None):
@@ -46,22 +48,27 @@ def function(intypes, outtype, pass_context=False, name=None):
                 if pass_context:
                     return func(context, *args)
                 return func(*args)
-        fname = name if name is not None else func.__name__
-        Func.__name__ = fname
+        Func.__name__ = name if name is not None else func.__name__
         Func.__doc__ = func.__doc__
-        if object in intypes:
-            SIMPLE_FUNCTIONS[fname] = Func
-        else:
-            SIMPLE_FUNCTIONS[(fname, *intypes)] = Func
+        SIMPLE_FUNCTIONS[Func.__name__].append(Func)
         return func
     return decorator
 
 
 def Function(name, args):
-    func = SIMPLE_FUNCTIONS.get((name, *[x.dtype for x in args])) or SIMPLE_FUNCTIONS.get(name)
+    func = types.function_lookup(SIMPLE_FUNCTIONS, name, args)
     if func is not None:
         return func(args)
-    return None
+    func = types.function_lookup(AGGREGATE_FUNCTIONS, name, args)
+    if func is not None:
+        return func(args)
+    raise KeyError
+
+
+@function([object], bool, name='bool')
+def _bool_cast(x):
+    """Convert to bool value."""
+    return bool(x)
 
 
 @function([Decimal], Decimal)
@@ -98,7 +105,7 @@ def length(x):
     return len(x)
 
 
-@function([object], str, name='str')
+@function([types.Any], str, name='str')
 def str_(x):
     """Convert the argument to a string."""
     return repr(x)
@@ -458,7 +465,8 @@ def possign(context, x, account):
     return x if sign >= 0  else -x
 
 
-@function([object, object], object)
+# FIXME!
+@function([types.Any, types.Any], object)
 def coalesce(*args):
     """Return the first non-null argument."""
     for arg in args:
@@ -496,22 +504,20 @@ def date_add(x, y):
 
 
 # Aggregate functions.
-AGGREGATE_FUNCTIONS = {}
+AGGREGATE_FUNCTIONS = collections.defaultdict(list)
 
 
 def aggregator(intypes, name=None):
     def decorator(cls):
         cls.__intypes__ = intypes
-        fname = name if name is not None else cls.__name__
-        if object in intypes:
-            AGGREGATE_FUNCTIONS[fname] = cls
-        else:
-            AGGREGATE_FUNCTIONS[(fname, *intypes)] = cls
+        if name is not None:
+            cls.__name__ = name
+        AGGREGATE_FUNCTIONS[cls.__name__].append(cls)
         return cls
     return decorator
 
 
-@aggregator([object], name='count')
+@aggregator([types.Any], name='count')
 class Count(query_compile.EvalAggregator):
     """Count the number of occurrences of the argument."""
     def __init__(self, operands):
@@ -522,8 +528,19 @@ class Count(query_compile.EvalAggregator):
 
 
 @aggregator([int], name='sum')
+class SumInt(query_compile.EvalAggregator):
+    """Calculate the sum of the numerical argument."""
+    def __init__(self, operands):
+        super().__init__(operands, operands[0].dtype)
+
+    def update(self, store, context):
+        value = self.operands[0](context)
+        if value is not None:
+            store[self.handle] += value
+
+
 @aggregator([Decimal], name='sum')
-class Sum(query_compile.EvalAggregator):
+class SumDecimal(query_compile.EvalAggregator):
     """Calculate the sum of the numerical argument."""
     def update(self, store, context):
         value = self.operands[0](context)
@@ -564,7 +581,7 @@ class SumInventory(query_compile.EvalAggregator):
         store[self.handle].add_inventory(value)
 
 
-@aggregator([object], name='first')
+@aggregator([types.Any], name='first')
 class First(query_compile.EvalAggregator):
     """Keep the first of the values seen."""
     def initialize(self, store):
@@ -576,7 +593,7 @@ class First(query_compile.EvalAggregator):
             store[self.handle] = value
 
 
-@aggregator([object], name='last')
+@aggregator([types.Any], name='last')
 class Last(query_compile.EvalAggregator):
     """Keep the last of the values seen."""
     def initialize(self, store):
@@ -587,7 +604,7 @@ class Last(query_compile.EvalAggregator):
         store[self.handle] = value
 
 
-@aggregator([object], name='min')
+@aggregator([types.Any], name='min')
 class Min(query_compile.EvalAggregator):
     """Compute the minimum of the values."""
     def initialize(self, store):
@@ -600,7 +617,7 @@ class Min(query_compile.EvalAggregator):
             store[self.handle] = value
 
 
-@aggregator([object], name='max')
+@aggregator([types.Any], name='max')
 class Max(query_compile.EvalAggregator):
     """Compute the maximum of the values."""
     def initialize(self, store):
@@ -802,9 +819,7 @@ class MatchAccount(query_compile.EvalFunction):
 
 
 # Functions defined only on entries.
-ENTRY_FUNCTIONS = {
-    'has_account' : MatchAccount,
-    }
+ENTRY_FUNCTIONS = { 'has_account': [MatchAccount], }
 
 
 class FilterEntriesEnvironment(query_compile.CompilationEnvironment):

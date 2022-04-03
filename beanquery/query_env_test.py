@@ -16,8 +16,6 @@ from beanquery import query
 class TestCompileDataTypes(unittest.TestCase):
 
     def test_compile_Length(self):
-        c_length = qe.Function('length', [qc.EvalConstant(17)])
-        self.assertEqual(None, c_length)
         c_length = qe.Function('length', [qc.EvalConstant('testing')])
         self.assertEqual(int, c_length.dtype)
 
