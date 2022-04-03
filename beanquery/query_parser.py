@@ -234,7 +234,7 @@ class Lexer:
 
     # An identifier, for a column or a dimension or whatever.
     def t_ID(self, token):
-        "[a-zA-Z][a-zA-Z_]*"
+        "[a-zA-Z][a-zA-Z0-9_]*"
         utoken = token.value.upper()
         if utoken in self.keywords:
             token.type = utoken
