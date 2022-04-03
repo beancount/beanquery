@@ -164,6 +164,16 @@ def Operator(op, operands):
 unaryop(query_parser.Not, [types.Any], bool)(operator.not_)
 
 
+@unaryop(query_parser.IsNull, [object], bool)
+def null(x):
+    return x is None
+
+
+@unaryop(query_parser.IsNotNull, [object], bool)
+def not_null(x):
+    return x is not None
+
+
 @binaryop(query_parser.Mul, [Decimal, Decimal], Decimal)
 @binaryop(query_parser.Mul, [Decimal, int], Decimal)
 @binaryop(query_parser.Mul, [int, Decimal], Decimal)

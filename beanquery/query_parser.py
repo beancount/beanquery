@@ -160,6 +160,9 @@ BinaryOp = cmptuple('BinaryOp', 'left right')
 # Negation operator.
 class Not(UnaryOp): pass
 
+class IsNull(UnaryOp): pass
+class IsNotNull(UnaryOp): pass
+
 # Logical and/or operators.
 class And(BinaryOp): pass
 class Or(BinaryOp): pass
@@ -199,7 +202,7 @@ class Lexer:
         'BALANCES', 'JOURNAL', 'PRINT', 'AT',
         'GROUP', 'BY', 'HAVING', 'ORDER', 'DESC', 'ASC', 'PIVOT',
         'LIMIT', 'FLATTEN', 'DISTINCT',
-        'AND', 'OR', 'NOT', 'IN',
+        'AND', 'OR', 'NOT', 'IN', 'IS',
         'TRUE', 'FALSE', 'NULL',
     }
 
@@ -502,6 +505,14 @@ class SelectParser(Lexer):
         ('left', 'ASTERISK', 'SLASH'),
         ('left', 'EQ', 'NE', 'GT', 'GTE', 'LT', 'LTE', 'TILDE', 'IN'),
         ]
+
+    def p_expression_is_null(self, p):
+        "expression : expression IS NULL"
+        p[0] = IsNull(p[1])
+
+    def p_expression_is_not_null(self, p):
+        "expression : expression IS NOT NULL"
+        p[0] = IsNotNull(p[1])
 
     def p_expression_and(self, p):
         "expression : expression AND expression"

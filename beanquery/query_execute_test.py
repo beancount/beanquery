@@ -276,6 +276,11 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT FALSE or 1.0", True)
         # not
         self.assertResult("SELECT not TRUE", False)
+        # is null
+        self.assertResult("SELECT meta('missing') IS NULL", True)
+        self.assertResult("SELECT meta('int') IS NULL", False)
+        self.assertResult("SELECT meta('missing') IS NOT NULL", False)
+        self.assertResult("SELECT meta('int') IS NOT NULL", True)
 
     def test_operators_type_inference(self):
         self.assertResult("SELECT 1 + meta('int')", Decimal(2))
