@@ -70,24 +70,11 @@ Journal = collections.namedtuple('Journal', 'account summary_func from_clause')
 #   from_clause: An instance of 'From', or None if absent.
 Print = collections.namedtuple('Print', 'from_clause')
 
-# Errors command (prints errors and context around them).
-Errors = collections.namedtuple('Errors', '')
-
-# Reload command (reloads the input file).
-Reload = collections.namedtuple('Reload', '')
-
 # Explains a command (prints out AST for debugging).
 #
 # Attributes:
 #   statement: An instance of a compiled statement to explain.
 Explain = collections.namedtuple('Explain', 'statement')
-
-# RunCustom command (runs a custom query defined in the input file).
-#
-# Attributes:
-#   query_name: A string, the name of the custom query.
-RunCustom = collections.namedtuple('RunCustom', 'query_name')
-
 
 # A parsed SELECT column or target.
 #
@@ -216,8 +203,7 @@ class Lexer:
     keywords = {
         'EXPLAIN',
         'SELECT', 'AS', 'FROM', 'WHERE', 'OPEN', 'CLOSE', 'CLEAR', 'ON',
-        'BALANCES', 'JOURNAL', 'PRINT', 'RUN', 'AT',
-        'ERRORS', 'RELOAD',
+        'BALANCES', 'JOURNAL', 'PRINT', 'AT',
         'GROUP', 'BY', 'HAVING', 'ORDER', 'DESC', 'ASC', 'PIVOT',
         'LIMIT', 'FLATTEN', 'DISTINCT',
         'AND', 'OR', 'NOT', 'IN',
@@ -691,9 +677,6 @@ class Parser(SelectParser):
                   | balances_statement
                   | journal_statement
                   | print_statement
-                  | run_statement
-                  | errors_statement
-                  | reload_statement
         """
         p[0] = p[1]
 
@@ -728,27 +711,6 @@ class Parser(SelectParser):
         print_statement : PRINT from
         """
         p[0] = Print(p[2])
-
-    def p_run_statement(self, p):
-        """
-        run_statement : RUN ID
-                      | RUN STRING
-                      | RUN ASTERISK
-                      | RUN empty
-        """
-        p[0] = RunCustom(p[2])
-
-    def p_errors_statement(self, p):
-        """
-        errors_statement : ERRORS
-        """
-        p[0] = Errors()
-
-    def p_reload_statement(self, p):
-        """
-        reload_statement : RELOAD
-        """
-        p[0] = Reload()
 
 
 def get_expression_name(expr):

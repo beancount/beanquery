@@ -191,9 +191,12 @@ class DispatchingShell(cmd.Cmd):
             except KeyboardInterrupt:
                 print('\n(Interrupted)', file=self.outfile)
 
-    def do_help(self, arg):
-        """Strip superfluous semicolon."""
-        super().do_help(arg.rstrip('; \t'))
+    def parseline(self, line):
+        """Override command line parsing for case insensitive commands lookup."""
+        cmd, arg, line = super().parseline(line)
+        if cmd != 'EOF':
+            cmd = cmd.lower()
+        return cmd, arg, line
 
     def do_history(self, _):
         "Print the command-line history statement."
@@ -319,22 +322,54 @@ class BQLShell(DispatchingShell):
         self.env_entries = query_env.FilterEntriesEnvironment()
         self.env_postings = query_env.FilterPostingsEnvironment()
 
-    def on_Reload(self, unused_statement=None):
-        """
-        Reload the input file without restarting the shell.
-        """
-        self.entries, self.errors, self.options_map = self.loadfun()
+    def do_reload(self, _line=None):
+        "Reload the Beancount input file."
+        self.entries, self.errors, self.options = self.loadfun()
         if self.is_interactive:
-            print_statistics(self.entries, self.options_map, self.outfile)
+            print_statistics(self.entries, self.options, self.outfile)
 
-    def on_Errors(self, _):
-        """
-        Print the errors that occurred during parsing.
-        """
+    def do_errors(self, _line):
+        "Print the errors that occurred during Beancount input file parsing."
         if self.errors:
             printer.print_errors(self.errors)
         else:
-            print('(No errors)', file=self.outfile)
+            print('(no errors)', file=self.outfile)
+
+    def do_run(self, line):
+        "Run a named query defined in the Beancount input file."
+        custom_query_map = create_custom_query_map(self.entries)
+
+        line = line.rstrip('; \t')
+        if not line:
+            # List the available queries.
+            for name in sorted(custom_query_map):
+                print(name)
+            return
+
+        if line == "*":
+            # Execute all.
+            for name, query in sorted(custom_query_map.items()):
+                print(f'{name}:')
+                self.run_parser(query.query_string, default_close_date=query.date)
+                print()
+                print()
+            return
+
+        name, *args = shlex.split(line)
+        if args:
+            print("ERROR: Too many arguments for 'run' command.")
+            return
+
+        query = custom_query_map.get(name)
+        if not query:
+            # Lookup best query match using name as prefix
+            queries = [q for q in custom_query_map if q.startswith(name)]
+            if len(queries) == 1:
+                name = queries[0]
+                query = custom_query_map[name]
+        if not query:
+            return print(f"ERROR: Query '{name}' not found.")
+        self.dispatch(self.parser.parse(query.query_string))
 
     def on_Print(self, print_stmt):
         """
@@ -364,7 +399,7 @@ class BQLShell(DispatchingShell):
             return
 
         with self.get_output() as out:
-            query_execute.execute_print(c_print, self.entries, self.options_map, out)
+            query_execute.execute_print(c_print, self.entries, self.options, out)
 
     def on_Select(self, statement):
         """
@@ -423,7 +458,7 @@ class BQLShell(DispatchingShell):
         # Execute it to obtain the result rows.
         rtypes, rrows = query_execute.execute_query(c_query,
                                                     self.entries,
-                                                    self.options_map)
+                                                    self.options)
 
         # Output the resulting rows.
         if not rrows:
@@ -436,17 +471,17 @@ class BQLShell(DispatchingShell):
                             expand=self.vars['expand'])
                 with self.get_output() as out:
                     query_render.render_text(rtypes, rrows,
-                                             self.options_map['dcontext'],
+                                             self.options['dcontext'],
                                              out, **kwds)
 
             elif output_format == 'csv':
                 # Numberify CSV output if requested.
                 if self.vars['numberify']:
-                    dformat = self.options_map['dcontext'].build()
+                    dformat = self.options['dcontext'].build()
                     rtypes, rrows = numberify.numberify_results(rtypes, rrows, dformat)
 
                 query_render.render_csv(rtypes, rrows,
-                                        self.options_map['dcontext'],
+                                        self.options['dcontext'],
                                         self.outfile,
                                         expand=self.vars['expand'])
 
@@ -515,45 +550,6 @@ class BQLShell(DispatchingShell):
                 ' (aggregate)' if query_compile.is_aggregate(c_target.c_expr) else '',
                 c_target.c_expr.dtype.__name__))
         pr()
-
-    def on_RunCustom(self, run_stmt):
-        """
-        Run a custom query instead of a SQL command.
-
-           RUN <custom-query-name>
-
-        Where:
-
-          custom-query-name: Should be the name of a custom query to be defined
-            in the Beancount input file.
-
-        """
-        custom_query_map = create_custom_query_map(self.entries)
-        name = run_stmt.query_name
-        if name is None:
-            # List the available queries.
-            for name in sorted(custom_query_map):
-                print(name)
-        elif name == "*":
-            for name, query in sorted(custom_query_map.items()):
-                print(f'{name}:')
-                self.run_parser(query.query_string, default_close_date=query.date)
-                print()
-                print()
-        else:
-            query = None
-            if name in custom_query_map:
-                query = custom_query_map[name]
-            else:  # lookup best query match using name as prefix
-                queries = [q for q in custom_query_map if q.startswith(name)]
-                if len(queries) == 1:
-                    name = queries[0]
-                    query = custom_query_map[name]
-            if query:
-                statement = self.parser.parse(query.query_string)
-                self.dispatch(statement)
-            else:
-                print(f"ERROR: Query '{name}' not found")
 
     def help_targets(self):
         template = textwrap.dedent("""
@@ -736,17 +732,17 @@ def summary_statistics(entries):
     return (num_directives, num_transactions, num_postings)
 
 
-def print_statistics(entries, options_map, outfile):
+def print_statistics(entries, options, outfile):
     """Print summary statistics to stdout.
 
     Args:
       entries: A list of directives.
-      options_map: An options map. as produced by the parser.
+      options: An options map. as produced by the parser.
       outfile: A file object to write to.
     """
     num_directives, num_transactions, num_postings = summary_statistics(entries)
-    if 'title' in options_map:
-        print(f'''Input file: "{options_map['title']}"''', file=outfile)
+    if 'title' in options:
+        print(f'''Input file: "{options['title']}"''', file=outfile)
     print(f"Ready with {num_directives} directives",
           f"({num_postings} postings in {num_transactions} transactions).",
           file=outfile)
@@ -806,7 +802,7 @@ def main(filename, query, numberify, output_format, output, no_errors):
     # Create the shell.
     is_interactive = sys.stdin.isatty() and not query
     shell_obj = BQLShell(is_interactive, load, output, output_format, numberify)
-    shell_obj.on_Reload()
+    shell_obj.do_reload()
 
     # Run interactively if we're a TTY and no query is supplied.
     if is_interactive:

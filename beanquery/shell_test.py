@@ -124,7 +124,7 @@ def runshell(function):
     def wrapper(self):
         with test_utils.capture('stdout') as stdout:
             shell_obj = shell.BQLShell(False, load, sys.stdout)
-            shell_obj.on_Reload()
+            shell_obj.do_reload()
             shell_obj.onecmd(function.__doc__)
         return function(self, stdout.getvalue())
     return wrapper
@@ -257,7 +257,7 @@ class TestRun(unittest.TestCase):
         """
         RUN something
         """
-        self.assertEqual("ERROR: Query 'something' not found", output.strip())
+        self.assertEqual("ERROR: Query 'something' not found.", output.strip())
 
     @runshell
     def test_run_custom__query_id(self, output):
