@@ -166,6 +166,15 @@ def safediv(x, y):
     return x / y
 
 
+@function([Decimal], Decimal, name='round')
+@function([Decimal, int], Decimal, name='round')
+@function([int], int, name='round')
+@function([int, int], int, name='round')
+def round_(num, digits=0):
+    """Round the argument."""
+    return round(num, digits)
+
+
 @function([list], int)
 @function([set], int)
 @function([str], int)

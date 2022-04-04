@@ -236,6 +236,12 @@ class TestTypes(QueryBase):
         self.assertResult("SELECT date(meta('null'))", None, datetime.date)
         self.assertResult("SELECT date(meta('missing'))", None, datetime.date)
 
+    def test_functions(self):
+        self.assertResult("SELECT round(1.2)", Decimal(1))
+        self.assertResult("SELECT round(1.234, 2)", Decimal('1.23'))
+        self.assertResult("SELECT round(12)", 12)
+        self.assertResult("SELECT round(12, -1)", 10)
+
 
 class TestFilterEntries(CommonInputBase, QueryBase):
 
