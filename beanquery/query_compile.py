@@ -432,9 +432,43 @@ def compile_expression(expr, environ):
     if isinstance(expr, query_parser.BinaryOp):
         left = compile_expression(expr.left, environ)
         right = compile_expression(expr.right, environ)
-        op = types.function_lookup(OPERATORS, type(expr), [left, right])
-        if op is not None:
-            return op(left, right)
+
+        candidates = OPERATORS[type(expr)]
+        while True:
+            intypes = [left.dtype, right.dtype]
+            for op in candidates:
+                if op.__intypes__ == intypes:
+                    return op(left, right)
+
+            # Implement type inference when one of the operands is not strongly typed.
+            if left.dtype is object and right.dtype is not object:
+                target = right.dtype
+                if target is int:
+                    # The Beancount parser does not emit int typed
+                    # values, thus casting to int is only going to
+                    # loose information. Promote to decimal.
+                    target = Decimal
+                name = types.MAP.get(target)
+                if name is None:
+                    break
+                left = environ.get_function(name, [left])
+                continue
+            if right.dtype is object and left.dtype is not object:
+                target = left.dtype
+                if target is int:
+                    # The Beancount parser does not emit int typed
+                    # values, thus casting to int is only going to
+                    # loose information. Promote to decimal.
+                    target = Decimal
+                name = types.MAP.get(target)
+                if name is None:
+                    break
+                right = environ.get_function(name, [right])
+                continue
+
+            # Failure.
+            break
+
         raise CompilationError(
             f'Operator {type(expr).__name__.lower()}('
             f'{left.dtype.__name__}, {right.dtype.__name__}) not supported')

@@ -339,6 +339,32 @@ class CompileSelectBase(unittest.TestCase):
             raise
 
 
+class TestCompileFundamentals(CompileSelectBase):
+
+    def test_operaotors(self):
+        expr = self.compile("SELECT 1 + 1 AS expr")
+        self.assertEqual(expr, qc.EvalQuery(
+            [qc.EvalTarget(
+                qc.Operator(qp.Add, [
+                    qc.EvalConstant(1),
+                    qc.EvalConstant(1)
+                ]), 'expr', False)],
+            None, None, None, None, None, None, None, None))
+
+        expr = self.compile("SELECT 1 + meta('int') AS expr")
+        self.assertEqual(expr, qc.EvalQuery(
+            [qc.EvalTarget(
+                qc.Operator(qp.Add, [
+                    qc.EvalConstant(1),
+                    qe.Function('decimal', [
+                        qe.Function('meta', [
+                            qc.EvalConstant('int'),
+                        ]),
+                    ]),
+                ]), 'expr', False)],
+            None, None, None, None, None, None, None, None))
+
+
 class TestCompileSelect(CompileSelectBase):
 
     def test_compile_from(self):

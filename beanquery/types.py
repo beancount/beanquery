@@ -1,3 +1,7 @@
+import datetime
+import decimal
+
+
 class AnyType:
     """As written on the tin."""
     __slots__ = ()
@@ -25,8 +29,18 @@ def function_lookup(functions, name, operands):
     Returns:
       A EvalNode (or subclass) instance or None if the function was not found.
     """
-    signature = [operand.dtype for operand in operands]
+    intypes = [operand.dtype for operand in operands]
     for func in functions[name]:
-        if func.__intypes__ == signature:
+        if func.__intypes__ == intypes:
             return func
     return None
+
+
+# Map types to their BQL name. Used to find the name of the type cast funtion.
+MAP = {
+    bool: 'bool',
+    datetime.date: 'date',
+    decimal.Decimal: 'decimal',
+    int: 'int',
+    str: 'str',
+}
