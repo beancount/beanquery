@@ -159,15 +159,15 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT bool(1)", True)
         self.assertResult("SELECT bool(1.1)", True)
         self.assertResult("SELECT bool('foo')", True)
-        self.assertResult("SELECT bool(NULL)", False)
+        self.assertResult("SELECT bool(NULL)", None, bool)
         self.assertResult("SELECT bool(2022-04-05)", True)
         self.assertResult("SELECT bool(meta('int'))", True)
         self.assertResult("SELECT bool(meta('decimal'))", True)
         self.assertResult("SELECT bool(meta('bool'))", True)
         self.assertResult("SELECT bool(meta('str'))", True)
         self.assertResult("SELECT bool(meta('date'))", True)
-        self.assertResult("SELECT bool(meta('null'))", False)
-        self.assertResult("SELECT bool(meta('missing'))", False)
+        self.assertResult("SELECT bool(meta('null'))", None, bool)
+        self.assertResult("SELECT bool(meta('missing'))", None, bool)
 
         # int
         self.assertResult("SELECT int(TRUE)", 1)
