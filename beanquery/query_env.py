@@ -551,16 +551,6 @@ def possign(context, x, account):
     return x if sign >= 0  else -x
 
 
-# FIXME!
-@function([types.Any, types.Any], object)
-def coalesce(*args):
-    """Return the first non-null argument."""
-    for arg in args:
-        if arg is not None:
-            return arg
-    return None
-
-
 @function([str], datetime.date)
 @function([str, str], datetime.date)
 def parse_date(string, frmt=None):

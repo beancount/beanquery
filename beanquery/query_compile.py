@@ -272,9 +272,28 @@ def or_(x, y):
     return bool(x) or bool(y)
 
 
+class EvalCoalesce(EvalNode):
+    __slots__ = ('expressions',)
+
+    def __init__(self, expressions):
+        for expr in expressions:
+            if expr.dtype != expressions[0].dtype:
+                dtypes = ', '.join(expr.dtype.__name__ for expr in expressions)
+                raise CompilationError(
+                    f"coalesce() function arguments must have uniform type, found: {dtypes}")
+        super().__init__(expressions[0].dtype)
+        self.expressions = expressions
+
+    def __call__(self, context):
+        for expr in self.expressions:
+            value = expr(context)
+            if value is not None:
+                return value
+        return None
+
+
 # pylint: disable=abstract-method
 class EvalFunction(EvalNode):
-    """Base class for all function objects."""
     __slots__ = ('operands',)
 
     # Type constraints on the input arguments.
@@ -286,12 +305,10 @@ class EvalFunction(EvalNode):
 
 
 class EvalColumn(EvalNode):
-    "Base class for all column accessors."
+    pass
 
 
 class EvalAggregator(EvalFunction):
-    "Base class for all aggregator evaluator types."
-
     def __init__(self, operands, dtype=None):
         super().__init__(operands, dtype or operands[0].dtype)
 
@@ -427,6 +444,11 @@ def compile_expression(expr, environ):
 
     if isinstance(expr, query_parser.Function):
         operands = [compile_expression(operand, environ) for operand in expr.operands]
+        if expr.fname == 'coalesce':
+            # coalesce() is parsed like a function call but it does
+            # not really fit our model for function evaluation,
+            # therefore it gets special threatment here.
+            return EvalCoalesce(operands)
         return environ.get_function(expr.fname, operands)
 
     if isinstance(expr, query_parser.UnaryOp):

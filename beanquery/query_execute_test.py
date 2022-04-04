@@ -300,6 +300,11 @@ class TestFundamentals(QueryBase):
                           {'filename': '<string>', 'lineno': 2, 'rate': Decimal('42')})
         self.assertResult("SELECT commodity_meta('TEST', 'rate')", Decimal('42'), object)
 
+    def test_coalesce(self):
+        # coalesce
+        self.assertResult("SELECT COALESCE(str(meta('missing')), '!')", "!")
+        self.assertError ("SELECT COALESCE(meta('missing'), '!')")
+
 
 class TestFilterEntries(CommonInputBase, QueryBase):
 

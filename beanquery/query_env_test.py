@@ -182,29 +182,6 @@ class TestEnv(unittest.TestCase):
         self.assertEqual([('i love candy',)], rrows)
 
     @parser.parse_doc()
-    def test_Coalesce(self, entries, _, options_map):
-        """
-        2016-11-20 *
-          Assets:Banking          1 USD
-        """
-        rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT COALESCE(account, price) as m')
-        self.assertEqual([('Assets:Banking',)], rrows)
-
-        rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT COALESCE(price, account) as m')
-        self.assertEqual([('Assets:Banking',)], rrows)
-
-        rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT COALESCE(price, cost_number) as m')
-        self.assertEqual([(None,)], rrows)
-
-        rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT COALESCE(narration, account) as m')
-        self.assertEqual([('',)], rrows)
-
-
-    @parser.parse_doc()
     def test_Date(self, entries, _, options_map):
         """
         2016-11-20 * "ok"
