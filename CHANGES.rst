@@ -43,3 +43,8 @@ Version 0.1 (unreleased)
   ``date()`` as a type casting function.  The function is renamed
   ``parse_date()``.  Another form of ``parse_date()`` that accepts the
   date format as second argument has been added.
+
+- The ``getitem()`` BQL function return type has been changed from a
+  string to a generic ``object`` to match the return type of function
+  retrieving entries from metadata dictionaries.  The old behavior can
+  be obtained with ``str(getitem(x, key))``.
