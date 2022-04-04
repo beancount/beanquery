@@ -128,7 +128,9 @@ class TestTypes(QueryBase):
 
     def setUp(self):
         super().setUp()
-        self.entries, _, self.options = loader.load_string("""
+        self.entries, errors, self.options = loader.load_string("""
+          2022-04-05 commodity TEST
+            rate: 42
           2022-04-05 open Assets:Tests
           2022-04-05 * "Test"
             Assets:Tests  1.000 TEST
@@ -140,7 +142,7 @@ class TestTypes(QueryBase):
               str4: "4.0"
               date: 2022-04-05
               null: NULL
-        """)
+        """, dedent=True)
 
     def assertResult(self, query, result, dtype=None):
         dtypes, rows = qx.execute_query(self.compile(query), self.entries, self.options)
@@ -237,10 +239,17 @@ class TestTypes(QueryBase):
         self.assertResult("SELECT date(meta('missing'))", None, datetime.date)
 
     def test_functions(self):
+        # round
         self.assertResult("SELECT round(1.2)", Decimal(1))
         self.assertResult("SELECT round(1.234, 2)", Decimal('1.23'))
         self.assertResult("SELECT round(12)", 12)
         self.assertResult("SELECT round(12, -1)", 10)
+
+        # commodity_meta
+        self.assertResult("SELECT commodity_meta('MISSING')", None, dict)
+        self.assertResult("SELECT commodity_meta('TEST')",
+                          {'filename': '<string>', 'lineno': 2, 'rate': Decimal('42')})
+        self.assertResult("SELECT commodity_meta('TEST', 'rate')", Decimal('42'), object)
 
 
 class TestFilterEntries(CommonInputBase, QueryBase):

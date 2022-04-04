@@ -359,20 +359,29 @@ def any_meta(context, key):
 
 
 @function([str], dict, pass_context=True)
-def open_meta(context, acc):
+@function([str, str], object, pass_context=True)
+def open_meta(context, account, key=None):
     """Get the metadata dict of the open directive of the account."""
-    open_entry, _ = context.open_close_map[acc]
-    return open_entry.meta
+    entry, _ = context.open_close_map[account]
+    if entry is None:
+        return None
+    if key is None:
+        return entry.meta
+    return entry.meta.get(key)
 
 
 @function([str], dict, pass_context=True)
+@function([str, str], object, pass_context=True)
 @function([str], dict, pass_context=True, name='commodity_meta')
-def currency_meta(context, curr):
+@function([str, str], object, pass_context=True, name='commodity_meta')
+def currency_meta(context, commodity, key=None):
     """Get the metadata dict of the commodity directive of the currency."""
-    commodity_entry = context.commodity_map.get(curr, None)
-    if commodity_entry is None:
-        return {}
-    return commodity_entry.meta
+    entry = context.commodity_map.get(commodity)
+    if entry is None:
+        return None
+    if key is None:
+        return entry.meta
+    return entry.meta.get(key)
 
 
 @function([str], str, pass_context=True)
@@ -481,15 +490,10 @@ def currency(x):
     return x.currency
 
 
-@function([dict, str], str, name='getitem')
+@function([dict, str], object, name='getitem')
 def getitem_(x, key):
     """Get the string value of a dict. The value is always converted to a string."""
-    value = x.get(key)
-    if value is None:
-        value = ''
-    elif not isinstance(value, str):
-        value = str(value)
-    return value
+    return x.get(key)
 
 
 @function([str, set], str)
