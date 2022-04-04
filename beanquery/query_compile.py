@@ -168,19 +168,19 @@ unaryop(query_parser.Not, [types.Any], bool)(operator.not_)
 @binaryop(query_parser.Mul, [Decimal, int], Decimal)
 @binaryop(query_parser.Mul, [int, Decimal], Decimal)
 @binaryop(query_parser.Mul, [int, int], int)
-def _mul(x, y):
+def mul_(x, y):
     return x * y
 
 
 @binaryop(query_parser.Div, [Decimal, Decimal], Decimal)
 @binaryop(query_parser.Div, [Decimal, int], Decimal)
 @binaryop(query_parser.Div, [int, Decimal], Decimal)
-def _div(x, y):
+def div_(x, y):
     return x / y
 
 
 @binaryop(query_parser.Div, [int, int], Decimal)
-def _div_int(x, y):
+def div_int(x, y):
     return Decimal(x) / y
 
 
@@ -188,7 +188,7 @@ def _div_int(x, y):
 @binaryop(query_parser.Add, [Decimal, int], Decimal)
 @binaryop(query_parser.Add, [int, Decimal], Decimal)
 @binaryop(query_parser.Add, [int, int], int)
-def _add(x, y):
+def add_(x, y):
     return x + y
 
 
@@ -196,39 +196,37 @@ def _add(x, y):
 @binaryop(query_parser.Sub, [Decimal, int], Decimal)
 @binaryop(query_parser.Sub, [int, Decimal], Decimal)
 @binaryop(query_parser.Sub, [int, int], int)
-def _sub(x, y):
+def sub_(x, y):
     return x - y
 
 
 @binaryop(query_parser.Add, [datetime.date, int], datetime.date)
-def _add_date_int(x, y):
+def add_date_int(x, y):
     return x + datetime.timedelta(days=y)
 
 
 @binaryop(query_parser.Add, [int, datetime.date], datetime.date)
-def _add_date_int(x, y):
+def add_int_date(x, y):
     return y + datetime.timedelta(days=x)
 
 
 @binaryop(query_parser.Sub, [datetime.date, int], datetime.date)
-def _sub_date_int(x, y):
+def sub_date_int(x, y):
     return x - datetime.timedelta(days=y)
 
 
 @binaryop(query_parser.Sub, [datetime.date, datetime.date], int)
-def _sub_date_date(x, y):
+def sub_date_date(x, y):
     return (x - y).days
 
 
 @binaryop(query_parser.Match, [str, str], bool)
-def _match(x, y):
-    if x is None or y is None:
-        return False
+def match_(x, y):
     return bool(re.search(y, x, re.IGNORECASE))
 
 
 @binaryop(query_parser.Contains, [object, list], bool)
-def _contains(x, y):
+def contains_(x, y):
     return operator.contains(y, x)
 
 
@@ -255,12 +253,12 @@ for node, op in _comparisons:
 
 
 @binaryop(query_parser.And, [types.Any, types.Any], bool)
-def _and(x, y):
+def and_(x, y):
     return bool(x) and bool(y)
 
 
 @binaryop(query_parser.Or, [types.Any, types.Any], bool)
-def _or(x, y):
+def or_(x, y):
     return bool(x) or bool(y)
 
 
