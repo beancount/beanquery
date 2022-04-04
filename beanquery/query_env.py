@@ -46,6 +46,9 @@ def function(intypes, outtype, pass_context=False, name=None):
                 super().__init__(operands, outtype)
             def __call__(self, context):
                 args = [operand(context) for operand in self.operands]
+                for arg in args:
+                    if arg is None:
+                        return None
                 if pass_context:
                     return func(context, *args)
                 return func(*args)
@@ -81,8 +84,6 @@ def bool_(x):
 @function([str], int, name='int')
 @function([object], int, name='int')
 def int_(x):
-    if x is None:
-        return None
     try:
         return int(x)
     except (ValueError, TypeError):
@@ -95,8 +96,6 @@ def int_(x):
 @function([str], Decimal, name='decimal')
 @function([object], Decimal, name='decimal')
 def decimal_(x):
-    if x is None:
-        return None
     try:
         return Decimal(x)
     except (ValueError, TypeError, decimal.InvalidOperation):
@@ -105,8 +104,6 @@ def decimal_(x):
 
 @function([types.Any], str, name='str')
 def str_(x):
-    if x is None:
-        return None
     if x is True:
         return 'TRUE'
     if x is False:
@@ -293,24 +290,18 @@ def grepn(pattern, string, n):
 @function([str, str, str], str)
 def subst(pattern, repl, string):
     """Substitute leftmost non-overlapping occurrences of pattern by replacement."""
-    if pattern is None or repl is None or string is None:
-        return None
     return re.sub(pattern, repl, string)
 
 
 @function([str], str)
 def upper(string):
     """Convert string to uppercase."""
-    if string is None:
-        return None
     return string.upper()
 
 
 @function([str], str)
 def lower(string):
     """Convert string to lowercase."""
-    if string is None:
-        return None
     return string.lower()
 
 
@@ -563,16 +554,12 @@ def parse_date(string, frmt=None):
 @function([datetime.date, datetime.date], int)
 def date_diff(x, y):
     """Calculates the difference (in days) between two dates."""
-    if x is None or y is None:
-        return None
     return (x - y).days
 
 
 @function([datetime.date, int], datetime.date)
 def date_add(x, y):
     """Adds/subtracts number of days from the given date."""
-    if x is None or y is None:
-        return None
     return x + datetime.timedelta(days=y)
 
 
@@ -629,7 +616,8 @@ class SumAmount(query_compile.EvalAggregator):
 
     def update(self, store, context):
         value = self.operands[0](context)
-        store[self.handle].add_amount(value)
+        if value is not None:
+            store[self.handle].add_amount(value)
 
 
 @aggregator([position.Position], name='sum')
@@ -640,7 +628,8 @@ class SumPosition(query_compile.EvalAggregator):
 
     def update(self, store, context):
         value = self.operands[0](context)
-        store[self.handle].add_position(value)
+        if value is not None:
+            store[self.handle].add_position(value)
 
 
 @aggregator([inventory.Inventory], name='sum')
@@ -651,7 +640,8 @@ class SumInventory(query_compile.EvalAggregator):
 
     def update(self, store, context):
         value = self.operands[0](context)
-        store[self.handle].add_inventory(value)
+        if value is not None:
+            store[self.handle].add_inventory(value)
 
 
 @aggregator([types.Any], name='first')
@@ -685,9 +675,10 @@ class Min(query_compile.EvalAggregator):
 
     def update(self, store, context):
         value = self.operands[0](context)
-        cur = store[self.handle]
-        if cur is None or value < cur:
-            store[self.handle] = value
+        if value is not None:
+            cur = store[self.handle]
+            if cur is None or value < cur:
+                store[self.handle] = value
 
 
 @aggregator([types.Any], name='max')
@@ -698,9 +689,10 @@ class Max(query_compile.EvalAggregator):
 
     def update(self, store, context):
         value = self.operands[0](context)
-        cur = store[self.handle]
-        if cur is None or value > cur:
-            store[self.handle] = value
+        if value is not None:
+            cur = store[self.handle]
+            if cur is None or value > cur:
+                store[self.handle] = value
 
 
 # Column accessors for entries.
