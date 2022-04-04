@@ -218,17 +218,21 @@ class TestEnv(unittest.TestCase):
                                         'SELECT date(year, month, 1) as m')
         self.assertEqual([(datetime.date(2016, 11, 1),)], rrows)
 
-        with self.assertRaisesRegex(ValueError, "day is out of range for month"):
-            rtypes, rrows = query.run_query(entries, options_map,
-                                            'SELECT date(2020, 2, 32) as m')
+        rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT date(2020, 2, 32) as m')
+        self.assertEqual([(None,)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
                                         'SELECT date("2020-01-02") as m')
         self.assertEqual([(datetime.date(2020, 1, 2),)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT date("2016/11/1") as m')
+                                        'SELECT parse_date("2016/11/1") as m')
         self.assertEqual([(datetime.date(2016, 11, 1),)], rrows)
+
+        rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT parse_date("2016/11/1", "%Y/%d/%m") as m')
+        self.assertEqual([(datetime.date(2016, 1, 11),)], rrows)
 
     @parser.parse_doc()
     def test_DateDiffAdjust(self, entries, _, options_map):

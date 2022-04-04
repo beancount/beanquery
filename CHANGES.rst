@@ -24,3 +24,20 @@ Version 0.1 (unreleased)
   behavior, the query should be written::
 
     SELECT date, narration ORDER BY date DESC, narration DESC
+
+- Type casting functions ``int()``, ``decimal()``, ``str()``,
+  ``date()`` have been added.  These are mostly useful to convert the
+  generic ``object`` type returned by the metadata retrieval functions
+  but can also be used to convert between types.  If the conversion
+  fails, ``NULL`` is returned.
+
+- The ``str()`` BQL function used to return a string representation of
+  its argument using the Python :py:func:`repr()` function.  This
+  clashes with the use of ``str()`` as a type casting function.  The
+  function is renamed ``repr()``.
+
+- The ``date()`` BQL function used to extract a date from string
+  arguments with a very relaxed parser.  This clashes with the use of
+  ``date()`` as a type casting function.  The function is renamed
+  ``parse_date()``.  Another form of ``parse_date()`` that accepts the
+  date format as second argument has been added.

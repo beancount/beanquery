@@ -123,6 +123,120 @@ class CommonInputBase(unittest.TestCase):
         self.entries, _, self.options_map = loader.load_string(textwrap.dedent(self.INPUT))
         self.context = qx.create_row_context(self.entries, self.options_map)
 
+
+class TestTypes(QueryBase):
+
+    def setUp(self):
+        super().setUp()
+        self.entries, _, self.options = loader.load_string("""
+          2022-04-05 open Assets:Tests
+          2022-04-05 * "Test"
+            Assets:Tests  1.000 TEST
+              int: 1
+              decimal: 1.2
+              bool: TRUE
+              str: "str"
+              str3: "3"
+              str4: "4.0"
+              date: 2022-04-05
+              null: NULL
+        """)
+
+    def assertResult(self, query, result, dtype=None):
+        dtypes, rows = qx.execute_query(self.compile(query), self.entries, self.options)
+        self.assertEqual([dtype for name, dtype in dtypes], [dtype or type(result)])
+        self.assertEqual(rows, [(result, )])
+
+    def assertError(self, query):
+        with self.assertRaises(qc.CompilationError):
+            dtypes, rows = qx.execute_query(self.compile(query), self.entries, self.options)
+
+    def test_type_casting(self):
+        # bool
+        self.assertResult("SELECT bool(TRUE)", True)
+        self.assertResult("SELECT bool(1)", True)
+        self.assertResult("SELECT bool(1.1)", True)
+        self.assertResult("SELECT bool('foo')", True)
+        self.assertResult("SELECT bool(NULL)", False)
+        self.assertResult("SELECT bool(2022-04-05)", True)
+        self.assertResult("SELECT bool(meta('int'))", True)
+        self.assertResult("SELECT bool(meta('decimal'))", True)
+        self.assertResult("SELECT bool(meta('bool'))", True)
+        self.assertResult("SELECT bool(meta('str'))", True)
+        self.assertResult("SELECT bool(meta('date'))", True)
+        self.assertResult("SELECT bool(meta('null'))", False)
+        self.assertResult("SELECT bool(meta('missing'))", False)
+
+        # int
+        self.assertResult("SELECT int(TRUE)", 1)
+        self.assertResult("SELECT int(1)", 1)
+        self.assertResult("SELECT int(1.2)", 1)
+        self.assertResult("SELECT int('1')", 1)
+        self.assertResult("SELECT int('foo')", None, int)
+        self.assertError ("SELECT int(NULL)")
+        self.assertError ("SELECT int(2022-04-05)")
+        self.assertResult("SELECT int(meta('int'))", 1)
+        self.assertResult("SELECT int(meta('decimal'))", 1)
+        self.assertResult("SELECT int(meta('bool'))", 1)
+        self.assertResult("SELECT int(meta('str'))", None, int)
+        self.assertResult("SELECT int(meta('str3'))", 3)
+        self.assertResult("SELECT int(meta('str4'))", None, int)
+        self.assertResult("SELECT int(meta('date'))", None, int)
+        self.assertResult("SELECT int(meta('null'))", None, int)
+        self.assertResult("SELECT int(meta('missing'))", None, int)
+
+        # decimal
+        self.assertResult("SELECT decimal(TRUE)", Decimal(1))
+        self.assertResult("SELECT decimal(1)", Decimal(1))
+        self.assertResult("SELECT decimal(1.2)", Decimal('1.2'))
+        self.assertResult("SELECT decimal('1.2')", Decimal('1.2'))
+        self.assertResult("SELECT decimal('foo')", None, Decimal)
+        self.assertError ("SELECT decimal(NULL)")
+        self.assertError ("SELECT decimal(2022-04-05)")
+        self.assertResult("SELECT decimal(meta('int'))", Decimal(1))
+        self.assertResult("SELECT decimal(meta('decimal'))", Decimal('1.2'))
+        self.assertResult("SELECT decimal(meta('bool'))", Decimal(1))
+        self.assertResult("SELECT decimal(meta('str'))", None, Decimal)
+        self.assertResult("SELECT decimal(meta('str3'))", Decimal(3))
+        self.assertResult("SELECT decimal(meta('str4'))", Decimal('4.0'))
+        self.assertResult("SELECT decimal(meta('date'))", None, Decimal)
+        self.assertResult("SELECT decimal(meta('null'))", None, Decimal)
+        self.assertResult("SELECT decimal(meta('missing'))", None, Decimal)
+
+        # str
+        self.assertResult("SELECT str(TRUE)", 'TRUE')
+        self.assertResult("SELECT str(1)", '1')
+        self.assertResult("SELECT str(1.1)", '1.1')
+        self.assertResult("SELECT str('foo')", 'foo')
+        self.assertResult("SELECT str(NULL)", None, str)
+        self.assertResult("SELECT str(2022-04-05)", '2022-04-05')
+        self.assertResult("SELECT str(meta('int'))", '1')
+        self.assertResult("SELECT str(meta('decimal'))", '1.2')
+        self.assertResult("SELECT str(meta('bool'))", 'TRUE')
+        self.assertResult("SELECT str(meta('str'))", 'str')
+        self.assertResult("SELECT str(meta('date'))", '2022-04-05')
+        self.assertResult("SELECT str(meta('null'))", None, str)
+        self.assertResult("SELECT str(meta('missing'))", None, str)
+
+        # date
+        self.assertError ("SELECT date(TRUE)")
+        self.assertError ("SELECT date(1)")
+        self.assertError ("SELECT date(1.2)")
+        self.assertResult("SELECT date('1.2')", None, datetime.date)
+        self.assertResult("SELECT date('foo')", None, datetime.date)
+        self.assertResult("SELECT date('2022-04-05')", datetime.date(2022, 4, 5))
+        self.assertError ("SELECT date(NULL)")
+        self.assertResult("SELECT date(2022-04-05)", datetime.date(2022, 4, 5))
+        self.assertResult("SELECT date(2022, 4, 5)", datetime.date(2022, 4, 5))
+        self.assertResult("SELECT date(meta('int'))", None, datetime.date)
+        self.assertResult("SELECT date(meta('decimal'))", None, datetime.date)
+        self.assertResult("SELECT date(meta('bool'))", None, datetime.date)
+        self.assertResult("SELECT date(meta('str'))", None, datetime.date)
+        self.assertResult("SELECT date(meta('date'))", datetime.date(2022, 4, 5))
+        self.assertResult("SELECT date(meta('null'))", None, datetime.date)
+        self.assertResult("SELECT date(meta('missing'))", None, datetime.date)
+
+
 class TestFilterEntries(CommonInputBase, QueryBase):
 
     def test_filter_empty_from(self):
