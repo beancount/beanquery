@@ -343,8 +343,8 @@ class TestCompileFundamentals(CompileSelectBase):
 
     def test_operaotors(self):
         expr = self.compile("SELECT 1 + 1 AS expr")
-        self.assertEqual(expr, qc.EvalQuery(
-            [qc.EvalTarget(
+        self.assertEqual(expr, qc.EvalQuery([
+            qc.EvalTarget(
                 qc.Operator(qp.Add, [
                     qc.EvalConstant(1),
                     qc.EvalConstant(1)
@@ -352,8 +352,8 @@ class TestCompileFundamentals(CompileSelectBase):
             None, None, None, None, None, None, None, None))
 
         expr = self.compile("SELECT 1 + meta('int') AS expr")
-        self.assertEqual(expr, qc.EvalQuery(
-            [qc.EvalTarget(
+        self.assertEqual(expr, qc.EvalQuery([
+            qc.EvalTarget(
                 qc.Operator(qp.Add, [
                     qc.EvalConstant(1),
                     qe.Function('decimal', [
@@ -363,6 +363,20 @@ class TestCompileFundamentals(CompileSelectBase):
                     ]),
                 ]), 'expr', False)],
             None, None, None, None, None, None, None, None))
+
+    def test_coalesce(self):
+        expr = self.compile("SELECT coalesce(narration, str(date), '~') AS expr")
+        self.assertEqual(expr, qc.EvalQuery([
+            qc.EvalTarget(
+                qc.EvalCoalesce([
+                    qe.NarrationColumn(),
+                    qe.Function('str', [qe.DateColumn()]),
+                    qc.EvalConstant('~'),
+                ]), 'expr', False)],
+            None, None, None, None, None, None, None, None))
+
+        with self.assertRaises(qc.CompilationError):
+            self.compile("SELECT coalesce(narration, date, 1)")
 
 
 class TestCompileSelect(CompileSelectBase):
