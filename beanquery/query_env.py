@@ -10,6 +10,7 @@ __license__ = "GNU GPLv2"
 import collections
 import copy
 import datetime
+import decimal
 import re
 import textwrap
 
@@ -65,10 +66,78 @@ def Function(name, args):
     raise KeyError
 
 
-@function([object], bool, name='bool')
-def _bool_cast(x):
+## Type casting
+
+
+@function([types.Any], bool, name='bool')
+def bool_(x):
     """Convert to bool value."""
     return bool(x)
+
+
+@function([int], int, name='int')
+@function([bool], int, name='int')
+@function([Decimal], int, name='int')
+@function([str], int, name='int')
+@function([object], int, name='int')
+def int_(x):
+    if x is None:
+        return None
+    try:
+        return int(x)
+    except (ValueError, TypeError):
+        return None
+
+
+@function([Decimal], Decimal, name='decimal')
+@function([int], Decimal, name='decimal')
+@function([bool], Decimal, name='decimal')
+@function([str], Decimal, name='decimal')
+@function([object], Decimal, name='decimal')
+def decimal_(x):
+    if x is None:
+        return None
+    try:
+        return Decimal(x)
+    except (ValueError, TypeError, decimal.InvalidOperation):
+        return None
+
+
+@function([types.Any], str, name='str')
+def str_(x):
+    if x is None:
+        return None
+    if x is True:
+        return 'TRUE'
+    if x is False:
+        return 'FALSE'
+    return str(x)
+
+
+@function([datetime.date], datetime.date, name='date')
+@function([str], datetime.date, name='date')
+@function([object], datetime.date, name='date')
+def date_(x):
+    if isinstance(x, datetime.date):
+        return x
+    if isinstance(x, str):
+        try:
+            return datetime.datetime.strptime(x, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+    return None
+
+
+@function([int, int, int], datetime.date, name='date')
+def date_from_ymd(year, month, day):
+    """Construct a date with year, month, day arguments."""
+    try:
+        return datetime.date(year, month, day)
+    except ValueError:
+        return None
+
+
+## Functions
 
 
 @function([Decimal], Decimal)
@@ -105,9 +174,9 @@ def length(x):
     return len(x)
 
 
-@function([types.Any], str, name='str')
-def str_(x):
-    """Convert the argument to a string."""
+@function([types.Any], str, name='repr')
+def repr_(x):
+    """Convert the argument to a string via repr()."""
     return repr(x)
 
 
@@ -475,16 +544,13 @@ def coalesce(*args):
     return None
 
 
-@function([int, int, int], datetime.date, name='date')
-def date_from_ymd(year, month, day):
-    """Construct a date with year, month, day arguments."""
-    return datetime.date(year, month, day)
-
-
-@function([str], datetime.date, name='date')
-def date_from_str(string):
+@function([str], datetime.date)
+@function([str, str], datetime.date)
+def parse_date(string, frmt=None):
     """Parse date from string."""
-    return parse_date_liberally(string)
+    if frmt is None:
+        return parse_date_liberally(string)
+    return datetime.datetime.strptime(string, frmt).date()
 
 
 @function([datetime.date, datetime.date], int)
