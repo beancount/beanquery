@@ -277,6 +277,11 @@ class TestFundamentals(QueryBase):
         # not
         self.assertResult("SELECT not TRUE", False)
 
+    def test_operators_type_inference(self):
+        self.assertResult("SELECT 1 + meta('int')", Decimal(2))
+        self.assertResult("SELECT 1 + meta('str3')", Decimal(4))
+        self.assertResult("SELECT meta('int') > 0", True)
+
     def test_functions(self):
         # round
         self.assertResult("SELECT round(1.2)", Decimal(1))
