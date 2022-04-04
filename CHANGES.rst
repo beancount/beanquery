@@ -7,6 +7,8 @@ Version 0.1 (unreleased)
   object as returned by the ``sum()`` aggregate function is empty has
   been added.
 
+- Added the ``round()`` BQL function.
+
 - ``NULL`` values in ``SORT BY`` clause are now always considered to
   be smaller than any other values.  This may results in rows to be
   returned in a slightly different order.
