@@ -270,12 +270,17 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 1 and FALSE", False)
         self.assertResult("SELECT 'something' and FALSE", False)
         self.assertResult("SELECT 1.0 and FALSE", False)
+        self.assertResult("SELECT TRUE and meta('missing')", False)
+        self.assertResult("SELECT TRUE and not meta('missing')", True)
         # or
         self.assertResult("SELECT FALSE or 1", True)
         self.assertResult("SELECT FALSE or 'something'", True)
         self.assertResult("SELECT FALSE or 1.0", True)
+        self.assertResult("SELECT TRUE or meta('missing')", True)
+        self.assertResult("SELECT FALSE or not meta('missing')", True)
         # not
         self.assertResult("SELECT not TRUE", False)
+        self.assertResult("SELECT not meta('missing')", True)
         # is null
         self.assertResult("SELECT meta('missing') IS NULL", True)
         self.assertResult("SELECT meta('int') IS NULL", False)
