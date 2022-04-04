@@ -101,7 +101,23 @@ class EvalUnaryOp(EvalNode):
         self.operator = operator
 
     def __call__(self, context):
-        return self.operator(self.operand(context))
+        operand = self.operand(context)
+        return self.operator(operand)
+
+
+class EvalUnaryOpSafe(EvalNode):
+    __slots__ = ('operand', 'operator')
+
+    def __init__(self, operator, operand, dtype):
+        super().__init__(dtype)
+        self.operand = operand
+        self.operator = operator
+
+    def __call__(self, context):
+        operand = self.operand(context)
+        if operand is None:
+            return None
+        return self.operator(operand)
 
 
 class EvalBinaryOp(EvalNode):
@@ -114,7 +130,13 @@ class EvalBinaryOp(EvalNode):
         self.right = right
 
     def __call__(self, context):
-        return self.operator(self.left(context), self.right(context))
+        left = self.left(context)
+        if left is None:
+            return None
+        right = self.right(context)
+        if right is None:
+            return None
+        return self.operator(left, right)
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
@@ -130,9 +152,9 @@ class EvalBinaryOp(EvalNode):
 OPERATORS = collections.defaultdict(list)
 
 
-def unaryop(op, intypes, outtype):
+def unaryop(op, intypes, outtype, nullsafe=False):
     def decorator(func):
-        class Op(EvalUnaryOp):
+        class Op(EvalUnaryOp if nullsafe else EvalUnaryOpSafe):
             __intypes__ = intypes
             def __init__(self, operand):
                 super().__init__(func, operand, outtype)
@@ -164,12 +186,12 @@ def Operator(op, operands):
 unaryop(query_parser.Not, [types.Any], bool)(operator.not_)
 
 
-@unaryop(query_parser.IsNull, [object], bool)
+@unaryop(query_parser.IsNull, [object], bool, nullsafe=True)
 def null(x):
     return x is None
 
 
-@unaryop(query_parser.IsNotNull, [object], bool)
+@unaryop(query_parser.IsNotNull, [object], bool, nullsafe=True)
 def not_null(x):
     return x is not None
 
