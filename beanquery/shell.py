@@ -6,6 +6,7 @@ import cmd
 import contextlib
 import io
 import logging
+import operator
 import os
 import re
 import readline
@@ -542,18 +543,23 @@ class BQLShell(DispatchingShell):
           simple functions and aggregate functions. If you use any aggregate
           function, you must also provide a GROUP-BY clause.
 
-          Available columns:
+          Columns
+          -------
+
           {columns}
 
-          Simple functions:
+          Functions
+          ---------
+
           {functions}
 
-          Aggregate functions:
+          Aggregate functions
+          -------------------
+
           {aggregates}
 
-        """).strip()
-        print(template.format(**generate_env_attribute_list(self.env_targets)),
-              file=self.outfile)
+        """)
+        print(template.format(**generate_env_attribute_list(self.env_targets)), file=self.outfile)
 
     def help_from(self):
         template = textwrap.dedent("""
@@ -561,15 +567,18 @@ class BQLShell(DispatchingShell):
           A logical expression that consist of columns on directives (mostly
           transactions) and simple functions.
 
-          Available columns:
+          Columns
+          -------
+
           {columns}
 
-          Simple functions:
+          Functions
+          ---------
+
           {functions}
 
-        """).strip()
-        print(template.format(**generate_env_attribute_list(self.env_entries)),
-              file=self.outfile)
+        """)
+        print(template.format(**generate_env_attribute_list(self.env_entries)), file=self.outfile)
 
     def help_where(self):
         template = textwrap.dedent("""
@@ -577,15 +586,18 @@ class BQLShell(DispatchingShell):
           A logical expression that consist of columns on postings and simple
           functions.
 
-          Available columns:
+          Columns
+          -------
+
           {columns}
 
-          Simple functions:
+          Functions
+          ---------
+
           {functions}
 
-        """).strip()
-        print(template.format(**generate_env_attribute_list(self.env_postings)),
-              file=self.outfile)
+        """)
+        print(template.format(**generate_env_attribute_list(self.env_postings)), file=self.outfile)
 
     def help_attributes(self):
         template = textwrap.dedent("""
@@ -593,13 +605,17 @@ class BQLShell(DispatchingShell):
           The attribute names on postings and directives equivalent to the names
           of columns that we make available for query.
 
-          Entries:
+          Entries
+          -------
+
           {entry_attributes}
 
-          Postings:
+          Postings
+          --------
+
           {posting_attributes}
 
-        """).strip()
+        """)
 
         entry_pairs = sorted(
             (getattr(column_cls, '__equivalent__', '-'), name)
@@ -626,26 +642,15 @@ def generate_env_attribute_list(env):
       A dict with keys 'columns', 'functions' and 'aggregates' to rendered
       and formatted strings.
     """
-    wrapper = textwrap.TextWrapper(initial_indent='  ',
-                                   subsequent_indent='    ',
-                                   drop_whitespace=True,
-                                   width=80)
+    wrapper = textwrap.TextWrapper(initial_indent='  ', subsequent_indent='  ', width=80)
 
-    str_columns = generate_env_attributes(
-        wrapper, env.columns)
-    str_simple = generate_env_attributes(
-        wrapper, env.functions,
-        lambda node: not issubclass(node, query_compile.EvalAggregator))
-    str_aggregate = generate_env_attributes(
-        wrapper, env.functions,
-        lambda node: issubclass(node, query_compile.EvalAggregator))
-
-    return dict(columns=str_columns,
-                functions=str_simple,
-                aggregates=str_aggregate)
+    columns = generate_env_attributes(wrapper, env.columns)
+    functions = generate_env_attributes(wrapper, env.functions, aggregates=False)
+    aggregates = generate_env_attributes(wrapper, env.functions, aggregates=True)
+    return dict(columns=columns, functions=functions, aggregates=aggregates)
 
 
-def generate_env_attributes(wrapper, field_dict, filter_pred=None):
+def generate_env_attributes(wrapper, fields, aggregates=False):
     """Generate a string of all the help functions of the attributes.
 
     Args:
@@ -657,43 +662,29 @@ def generate_env_attributes(wrapper, field_dict, filter_pred=None):
     Returns:
       A formatted multiline string, ready for insertion in a help text.
     """
-    # Expand the name if its key has argument types.
-    #
-    # FIXME: Render the __intypes__ here nicely instead of the key.
-    flat_items = []
-    for name, column_cls in field_dict.items():
-        if isinstance(name, tuple):
-            name = name[0]
-
-        if issubclass(column_cls, query_compile.EvalFunction):
+    entries = []
+    for name, field in fields.items():
+        if isinstance(field, list):
+            # Entry in functions registry.
+            if aggregates != issubclass(field[0], query_compile.EvalAggregator):
+                continue
             name = name.upper()
-            args = []
-            for dtypes in column_cls.__intypes__:
-                if isinstance(dtypes, (tuple, list)):
-                    arg = '|'.join(dtype.__name__ for dtype in dtypes)
-                else:
-                    arg = dtypes.__name__
-                args.append(arg)
-            name = "{}({})".format(name, ','.join(args))
+            # FIXME: Render the __intypes__ here nicely instead of the key.
+            def _format(f):
+                # pylint: disable=cell-var-from-loop
+                return '{}({})'.format(name, ', '.join(d.__name__.lower() for d in f.__intypes__))
+            signature = '\n'.join(_format(func) for func in field)
+            doc = field[0].__doc__ or ''
+        else:
+            signature = '{} [{}]'.format(name, field().dtype.__name__.lower())
+            doc = field.__doc__ or ''
+        entries.append((name, signature, wrapper.fill(re.sub(r'[ \n\t]+', ' ', doc))))
 
-        flat_items.append((name, column_cls))
-
-    # Render each of the attributes.
     oss = io.StringIO()
-    for name, column_cls in sorted(flat_items):
-        if filter_pred and not filter_pred(column_cls):
-            continue
-        docstring = column_cls.__doc__ or f"[See class {column_cls.__name__}]"
-        if issubclass(column_cls, query_compile.EvalColumn):
-            docstring += f" Type: {column_cls().dtype.__name__}."
-            # if hasattr(column_cls, '__equivalent__'):
-            #     docstring += " Attribute:{}.".format(column_cls.__equivalent__)
-
-        text = re.sub('[ \t]+', ' ', docstring.strip().replace('\n', ' '))
-        doc = f"'{name}': {text}"
-        oss.write(wrapper.fill(doc))
-        oss.write('\n')
-
+    for name, signature, text in sorted(entries, key=operator.itemgetter(0)):
+        print(signature, file=oss)
+        print(text, file=oss)
+        print(file=oss)
     return oss.getvalue().rstrip()
 
 
