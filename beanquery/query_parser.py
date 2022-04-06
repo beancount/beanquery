@@ -199,18 +199,15 @@ class Lexer:
     # List of reserved keywords.
     keywords = {
         'SELECT', 'AS', 'FROM', 'WHERE', 'OPEN', 'CLOSE', 'CLEAR', 'ON',
-        'BALANCES', 'JOURNAL', 'PRINT', 'AT',
-        'GROUP', 'BY', 'HAVING', 'ORDER', 'DESC', 'ASC', 'PIVOT',
-        'LIMIT', 'FLATTEN', 'DISTINCT',
-        'AND', 'OR', 'NOT', 'IN', 'IS',
-        'TRUE', 'FALSE', 'NULL',
+        'BALANCES', 'JOURNAL', 'PRINT', 'AT', 'GROUP', 'BY', 'HAVING',
+        'ORDER', 'DESC', 'ASC', 'PIVOT', 'LIMIT', 'FLATTEN', 'DISTINCT',
+        'AND', 'OR', 'NOT', 'IN', 'IS', 'TRUE', 'FALSE', 'NULL',
     }
 
     # List of valid tokens from the lexer.
     tokens = [
-        'ID', 'INTEGER', 'DECIMAL', 'STRING', 'DATE',
-        'COMMA', 'SEMI', 'LPAREN', 'RPAREN', 'TILDE',
-        'EQ', 'NE', 'GT', 'GTE', 'LT', 'LTE',
+        'ID', 'INTEGER', 'DECIMAL', 'STRING', 'DATE', 'COMMA', 'SEMI',
+        'LPAREN', 'RPAREN', 'TILDE', 'EQ', 'NE', 'GT', 'GTE', 'LT', 'LTE',
         'ASTERISK', 'SLASH', 'PLUS', 'MINUS',
     ] + list(keywords)
 
