@@ -548,6 +548,47 @@ class TestPrint(QueryParserTestBase):
                     ), None, True, None)))
 
 
+class TestComments(QueryParserTestBase):
+
+    def test_comments(self):
+        self.assertParse(
+            """SELECT first, /* comment */ second""",
+            Select([
+                qp.Target(qp.Column('first'), None),
+                qp.Target(qp.Column('second'), None)
+            ]))
+
+        self.assertParse(
+            """SELECT first, /*
+                   comment
+                   */ second;""",
+            Select([
+                qp.Target(qp.Column('first'), None),
+                qp.Target(qp.Column('second'), None),
+            ]))
+
+        self.assertParse(
+            """SELECT first, /**/ second;""",
+            Select([
+                qp.Target(qp.Column('first'), None),
+                qp.Target(qp.Column('second'), None),
+            ]))
+
+        self.assertParse(
+            """SELECT first, /* /* */ second;""",
+            Select([
+                qp.Target(qp.Column('first'), None),
+                qp.Target(qp.Column('second'), None),
+            ]))
+
+        self.assertParse(
+            """SELECT first, /* ; */ second;""",
+            Select([
+                qp.Target(qp.Column('first'), None),
+                qp.Target(qp.Column('second'), None),
+            ]))
+
+
 class TestExpressionName(QueryParserTestBase):
 
     def test_column(self):
