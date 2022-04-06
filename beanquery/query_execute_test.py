@@ -249,6 +249,7 @@ class TestFundamentals(QueryBase):
         self.assertError ("SELECT 1970-01-01 + 2022-04-01")
         self.assertResult("SELECT 2022-04-01 + 1", datetime.date(2022, 4, 2))
         self.assertResult("SELECT 1 + 2022-04-01", datetime.date(2022, 4, 2))
+
         # sub
         self.assertResult("SELECT 1 - 1", 0)
         self.assertResult("SELECT 1.0 - 1", Decimal(0))
@@ -256,39 +257,51 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 2022-04-01 - 1", datetime.date(2022, 3, 31))
         self.assertResult("SELECT 2022-04-01 - 2022-03-31", 1)
         self.assertError ("SELECT 1 - 2022-04-01")
+
         # mul
         self.assertResult("SELECT 2 * 2", 4)
         self.assertResult("SELECT 2.0 * 2", Decimal(4))
         self.assertResult("SELECT 2 * 2.0", Decimal(4))
         self.assertResult("SELECT 2.0 * 2.0", Decimal(4))
+
         # div
         self.assertResult("SELECT 4 / 2", Decimal(2))
         self.assertResult("SELECT 4.0 / 2", Decimal(2))
         self.assertResult("SELECT 4 / 2.0", Decimal(2))
         self.assertResult("SELECT 4.0 / 2.0", Decimal(2))
+
         # match
         self.assertResult("SELECT 'foobarbaz' ~ 'bar'", True)
         self.assertResult("SELECT 'foobarbaz' ~ 'quz'", False)
+
         # and
         self.assertResult("SELECT 1 and FALSE", False)
         self.assertResult("SELECT 'something' and FALSE", False)
         self.assertResult("SELECT 1.0 and FALSE", False)
         self.assertResult("SELECT TRUE and meta('missing')", False)
         self.assertResult("SELECT TRUE and not meta('missing')", True)
+
         # or
         self.assertResult("SELECT FALSE or 1", True)
         self.assertResult("SELECT FALSE or 'something'", True)
         self.assertResult("SELECT FALSE or 1.0", True)
         self.assertResult("SELECT TRUE or meta('missing')", True)
         self.assertResult("SELECT FALSE or not meta('missing')", True)
+
         # not
         self.assertResult("SELECT not TRUE", False)
         self.assertResult("SELECT not meta('missing')", True)
+
         # is null
         self.assertResult("SELECT meta('missing') IS NULL", True)
         self.assertResult("SELECT meta('int') IS NULL", False)
         self.assertResult("SELECT meta('missing') IS NOT NULL", False)
         self.assertResult("SELECT meta('int') IS NOT NULL", True)
+
+        # contains
+        self.assertResult("SELECT 'tag' IN tags", False)
+        self.assertResult("SELECT 3 IN (2, 3, 4)", True)
+        self.assertResult("SELECT 'x' IN ('a', 'b', 'c')", False)
 
     def test_operators_type_inference(self):
         self.assertResult("SELECT 1 + meta('int')", Decimal(2))
