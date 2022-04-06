@@ -211,6 +211,10 @@ class Lexer:
         'ASTERISK', 'SLASH', 'PLUS', 'MINUS',
     ] + list(keywords)
 
+    # Support c-stype comments syntax */
+    def t_COMMENT(self, token):
+        r"(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/)"
+
     # An identifier, for a column or a dimension or whatever.
     def t_ID(self, token):
         "[a-zA-Z][a-zA-Z0-9_]*"
