@@ -20,6 +20,9 @@ from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query_execute as qx
 
+# pylint: disable=unused-import
+from beanquery import compat
+
 
 class QueryBase(cmptest.TestCase):
 
