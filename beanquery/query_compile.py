@@ -190,6 +190,11 @@ def Operator(op, operands):
 
 unaryop(query_parser.Not, [types.Any], bool, nullsafe=True)(operator.not_)
 
+@unaryop(query_parser.Neg, [int], int)
+@unaryop(query_parser.Neg, [Decimal], Decimal)
+def neg_(x):
+    return -x
+
 
 @unaryop(query_parser.IsNull, [object], bool, nullsafe=True)
 def null(x):

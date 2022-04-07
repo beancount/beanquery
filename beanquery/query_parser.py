@@ -7,6 +7,7 @@ import collections
 import datetime
 import enum
 import io
+import numbers
 import re
 
 import dateutil.parser
@@ -181,6 +182,7 @@ class Match(BinaryOp): pass
 class Contains(BinaryOp): pass
 
 # Arithmetic operators.
+class Neg(UnaryOp): pass
 class Mul(BinaryOp): pass
 class Div(BinaryOp): pass
 class Add(BinaryOp): pass
@@ -258,12 +260,12 @@ class Lexer:
 
     # Numbers.
     def t_DECIMAL(self, token):
-        r"[-+]?([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)"
+        r"([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)"
         token.value = D(token.value)
         return token
 
     def t_INTEGER(self, token):
-        r"[-+]?[0-9]+"
+        r"[0-9]+"
         token.value = int(token.value)
         return token
 
@@ -500,8 +502,20 @@ class SelectParser(Lexer):
         ('left', 'NOT'),
         ('left', 'PLUS', 'MINUS'),
         ('left', 'ASTERISK', 'SLASH'),
+        ('right', 'UMINUS'),
+        ('right', 'UPLUS'),
         ('left', 'EQ', 'NE', 'GT', 'GTE', 'LT', 'LTE', 'TILDE', 'IN'),
         ]
+
+    def p_expression_uminus(self, p):
+        "expression : MINUS expression %prec UMINUS"
+        # Optimization: if the argument is a numeric constant, rewrite
+        # the constant instead than emitting a unary operation.
+        p[0] = Constant(-p[2].value) if isinstance(p[2], Constant) and isinstance(p[2].value, numbers.Number) else Neg(p[2])
+
+    def p_expression_uplus(self, p):
+        "expression : PLUS expression %prec UPLUS"
+        p[0] = p[2]
 
     def p_expression_is_null(self, p):
         "expression : expression IS NULL"
