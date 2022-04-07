@@ -19,5 +19,5 @@ jobs:
         if: ${{ matrix.beancount != '3.0' }}
       - run: pip install 'git+https://github.com/beancount/beancount#egg=beancount'
         if: ${{ matrix.beancount == '3.0' }}
-      - run: pip install click ply python-dateutil pytest
-      - run: python -m pytest beanquery
+      - run: pip install click ply python-dateutil
+      - run: python -m unittest discover -p '*_test.py' -s beanquery/
