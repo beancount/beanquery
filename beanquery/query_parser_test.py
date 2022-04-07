@@ -4,7 +4,7 @@ __license__ = "GNU GPLv2"
 import datetime
 import unittest
 
-from beancount.core.number import D
+from decimal import Decimal as D
 from beanquery import query_parser as qp
 
 
@@ -44,6 +44,25 @@ class QueryParserTestBase(unittest.TestCase):
         self.assertIsInstance(expr, qp.Select)
         self.assertEqual(expr.from_clause, expected)
 
+
+class TestLexer(unittest.TestCase):
+
+    def setUp(self):
+        self.parser = qp.Parser()
+
+    def tokenize(self, string):
+        return [(tok.type, tok.value) for tok in self.parser.tokenize(string)]
+
+    def test_tokens(self):
+        self.assertEqual(self.tokenize("id42"), [('ID', 'id42')])
+        self.assertEqual(self.tokenize("ab_"), [('ID', 'ab_')])
+        self.assertEqual(self.tokenize("42"), [('INTEGER', 42)])
+        self.assertEqual(self.tokenize("4.2"), [('DECIMAL', D('4.2'))])
+        self.assertEqual(self.tokenize("'abc'"), [('STRING', 'abc')])
+        self.assertEqual(self.tokenize("'1'"), [('STRING', '1')])
+        self.assertEqual(self.tokenize("1970-01-01"), [('DATE', datetime.date(1970, 1, 1))])
+        with self.assertRaises(qp.ParseError):
+            self.tokenize(".foo")
 
 class TestParseSelect(QueryParserTestBase):
 
@@ -129,8 +148,10 @@ class TestParseSelect(QueryParserTestBase):
         self.assertParseTarget("SELECT a < 42;", qp.Less(qp.Column('a'), qp.Constant(42)))
         self.assertParseTarget("SELECT a <= 42;", qp.LessEq(qp.Column('a'), qp.Constant(42)))
         self.assertParseTarget("SELECT a ~ 'abc';", qp.Match(qp.Column('a'), qp.Constant('abc')))
-        self.assertParseTarget("SELECT a != (42);", qp.Not(qp.Equal(qp.Column('a'), qp.Constant(42))))
-        self.assertParseTarget("SELECT not (a = 42);", qp.Not(qp.Equal(qp.Column('a'), qp.Constant(42))))
+        self.assertParseTarget("SELECT a != 42;", qp.Not(qp.Equal(qp.Column('a'), qp.Constant(42))))
+        self.assertParseTarget("SELECT not a;", qp.Not(qp.Column('a')))
+        self.assertParseTarget("SELECT a IS NULL;", qp.IsNull(qp.Column('a')))
+        self.assertParseTarget("SELECT a IS NOT NULL;", qp.IsNotNull(qp.Column('a')))
 
         # bool expressions
         self.assertParseTarget("SELECT a AND b;", qp.And(qp.Column('a'), qp.Column('b')))
@@ -613,6 +634,14 @@ class TestExpressionName(QueryParserTestBase):
         name = qp.get_expression_name(qp.And(qp.Column('account'), qp.Column('date')))
         self.assertEqual(name, 'and_account_date')
 
+    def test_unknown(self):
+        with self.assertRaises(RuntimeError):
+            name = qp.get_expression_name(None)
 
-if __name__ == '__main__':
-    unittest.main()
+
+class TestRepr(unittest.TestCase):
+    # 100% branch test coverage is hard...
+
+    def test_ordering(self):
+        self.assertEqual(repr(qp.Ordering.ASC), 'Ordering.ASC')
+        self.assertEqual(repr(qp.Ordering.DESC), 'Ordering.DESC')

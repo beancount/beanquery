@@ -209,7 +209,8 @@ class DispatchingShell(cmd.Cmd):
     def do_lex(self, line):
         "Just run the lexer on the following command and print the output."
         try:
-            self.parser.tokenize(line)
+            for tok in self.parser.tokenize(line):
+                print(tok)
         except query_parser.ParseError as exc:
             print(exc, file=self.outfile)
 
