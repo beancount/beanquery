@@ -187,6 +187,10 @@ class TestParseSelect(QueryParserTestBase):
         self.assertParseTarget("SELECT min(a);", qp.Function('min', [qp.Column('a')]))
         self.assertParseTarget("SELECT min(a, b);", qp.Function('min', [qp.Column('a'), qp.Column('b')]))
 
+    def test_non_associative(self):
+        # non associative operators
+        self.assertRaises(qp.ParseError, self.parse, "SELECT 3 > 2 > 1")
+        self.assertRaises(qp.ParseError, self.parse, "SELECT 3 = 2 = 1")
 
     def test_complex_expressions(self):
         self.assertParseTarget(

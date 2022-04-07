@@ -504,8 +504,8 @@ class SelectParser(Lexer):
         ('left', 'ASTERISK', 'SLASH'),
         ('right', 'UMINUS'),
         ('right', 'UPLUS'),
-        ('left', 'EQ', 'NE', 'GT', 'GTE', 'LT', 'LTE', 'TILDE', 'IN'),
-        ]
+        ('nonassoc', 'EQ', 'NE', 'GT', 'GTE', 'LT', 'LTE', 'TILDE', 'IN'),
+    ]
 
     def p_expression_uminus(self, p):
         "expression : MINUS expression %prec UMINUS"
