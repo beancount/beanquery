@@ -738,7 +738,7 @@ _SUPPORTED_FORMATS = ('text', 'csv')
               help="Output filename.")
 @click.option('--no-errors', '-q', is_flag=True,
               help="Do not report errors.")
-@click.version_option()
+@click.version_option(prog_name='bean-query', message='%(prog)s %(version)s')
 def main(filename, query, numberify, output_format, output, no_errors):
     """An interactive interpreter for the Beancount Query Language.
 
