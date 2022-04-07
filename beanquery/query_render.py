@@ -95,14 +95,14 @@ class BoolRenderer(ColumnRenderer):
     def __init__(self, dcontext):
         super().__init__(dcontext)
         self.maxlen = 0
-        self.seen_true = False
+        self.seen_false = False
 
     def update(self, value):
-        if value:
-            self.seen_true = True
+        if not value:
+            self.seen_false = True
 
     def prepare(self):
-        self.maxlen = 5 if self.seen_true else 4
+        self.maxlen = 5 if self.seen_false else 4
         self.fmt = '{{:<{}.{}}}'.format(self.maxlen, self.maxlen)
 
     def width(self):
