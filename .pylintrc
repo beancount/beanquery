@@ -1,4 +1,5 @@
 [MESSAGES CONTROL]
+max-line-length=128
 enable=all
 disable=
   # https://pylint.pycqa.org/en/latest/technical_reference/features.html
