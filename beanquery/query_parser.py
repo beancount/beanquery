@@ -221,7 +221,7 @@ class Lexer:
         utoken = token.value.upper()
         if utoken in self.keywords:
             token.type = utoken
-            token.value = token.value.upper()
+            token.value = utoken
         else:
             token.value = token.value.lower()
         return token
@@ -282,37 +282,33 @@ class SelectParser(Lexer):
     start = 'select_statement'
 
     def __init__(self, **options):
-        self.ply_lexer = ply.lex.lex(module=self,
-                                     optimize=False,
-                                     debuglog=None,
-                                     debug=False)
-        self.ply_parser = ply.yacc.yacc(module=self,
-                                        optimize=False,
-                                        write_tables=False,
-                                        debuglog=None,
-                                        debug=False,
-                                        **options)
+        self.lexer = ply.lex.lex(module=self,
+                                 optimize=False,
+                                 debuglog=None,
+                                 debug=False)
+        self.parser = ply.yacc.yacc(module=self,
+                                    optimize=False,
+                                    write_tables=False,
+                                    debuglog=None,
+                                    debug=False,
+                                    **options)
 
         # The default value to use for the close date.
         self.default_close_date = None
 
     def tokenize(self, line):
-        self.ply_lexer.input(line)
+        self.lexer.input(line)
         while True:
-            tok = self.ply_lexer.token()
+            tok = self.lexer.token()
             if not tok:
                 break
-            print(tok)
+            yield tok
 
     def parse(self, line, debug=False, default_close_date=None):
         try:
-            self._input = line
             self.default_close_date = default_close_date
-            return self.ply_parser.parse(line,
-                                         lexer=self.ply_lexer,
-                                         debug=debug)
+            return self.parser.parse(line, lexer=self.lexer, debug=debug)
         finally:
-            self._input = None
             self.default_close_date = None
 
     def handle_comma_separated_list(self, p):
@@ -683,7 +679,7 @@ class SelectParser(Lexer):
         oss.write("ERROR: Syntax error near '{}' (at {})\n".format(token.value,
                                                                    token.lexpos))
         oss.write("  ")
-        oss.write(self._input)
+        oss.write(self.lexer.lexdata)
         oss.write("\n")
         oss.write("  {}^".format(' ' * token.lexpos))
         raise ParseError(oss.getvalue())
@@ -767,4 +763,4 @@ def get_expression_name(expr):
                          get_expression_name(expr.left),
                          get_expression_name(expr.right)])
 
-    assert False, "Unknown expression type."
+    raise NotImplementedError
