@@ -165,22 +165,28 @@ class TestParseSelect(QueryParserTestBase):
         self.assertParseTarget("SELECT a+b;", qp.Add(qp.Column('a'), qp.Column('b')))
         self.assertParseTarget("SELECT a - b;", qp.Sub(qp.Column('a'), qp.Column('b')))
         self.assertParseTarget("SELECT a-b;", qp.Sub(qp.Column('a'), qp.Column('b')))
+        self.assertParseTarget("SELECT +a;", qp.Column('a'))
+        self.assertParseTarget("SELECT -a;", qp.Neg(qp.Column('a')))
 
         # math expressions with numerals
+        self.assertParseTarget("SELECT 2 * 3;", qp.Mul(qp.Constant(2), qp.Constant(3)))
+        self.assertParseTarget("SELECT 2 / 3;", qp.Div(qp.Constant(2), qp.Constant(3)))
         self.assertParseTarget("SELECT 2+(3);", qp.Add(qp.Constant(2), qp.Constant(3)))
-        self.assertParseTarget("SELECT 2-(3);", qp.Sub(qp.Constant(2), qp.Constant(3)))
+        self.assertParseTarget("SELECT (2)-3;", qp.Sub(qp.Constant(2), qp.Constant(3)))
+        self.assertParseTarget("SELECT 2 + 3;", qp.Add(qp.Constant(2), qp.Constant(3)))
+        self.assertParseTarget("SELECT 2+3;", qp.Add(qp.Constant(2), qp.Constant(3)))
+        self.assertParseTarget("SELECT 2 - 3;", qp.Sub(qp.Constant(2), qp.Constant(3)))
+        self.assertParseTarget("SELECT 2-3;", qp.Sub(qp.Constant(2), qp.Constant(3)))
+        self.assertParseTarget("SELECT +2;", qp.Constant(2))
+        self.assertParseTarget("SELECT -2;", qp.Constant(-2))
+        # silly, fails at compile time
+        self.assertParseTarget("SELECT -'abc';", qp.Neg(qp.Constant('abc')))
 
         # functions
         self.assertParseTarget("SELECT random();", qp.Function('random', []))
         self.assertParseTarget("SELECT min(a);", qp.Function('min', [qp.Column('a')]))
         self.assertParseTarget("SELECT min(a, b);", qp.Function('min', [qp.Column('a'), qp.Column('b')]))
 
-    @unittest.expectedFailure
-    def test_expressions_broken(self):
-        # The parser should be modified to remove signs from the
-        # DECIMAL and INTEGER tokens such that this is possible.
-        self.assertParseTarget("SELECT 2+3;", qp.Add(qp.Constant(2), qp.Constant(3)))
-        self.assertParseTarget("SELECT 2-3;", qp.Add(qp.Constant(2), qp.Constant(3)))
 
     def test_complex_expressions(self):
         self.assertParseTarget(
