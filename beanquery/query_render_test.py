@@ -22,9 +22,16 @@ class ColumnRendererBase(unittest.TestCase):
     # pylint: disable=not-callable
     RendererClass = None
 
-    dcontext = display_context.DisplayContext()
-    dcontext.update(D('1.00'), 'USD')
-    dcontext.update(D('1.00'), 'CAD')
+    def setUp(self):
+        self.dcontext = display_context.DisplayContext()
+        self.dcontext.expand = True
+        self.dcontext.update(D('1.00'), 'USD')
+        self.dcontext.update(D('1.00'), 'CAD')
+        self.dcontext.update(D('1.0000'), 'USD')
+        self.dcontext.update(D('1.0000'), 'USD')
+        self.dcontext.update(D('1.000'), 'HOOL')
+        self.dcontext.update(D('1'), 'CA')
+        self.dcontext.update(D('1.00'), 'AAPL')
 
     def get(self, *values):
         rdr = self.RendererClass(self.dcontext)
@@ -145,14 +152,6 @@ class TestDecimalRenderer(ColumnRendererBase):
 class TestAmountRenderer(ColumnRendererBase):
 
     RendererClass = query_render.AmountRenderer
-
-    def setUp(self):
-        super().setUp()
-        self.dcontext.update(D('1.0000'), 'USD')
-        self.dcontext.update(D('1.0000'), 'USD')
-        self.dcontext.update(D('1.000'), 'HOOL')
-        self.dcontext.update(D('1'), 'CA')
-        self.dcontext.update(D('1.00'), 'AAPL')
 
     def test_single_frac(self):
         pos = A('100.00 USD')
