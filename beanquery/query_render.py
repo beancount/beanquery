@@ -28,15 +28,24 @@ class RenderContext:
 
 
 class ColumnRenderer:
-    """Base class for classes that render and compute formatting and width for all
-    values that appear within a column. All the values rendered are assumed to
-    be of the same type, or None (empty). The class receives all the values that
-    will be rendered to accumulate the dimensions it will need to format them
-    later on. It is then responsible to render those values in a way that will
-    align nicely in a column, in the rendered output, whereby all the values
+    """Base class for classes that render column values.
+
+    The column renderers are responsible to render uniform type values
+    in a way that will align nicely in a column whereby all the values
     render to the same width.
+
+    The formatters are instantiated and are feed all the values in the
+    column via the ``update()`` method to accumulate the dimensions it
+    will need to format them later on. The ``prepare()`` method then
+    computes internal status required to format these values in
+    consistent fashion. The ``width()`` method can then be used to
+    retrieve the computer maximum width of the column. Individual
+    values are formatted with the ``format()`` method. Values are
+    assumed to be of the expected type for the formatter. Formatting
+    values outside the set of the values fed via the ``update()``
+    method is undefined behavior.
+
     """
-    # Override, the type of object to be rendered.
     dtype = None
 
     def __init__(self, ctx):
@@ -44,35 +53,28 @@ class ColumnRenderer:
 
     def update(self, value):
         """Update the rendered with the given value.
+
         Args:
-          value: Any object of the type 'dtype'.
-        Returns:
-          An integer, the number of lines this will get rendered to.
+          value: Any object of type ``dtype``.
+
         """
-        raise NotImplementedError
 
     def prepare(self):
-        """Prepare to render all values of a column.
-        This is called after having seen all the values in calls to update().
-        """
-        # No-op. Override if desired.
+        """Prepare to render all values of a column."""
 
     def width(self):
-        """Return the computed width of this column.
-        Returns:
-          An integer, the number of characters wide required for this field.
-        """
+        """Return the computed width of this column."""
         raise NotImplementedError
 
     def format(self, value):
         """Format the value.
 
         Args:
-          value: Any object of the type 'dtype'.
+          value: Any object of type ``dtype``.
+
         Returns:
-          A string, or a list of strings, the rendered and aligned string(s)
-          representations of for the value. A value may render on multiple
-          lines, which is why a list may be returned here.
+          A string or list of strings representing the rendered value.
+
         """
         raise NotImplementedError
 
