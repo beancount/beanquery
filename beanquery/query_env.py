@@ -440,7 +440,6 @@ def convert_position(context, pos, currency, date=None):
     return convert.convert_position(pos, currency, context.price_map, date)
 
 
-# pylint: disable=line-too-long
 @function([inventory.Inventory, str], inventory.Inventory, pass_context=True, name='convert')
 @function([inventory.Inventory, str, datetime.date], inventory.Inventory, pass_context=True, name='convert')
 def convert_inventory(context, inv, currency, date=None):
@@ -455,7 +454,6 @@ def position_value(context, pos, date=None):
     return convert.get_value(pos, context.price_map, date)
 
 
-# pylint: disable=line-too-long
 @function([inventory.Inventory], inventory.Inventory, pass_context=True, name='value')
 @function([inventory.Inventory, datetime.date], inventory.Inventory, pass_context=True, name='value')
 def inventory_value(context, inv, date=None):
