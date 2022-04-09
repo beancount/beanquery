@@ -454,7 +454,8 @@ def get_renderers(result_types, result_rows, ctx):
     # to begin rendering with correct alignment.
     for row in result_rows:
         for value, renderer in zip(row, renderers):
-            renderer.update(value)
+            if value is not None:
+                renderer.update(value)
 
     for renderer in renderers:
         renderer.prepare()
@@ -505,7 +506,7 @@ def render_rows(result_types, result_rows, ctx):
         max_lines = 1
         for value, renderer in zip(row, renderers):
             # Update the column renderer.
-            exp_lines = renderer.format(value)
+            exp_lines = renderer.format(value) if value is not None else ''
             if isinstance(exp_lines, list):
                 if ctx.expand:
                     max_lines = max(max_lines, len(exp_lines))
