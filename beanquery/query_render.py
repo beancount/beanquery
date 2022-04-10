@@ -11,6 +11,7 @@ from decimal import Decimal
 from itertools import zip_longest
 
 from beancount.core import amount
+from beancount.core import display_context
 from beancount.core import distribution
 from beancount.core import inventory
 from beancount.core import position
@@ -257,39 +258,51 @@ class DecimalRenderer(ColumnRenderer):
 
 
 class AmountRenderer(ColumnRenderer):
-    """A renderer for amounts. The currencies align with each other.
+    """Renderer for Amount instances.
+
+    The numerical part is formatted with the right quantization
+    determined by ``dcontext`` in the rendering context and aligned on
+    the decimal point across rows. Numbers are right padded with
+    spaces to alignt the commodity symbols across rows::
+
+      -  1234.00   USD
+      -    42      TEST
+      -     0.0001 ETH
+      -   567.00   USD
+
     """
     dtype = amount.Amount
 
     def __init__(self, ctx):
-        self.rdr = DecimalRenderer(ctx)
-        self.ccylen = 0
+        super().__init__(ctx)
+        # Use the display context inferred from the input ledger to
+        # determine the quantization of the column values.
+        self.quantize = ctx.dcontext.quantize
+        # Use column specific display context for formatting.
+        self.dcontext = display_context.DisplayContext()
+        # Maximum width of the commodity symbol.
+        self.curwidth = 0
+        self.maxwidth = 0
 
     def update(self, value):
-        if value is None:
-            return
-        self.rdr.update(value.number, value.currency)
-        self.ccylen = max(self.ccylen, len(value.currency))
+        # Need to handle None to reuse this in PositionRenderer.
+        if value is not None:
+            number = self.quantize(value.number, value.currency)
+            self.dcontext.update(number, value.currency)
+            self.curwidth = max(self.curwidth, len(value.currency))
 
     def prepare(self):
-        self.rdr.prepare()
-
-        if self.rdr.width() == 0:
-            self.fmt = None
-            self.empty = ''
-        else:
-            self.fmt = '{{:{0}}} {{:{1}}}'.format(self.rdr.width(), max(self.ccylen, 1))
-            self.empty = self.fmt.format('', '')
+        self.func = self.dcontext.build(display_context.Align.DOT)
+        zero = Decimal()
+        for commodity in self.dcontext.ccontexts:
+            if commodity != '__default__':
+                self.maxwidth = max(self.maxwidth, len(self.func(zero, commodity)) + 1 + self.curwidth)
 
     def width(self):
-        return len(self.empty)
+        return self.maxwidth
 
     def format(self, value):
-        if self.fmt is None:
-            return self.empty
-        if value is None:
-            return self.fmt.format('', '')
-        return self.fmt.format(self.rdr.format(value.number, value.currency), value.currency)
+        return f'{self.func(value.number, value.currency)} {value.currency:<{self.curwidth}}'
 
 
 class PositionRenderer(ColumnRenderer):
