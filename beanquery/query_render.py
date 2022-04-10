@@ -12,7 +12,6 @@ from itertools import zip_longest
 
 from beancount.core import amount
 from beancount.core import display_context
-from beancount.core import distribution
 from beancount.core import inventory
 from beancount.core import position
 
@@ -182,79 +181,49 @@ class IntRenderer(ColumnRenderer):
 
 
 class DecimalRenderer(ColumnRenderer):
-    """A renderer for decimal numbers."""
+    """Renderer for Decimal numbers.
+
+    Numbers are left padded to align on the decimal point::
+
+      -  123.40
+      -    5.000
+      -  -67
+
+    """
     dtype = Decimal
 
     def __init__(self, ctx):
-        self.dcontext = ctx.dcontext
+        super().__init__(ctx)
+        # Max number of digits before the decimal point including sign.
+        self.nintegral = 0
+        # Max number of digits after the decimal point.
+        self.nfractional = 0
 
-        self.has_negative = False
-        self.max_adjusted = 0
-        self.min_exponent = 0
-        self.total_width = None
-        self.num_values = 0
-        self.dists = collections.defaultdict(distribution.Distribution)
-
-    # pylint: disable=arguments-renamed
-    def update(self, number, key=None):
-        if number is None:
-            return
-        # Quantize the number based on the display context.
-        qnumber = self.dcontext.quantize(number, key)
-        self.num_values += 1
-        ntuple = qnumber.as_tuple()
-        if ntuple.sign:
-            self.has_negative = True
-        self.max_adjusted = max(self.max_adjusted, qnumber.adjusted())
-        self.min_exponent = min(self.min_exponent, ntuple.exponent)
-        self.dists[key].update(-ntuple.exponent)
+    def update(self, value):
+        n = value.as_tuple()
+        if n.exponent > 0:
+            # Special case for decimal numbers with positive exponent
+            # and thus represented in scientific notation.
+            self.nintegral = max(self.nintegral, len(str(value)))
+        else:
+            self.nintegral = max(self.nintegral, max(1, len(n.digits) + n.exponent) + n.sign)
+            self.nfractional = max(self.nfractional, -n.exponent)
 
     def prepare(self):
-        total_width = 0
-        if self.num_values > 0:
-            digits_sign = 1 if self.has_negative else 0
-            digits_integral = max(self.max_adjusted, 0) + 1
-            self.integral_width = digits_sign + digits_integral
-            self.format_number = '{: }'.format if self.has_negative else '{}'.format
-
-            for dist in self.dists.values():
-                # Note: to compute the number of fractional digits to be displayed,
-                # we use the most frequent of the number of digits we saw to be
-                # rendered (the mode of the distribution of number of digits).
-                digits_fractional = dist.mode()  # -self.min_exponent
-                digits_period = 1 if digits_fractional > 0 else 0
-                width = digits_sign + digits_integral + digits_period + digits_fractional
-                if width > total_width:
-                    total_width = width
-
-            self.fmt = '{{:<{total_width}.{total_width}}}'.format(total_width=total_width)
-
-        self.total_width = total_width
-        self.empty = ' ' * total_width
+        self.maxwidth = self.nintegral + self.nfractional + (1 if self.nfractional > 0 else 0)
 
     def width(self):
-        return self.total_width
+        return self.maxwidth
 
-    # FIXME: 'key' is being ignored here. It shouldn't. This is likely problematic.
-    # pylint: disable=arguments-renamed,unused-argument
-    def format(self, number, key=None):
-        if self.total_width == 0:
-            return ''
-        if number is None:
-            return self.fmt.format('')
-
-        # This would be the straightforward implementation:
-        #   return self.empty if number is None else self.fmt.format(number)
-        # However, we want to let the number render to its natural precision and
-        # pad it to the right with zeros, yet align all the periods. So we
-        # convert it to a string, find the period, and pad it manually. We might
-        # consider eventually implementing this in C for performance reasons.
-        number_str = self.format_number(number)
-        index = number_str.find('.')
-        if index == -1:
-            index = len(number_str)
-        left_pad = ' ' * (self.integral_width - index)
-        return self.fmt.format(left_pad + number_str)
+    def format(self, value):
+        n = value.as_tuple()
+        if n.exponent > 0:
+            # Special case for decimal numbers with positive exponent
+            # and thus represented in scientific notation.
+            return str(value).rjust(self.nintegral).ljust(self.maxwidth)
+        # Compute the padding required to align the decimal point.
+        left = self.nintegral - (max(1, len(n.digits) + n.exponent) + n.sign)
+        return f'{"":>{left}}{str(value):<{self.maxwidth - left}}'
 
 
 class AmountRenderer(ColumnRenderer):
