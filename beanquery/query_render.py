@@ -117,24 +117,20 @@ class BoolRenderer(ColumnRenderer):
 
 
 class StringRenderer(ColumnRenderer):
-    """A renderer for left-aligned strings."""
     dtype = str
 
     def __init__(self, ctx):
-        self.maxlen = 0
+        super().__init__(ctx)
+        self.maxwidth = 0
 
     def update(self, value):
-        if value is not None:
-            self.maxlen = max(self.maxlen, len(value))
-
-    def prepare(self):
-        self.fmt = '{{:<{}.{}}}'.format(self.maxlen, self.maxlen)
+        self.maxwidth = max(self.maxwidth, len(value))
 
     def width(self):
-        return self.maxlen
+        return self.maxwidth
 
     def format(self, value):
-        return self.fmt.format('' if value is None else value)
+        return value.ljust(self.maxwidth)
 
 
 class StringSetRenderer(ColumnRenderer):

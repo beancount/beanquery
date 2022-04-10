@@ -87,33 +87,27 @@ class TestBoolRenderer(ColumnRendererBase):
         ])
 
 
+
+
 class TestStringRenderer(ColumnRendererBase):
 
-    RendererClass = query_render.StringRenderer
+    renderer = query_render.StringRenderer
 
-    def test_string_simple(self):
-        rdr = self.get('a', 'bb', 'ccc', '')
-        self.assertEqual('dd ', rdr.format('dd'))
-        self.assertEqual('   ', rdr.format(''))
-
-    def test_string_nones(self):
-        rdr = self.get(None, 'bb', 'ccc', None)
-        self.assertEqual('dd ', rdr.format('dd'))
-        self.assertEqual('   ', rdr.format(None))
-
-    def test_string_overflow(self):
-        rdr = self.get('a', 'bb', 'ccc', '')
-        self.assertEqual('eee', rdr.format('eeee'))
-
+    def test_string(self):
+        self.assertEqual(self.render(['a', 'bb', 'ccc', '']), [
+            'a  ',
+            'bb ',
+            'ccc',
+            '   ',
+        ])
 
 class TestStringSetRenderer(ColumnRendererBase):
 
     RendererClass = query_render.StringSetRenderer
 
     def test_string_set(self):
-        rdr = self.get({}, {}, None, {'a'}, {'bb', 'cc'})
+        rdr = self.get({}, {'a'}, {'bb', 'cc'})
         self.assertEqual(['dd', 'e '], rdr.format({'ddd', 'e'}))
-
 
 
 class TestDateTimeRenderer(ColumnRendererBase):
