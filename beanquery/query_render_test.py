@@ -4,17 +4,16 @@ __license__ = "GNU GPLv2"
 import datetime
 import io
 import unittest
-import collections
+
 from decimal import Decimal
-from itertools import zip_longest
 
-from beancount.core.number import D
-from beancount.core.amount import A
-from beancount.core import inventory
-from beancount.core import position
 from beancount.core import display_context
-from beanquery import query_render
+from beancount.core.amount import A
+from beancount.core.inventory import from_string as I
+from beancount.core.number import D
+from beancount.core.position import from_string as P
 
+from beanquery import query_render
 
 def flatten(values):
     # Flatten lists of lists.
@@ -27,18 +26,11 @@ def flatten(values):
 class ColumnRendererBase(unittest.TestCase):
 
     # pylint: disable=not-callable
-    RendererClass = None
+    renderer = None
 
     def setUp(self):
         dcontext = display_context.DisplayContext()
         self.ctx = query_render.RenderContext(dcontext, expand=True)
-
-    def get(self, *values):
-        rdr = self.RendererClass(self.ctx)
-        for value in values:
-            rdr.update(value)
-        rdr.prepare()
-        return rdr
 
     def prepare(self, values):
         renderer = self.renderer(self.ctx)
@@ -85,8 +77,6 @@ class TestBoolRenderer(ColumnRendererBase):
             'FALSE',
             'FALSE',
         ])
-
-
 
 
 class TestStringRenderer(ColumnRendererBase):
@@ -339,7 +329,6 @@ class TestInventoryRenderer(ColumnRendererBase):
 
 class TestQueryRender(unittest.TestCase):
 
-    # pylint: disable=invalid-name
     def assertMultiLineEqualNoWS(self, expected, actual):
         for left, right in zip_longest(
                 expected.strip().splitlines(), actual.strip().splitlines()):
@@ -350,11 +339,9 @@ class TestQueryRender(unittest.TestCase):
         self.dcontext.update(D('1.00'), 'USD')
         self.dcontext.update(D('1.00'), 'CAD')
 
-    # pylint: disable=invalid-name
-
     def test_render_str(self):
         types = [('account', str)]
-        Row = collections.namedtuple('TestRow', [name for name, type in types])
+        Row = collections.namedtuple('Row', [name for name, type in types])
         rows = [
             Row('Assets:US:Babble:Vacation'),
             Row('Expenses:Vacation'),
@@ -404,13 +391,3 @@ class TestQueryRender(unittest.TestCase):
              456.1234
            3456.1234
         """, oss.getvalue())
-
-
-
-# Add a test like this, where the column's result ends up being zero wide.
-# bean-query $L  "select account, sum(units(position)) from open on 2014-01-01
-#   close on 2015-01-01 clear  where account ~ 'PnL'  group by 1"
-
-
-if __name__ == '__main__':
-    unittest.main()

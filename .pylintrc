@@ -22,4 +22,5 @@ disable=
   similarities,
   too-many-lines,
   unsubscriptable-object,
+  unused-argument,
   unused-variable,
