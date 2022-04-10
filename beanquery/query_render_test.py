@@ -255,18 +255,33 @@ class TestAmountRenderer(ColumnRendererBase):
 
 class TestPositionRenderer(ColumnRendererBase):
 
-    RendererClass = query_render.PositionRenderer
+    renderer = query_render.PositionRenderer
 
-    def test_various(self):
-        pos = position.from_string('100.00 USD')
-        rdr = self.get(pos)
-        self.assertEqual('100.00   USD',
-                         rdr.format(pos))
+    def setUp(self):
+        super().setUp()
+        # Prime the display context for some known commodities.
+        self.ctx.dcontext = display_context.DisplayContext()
+        self.ctx.dcontext.update(D('1.00'), 'USD')
+        self.ctx.dcontext.update(D('1.00'), 'CAD')
+        self.ctx.dcontext.update(D('1.000'), 'HOOL')
+        self.ctx.dcontext.update(D('1'), 'CA')
+        self.ctx.dcontext.update(D('1.00'), 'AAPL')
 
-        pos = position.from_string('5 HOOL {500.23 USD}')
-        rdr = self.get(pos)
-        self.assertEqual('5     HOOL {500.23   USD}',
-                         rdr.format(pos))
+    def test_simple_poitions(self):
+        self.assertEqual(self.render([P('3.0 USD'), P('3.0 CAD'), P('3.0 HOOL'), P('3.0 CA'), P('3.0 AAPL'), P('3.0 XY')]), [
+            '3.00  USD ',
+            '3.00  CAD ',
+            '3.000 HOOL',
+            '3     CA  ',
+            '3.00  AAPL',
+            '3.0   XY  ',
+        ])
+
+    def test_positions_with_price(self):
+        self.assertEqual(self.render([P('5 HOOL {500.230000 USD}'), P('123.0 CA {1 HOOL}')]), [
+            '  5.000 HOOL {500.23  USD }',
+            '123     CA   {  1.000 HOOL}',
+        ])
 
 
 class TestInventoryRenderer(ColumnRendererBase):
