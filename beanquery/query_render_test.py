@@ -114,19 +114,13 @@ class TestSetRenderer(ColumnRendererBase):
             'bb+ccc',
         ])
 
-class TestDateTimeRenderer(ColumnRendererBase):
 
-    RendererClass = query_render.DateTimeRenderer
+class TestDateRenderer(ColumnRendererBase):
 
-    def test_simple(self):
-        rdr = self.get(datetime.date(2014, 11, 3))
-        self.assertEqual('2014-10-03', rdr.format(datetime.date(2014, 10, 3)))
+    renderer = query_render.DateRenderer
 
-    def test_nones(self):
-        rdr = self.get(None, datetime.date(2014, 11, 3), None)
-        self.assertEqual('2014-03-30', rdr.format(datetime.date(2014, 3, 30)))
-        self.assertEqual('          ', rdr.format(None))
-
+    def test_date(self):
+        self.assertEqual(self.render([datetime.date(2014, 10, 3)]), ['2014-10-03'])
 
 class TestIntegerRenderer(ColumnRendererBase):
 
