@@ -140,37 +140,56 @@ class TestIntRenderer(ColumnRendererBase):
 
 class TestDecimalRenderer(ColumnRendererBase):
 
-    RendererClass = query_render.DecimalRenderer
+    renderer = query_render.DecimalRenderer
 
-    def test_integer(self):
-        rdr = self.get(D('1'))
-        self.assertEqual('2', rdr.format(D('2')))
-
-    def test_integers(self):
-        rdr = self.get(D('1'), D('222'), D('33'))
-        self.assertEqual('444', rdr.format(D('444')))
+    def test_integral(self):
+        self.assertEqual(self.render([D('1'), D('12'), D('123'), D('1e4')]), [
+            '   1',
+            '  12',
+            ' 123',
+            '1E+4',
+        ])
+        self.assertEqual(self.render([D('1'), D('-12'), D('123')]), [
+            '  1',
+            '-12',
+            '123',
+        ])
+        self.assertEqual(self.render([D('1'), D('12'), D('-123')]), [
+            '   1',
+            '  12',
+            '-123',
+        ])
+        self.assertEqual(self.render([D('1'), D('12'), D('-1e3')]), [
+            '    1',
+            '   12',
+            '-1E+3',
+        ])
 
     def test_fractional(self):
-        rdr = self.get(D('1.23'), D('1.2345'), D('2.345'))
-        self.assertEqual('1     ', rdr.format(D('1')))
-        self.assertEqual('2.3456', rdr.format(D('2.34567890')))
-
-    def test_mixed(self):
-        rdr = self.get(D('1000'), D('0.12334'))
-        self.assertEqual('   1      ', rdr.format(D('1')))
-
-    def test_zero_integers(self):
-        rdr = self.get(D('0.1234'))
-        self.assertEqual('1     ', rdr.format(D('1')))
-
-    def test_nones(self):
-        rdr = self.get(None, D('0.1234'), None)
-        self.assertEqual('1     ', rdr.format(D('1')))
-        self.assertEqual('      ', rdr.format(None))
-
-    def test_virgin(self):
-        rdr = self.get()
-        self.assertEqual('', rdr.format(None))
+        self.assertEqual(self.render([D('0.1'), D('1.2'), D('1.23'), D('1.234')]), [
+            '0.1  ',
+            '1.2  ',
+            '1.23 ',
+            '1.234',
+        ])
+        self.assertEqual(self.render([D('12'), D('1.2'), D('1.23'), D('12.345')]), [
+            '12    ',
+            ' 1.2  ',
+            ' 1.23 ',
+            '12.345',
+        ])
+        self.assertEqual(self.render([D('12'), D('1.2'), D('1.23'), D('-12.345')]), [
+            ' 12    ',
+            '  1.2  ',
+            '  1.23 ',
+            '-12.345',
+        ])
+        self.assertEqual(self.render([D('12'), D('1.2'), D('1.23'), D('-1.2e3')]), [
+            '     12   ',
+            '      1.2 ',
+            '      1.23',
+            '-1.2E+3   ',
+        ])
 
 
 class TestAmountRenderer(ColumnRendererBase):
