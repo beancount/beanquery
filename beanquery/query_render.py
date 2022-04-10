@@ -7,13 +7,24 @@ import collections
 import csv
 import datetime
 import math
+
 from decimal import Decimal
 from itertools import zip_longest
 
 from beancount.core import amount
-from beancount.core import position
-from beancount.core import inventory
 from beancount.core import distribution
+from beancount.core import inventory
+from beancount.core import position
+
+
+class RenderContext:
+    """Hold the query rendering configuration."""
+
+    def __init__(self, dcontext, expand=False, listsep=', ', spaced=False):
+        self.dcontext = dcontext
+        self.expand = expand
+        self.listsep = listsep
+        self.spaced = spaced
 
 
 class ColumnRenderer:
@@ -28,7 +39,7 @@ class ColumnRenderer:
     # Override, the type of object to be rendered.
     dtype = None
 
-    def __init__(self, unused_dcontext):
+    def __init__(self, ctx):
         pass
 
     def update(self, value):
@@ -70,8 +81,7 @@ class ObjectRenderer(ColumnRenderer):
     """A renderer for a generic object type."""
     dtype = object
 
-    def __init__(self, dcontext):
-        super().__init__(dcontext)
+    def __init__(self, ctx):
         self.maxlen = 0
 
     def update(self, value):
@@ -92,8 +102,7 @@ class BoolRenderer(ColumnRenderer):
     """A renderer for left-aligned strings."""
     dtype = bool
 
-    def __init__(self, dcontext):
-        super().__init__(dcontext)
+    def __init__(self, ctx):
         self.maxlen = 0
         self.seen_false = False
 
@@ -116,8 +125,7 @@ class StringRenderer(ColumnRenderer):
     """A renderer for left-aligned strings."""
     dtype = str
 
-    def __init__(self, dcontext):
-        super().__init__(dcontext)
+    def __init__(self, ctx):
         self.maxlen = 0
 
     def update(self, value):
@@ -138,8 +146,7 @@ class StringSetRenderer(ColumnRenderer):
     """A renderer for sets of strings."""
     dtype = set
 
-    def __init__(self, dcontext):
-        super().__init__(dcontext)
+    def __init__(self, ctx):
         self.maxlen = 0
 
     def update(self, value):
@@ -164,8 +171,7 @@ class DateTimeRenderer(ColumnRenderer):
     """A renderer for decimal numbers."""
     dtype = datetime.date
 
-    def __init__(self, dcontext):
-        super().__init__(dcontext)
+    def __init__(self, ctx):
         self.empty = ' ' * 10
 
     def update(self, _):
@@ -182,8 +188,7 @@ class IntegerRenderer(ColumnRenderer):
     """A renderer for integers."""
     dtype = int
 
-    def __init__(self, dcontext):
-        super().__init__(dcontext)
+    def __init__(self, ctx):
         self.has_negative = False
         self.max_digits = 0
 
@@ -213,9 +218,8 @@ class DecimalRenderer(ColumnRenderer):
     """A renderer for decimal numbers."""
     dtype = Decimal
 
-    def __init__(self, dcontext):
-        super().__init__(dcontext)
-        self.dcontext = dcontext
+    def __init__(self, ctx):
+        self.dcontext = ctx.dcontext
 
         self.has_negative = False
         self.max_adjusted = 0
@@ -291,9 +295,8 @@ class AmountRenderer(ColumnRenderer):
     """
     dtype = amount.Amount
 
-    def __init__(self, dcontext):
-        super().__init__(dcontext)
-        self.rdr = DecimalRenderer(dcontext)
+    def __init__(self, ctx):
+        self.rdr = DecimalRenderer(ctx)
         self.ccylen = 0
 
     def update(self, value):
@@ -329,10 +332,9 @@ class PositionRenderer(ColumnRenderer):
     """
     dtype = position.Position
 
-    def __init__(self, dcontext):
-        super().__init__(dcontext)
-        self.units_rdr = AmountRenderer(dcontext)
-        self.cost_rdr = AmountRenderer(dcontext)
+    def __init__(self, ctx):
+        self.units_rdr = AmountRenderer(ctx)
+        self.cost_rdr = AmountRenderer(ctx)
 
     def update(self, value):
         if value is None:
@@ -433,19 +435,18 @@ class InventoryRenderer(PositionRenderer):
         return strings
 
 
-def get_renderers(result_types, result_rows, dcontext):
+def get_renderers(result_types, result_rows, ctx):
     """Create renderers for each column and prepare them with the given data.
 
     Args:
       result_types: A list of items describing the names and data types of the items in
         each column.
       result_rows: A list of ResultRow instances.
-      dcontext: A DisplayContext object prepared for rendering numbers.
+      ctx: A RdenderContext object holding configuration.
     Returns:
       A list of subclass instances of ColumnRenderer.
     """
-    renderers = [RENDERERS[dtype](dcontext)
-                 for _, dtype in result_types]
+    renderers = [RENDERERS[dtype](ctx) for name, dtype in result_types]
 
     # Prime and prepare each of the renderers with the date in order to be ready
     # to begin rendering with correct alignment.
@@ -459,18 +460,14 @@ def get_renderers(result_types, result_rows, dcontext):
     return renderers
 
 
-def render_rows(result_types, result_rows, dcontext,
-                expand=False, spaced=False):
+def render_rows(result_types, result_rows, ctx):
     """Render the result of executing a query in text format.
 
     Args:
       result_types: A list of items describing the names and data types of the items in
         each column.
       result_rows: A list of ResultRow instances.
-      dcontext: A DisplayContext object prepared for rendering numbers.
-      expand: A boolean, if true, expand columns that render to lists on multiple rows.
-      spaced: If true, leave an empty line between each of the rows. This is useful if the
-        results have a lot of rows that render over multiple lines.
+      ctx: The rendering contect
     """
     # Important notes:
     #
@@ -485,10 +482,10 @@ def render_rows(result_types, result_rows, dcontext,
         assert len(result_types) == len(result_rows[0])
 
     # Create column renderers.
-    renderers = get_renderers(result_types, result_rows, dcontext)
+    renderers = get_renderers(result_types, result_rows, ctx)
 
     # Precompute a spacing row.
-    if spaced:
+    if ctx.spaced:
         spacing_row = [''] * len(renderers)
 
     # Render all the columns of all the rows to strings.
@@ -508,11 +505,11 @@ def render_rows(result_types, result_rows, dcontext,
             # Update the column renderer.
             exp_lines = renderer.format(value)
             if isinstance(exp_lines, list):
-                if expand:
+                if ctx.expand:
                     max_lines = max(max_lines, len(exp_lines))
                 else:
                     # Join the lines onto a single cell.
-                    exp_lines = ', '.join(exp_lines)
+                    exp_lines = ctx.listsep.join(exp_lines)
             exp_row.append(exp_lines)
 
         # If all the values were rendered directly to strings, this is a row that
@@ -536,14 +533,13 @@ def render_rows(result_types, result_rows, dcontext,
                     str_lines[index].append(exp_line)
             str_rows.extend(str_lines)
 
-        if spaced:
+        if ctx.spaced:
             str_rows.append(spacing_row)
 
     return str_rows, renderers
 
 
-def render_text(result_types, result_rows, dcontext, file,
-                expand=False, boxed=False, spaced=False):
+def render_text(result_types, result_rows, dcontext, file, expand=False, boxed=False, spaced=False):
     """Render the result of executing a query in text format.
 
     Args:
@@ -557,8 +553,8 @@ def render_text(result_types, result_rows, dcontext, file,
       spaced: If true, leave an empty line between each of the rows. This is useful if the
         results have a lot of rows that render over multiple lines.
     """
-    str_rows, renderers = render_rows(result_types, result_rows, dcontext,
-                                      expand=expand, spaced=spaced)
+    ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=' ')
+    str_rows, renderers = render_rows(result_types, result_rows, ctx)
 
     # Compute a final format strings.
     formats = ['{{:{}}}'.format(max(renderer.width(), 1))
@@ -609,8 +605,8 @@ def render_csv(result_types, result_rows, dcontext, file, expand=False):
       file: A file object to render the results to.
       expand: A boolean, if true, expand columns that render to lists on multiple rows.
     """
-    str_rows, renderers = render_rows(result_types, result_rows, dcontext,
-                                      expand=expand, spaced=False)
+    ctx = RenderContext(dcontext, expand=expand, spaced=False)
+    str_rows, renderers = render_rows(result_types, result_rows, ctx)
 
     writer = csv.writer(file)
     header_row = [name for name, _ in result_types]
