@@ -151,21 +151,14 @@ class SetRenderer(ColumnRenderer):
         return self.sep.join(str(x) for x in sorted(value)).ljust(self.maxwidth)
 
 
-class DateTimeRenderer(ColumnRenderer):
-    """A renderer for decimal numbers."""
+class DateRenderer(ColumnRenderer):
     dtype = datetime.date
-
-    def __init__(self, ctx):
-        self.empty = ' ' * 10
-
-    def update(self, _):
-        pass
 
     def width(self):
         return 10
 
     def format(self, value):
-        return self.empty if value is None else value.strftime('%Y-%m-%d')
+        return value.strftime('%Y-%m-%d')
 
 
 class IntegerRenderer(ColumnRenderer):
@@ -607,7 +600,7 @@ RENDERERS = {renderer_cls.dtype: renderer_cls
                                   SetRenderer,
                                   IntegerRenderer,
                                   DecimalRenderer,
-                                  DateTimeRenderer,
+                                  DateRenderer,
                                   AmountRenderer,
                                   PositionRenderer,
                                   InventoryRenderer]}
