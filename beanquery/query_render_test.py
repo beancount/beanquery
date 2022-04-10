@@ -24,13 +24,6 @@ class ColumnRendererBase(unittest.TestCase):
 
     def setUp(self):
         dcontext = display_context.DisplayContext()
-        dcontext.update(D('1.00'), 'USD')
-        dcontext.update(D('1.00'), 'CAD')
-        dcontext.update(D('1.0000'), 'USD')
-        dcontext.update(D('1.0000'), 'USD')
-        dcontext.update(D('1.000'), 'HOOL')
-        dcontext.update(D('1'), 'CA')
-        dcontext.update(D('1.00'), 'AAPL')
         self.ctx = query_render.RenderContext(dcontext, expand=True)
 
     def get(self, *values):
@@ -182,30 +175,63 @@ class TestDecimalRenderer(ColumnRendererBase):
 
 class TestAmountRenderer(ColumnRendererBase):
 
-    RendererClass = query_render.AmountRenderer
+    renderer = query_render.AmountRenderer
 
-    def test_single_frac(self):
-        pos = A('100.00 USD')
-        rdr = self.get(pos)
-        self.assertEqual('100.00   USD',
-                         rdr.format(pos))
+    def test_amount(self):
+        self.assertEqual(self.render([A('100.00 USD')]), ['100.00 USD'])
 
-    def test_single_int(self):
-        pos = A('5 HOOL')
-        rdr = self.get(pos)
-        self.assertEqual('5     HOOL',
-                         rdr.format(pos))
+    def test_quantization_one(self):
+        self.ctx.dcontext.update(Decimal('1.0000'), 'ETH')
+        self.assertEqual(self.ctx.dcontext.quantize(Decimal('1.0'), 'ETH'), Decimal('1.0000'))
+        self.assertEqual(self.render([A('1 ETH')]), ['1.0000 ETH'])
+        self.assertEqual(self.render([A('0.00001 ETH')]), ['0.0000 ETH'])
+
+    def test_quantization_many(self):
+        self.ctx.dcontext.update(Decimal('1.0000'), 'ETH')
+        self.ctx.dcontext.update(Decimal('1.00'), 'USD')
+        self.ctx.dcontext.update(Decimal('1'), 'XYZ')
+        self.assertEqual(self.render([A('1.0 ETH')]), ['1.0000 ETH'])
+        self.assertEqual(self.render([A('1.0 USD')]), ['1.00 USD'])
+        self.assertEqual(self.render([A('1.0 XYZ')]), ['1 XYZ'])
+
+    def test_number_padding(self):
+        # FIXME: The leading space seems like a bug in
+        # DisplayContext. Either it should always be there or it
+        # should be there to support minus signs not encountered in
+        # training or it shoudl not be there at all.
+        self.assertEqual(self.render([A('1 XY'), A('12 XY'), A('123 XY'), A('-1 XY')]), [
+            '   1 XY',
+            '  12 XY',
+            ' 123 XY',
+            '  -1 XY',
+        ])
+        self.assertEqual(self.render([A('1 XY'), A('12 XY'), A('-12 XY')]), [
+            '  1 XY',
+            ' 12 XY',
+            '-12 XY',
+        ])
+
+    def test_decimal_alignment(self):
+        self.assertEqual(self.render([A('1.0 AA'), A('1.00 BB'), A('1.000 CC')]), [
+            '1.0   AA',
+            '1.00  BB',
+            '1.000 CC',
+        ])
+
+    def test_currency_padding(self):
+        self.assertEqual(self.render([A('1.00 XY'), A('1.00 XYZ'), A('1.00 XYZK')]), [
+            '1.00 XY  ',
+            '1.00 XYZ ',
+            '1.00 XYZK',
+        ])
 
     def test_many(self):
-        amounts = [A(x)
-                   for x in ('0.0001 USD', '20.002 HOOL', '33 CA', '1098.20 AAPL')]
-        rdr = self.get(*amounts)
-        self.assertEqual(['   0.0001 USD ',
-                          '  20.002  HOOL',
-                          '  33      CA  ',
-                          '1098.20   AAPL'],
-                         [rdr.format(amount_) for amount_ in amounts])
-
+        self.assertEqual(self.render([A('0.0001 USD'), A('20.002 HOOL'), A('33 CA'), A('1098.20 AAPL')]), [
+            '   0.0001 USD ',
+            '  20.002  HOOL',
+            '  33      CA  ',
+            '1098.20   AAPL',
+        ])
 
 
 class TestPositionRenderer(ColumnRendererBase):
