@@ -80,24 +80,20 @@ class ColumnRenderer:
 
 
 class ObjectRenderer(ColumnRenderer):
-    """A renderer for a generic object type."""
     dtype = object
 
     def __init__(self, ctx):
-        self.maxlen = 0
+        super().__init__(ctx)
+        self.maxwidth = 0
 
     def update(self, value):
-        if value is not None:
-            self.maxlen = len(str(value))
-
-    def prepare(self):
-        pass
+        self.maxwidth = max(self.maxwidth, len(str(value)))
 
     def width(self):
-        return self.maxlen
+        return self.maxwidth
 
     def format(self, value):
-        return '' if value is None else str(value)
+        return str(value).ljust(self.maxwidth)
 
 
 class BoolRenderer(ColumnRenderer):

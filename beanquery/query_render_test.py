@@ -55,6 +55,19 @@ class ColumnRendererBase(unittest.TestCase):
         return strings
 
 
+class ObjectRenderer(ColumnRendererBase):
+
+    renderer = query_render.ObjectRenderer
+
+    def test_object(self):
+        self.assertEqual(self.render(["foo", 1, D('1.23'), datetime.date(1970, 1, 1)]), [
+            'foo       ',
+            '1         ',
+            '1.23      ',
+            '1970-01-01',
+        ])
+
+
 class TestBoolRenderer(ColumnRendererBase):
 
     renderer = query_render.BoolRenderer
