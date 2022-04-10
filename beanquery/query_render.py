@@ -275,73 +275,45 @@ class AmountRenderer(ColumnRenderer):
 
 
 class PositionRenderer(ColumnRenderer):
-    """A renderer for positions. Inventories renders as a list of position
-    strings. Both the unit numbers and the cost numbers are aligned, if any.
+    """Renderer for Position instrnaces.
+
+    Both the unit numbers and the cost numbers are aligned::
+
+      -    5.000 HOOL {500.23  USD }
+      -  123     CA   {  1.000 HOOL}
+      -    3.00  USD
+      -   42.000 HOOL
+      -    3.00  AAPL
+      -    3.0   XY
+
     """
     dtype = position.Position
 
     def __init__(self, ctx):
-        self.units_rdr = AmountRenderer(ctx)
-        self.cost_rdr = AmountRenderer(ctx)
+        super().__init__(ctx)
+        self.units_renderer = AmountRenderer(ctx)
+        self.cost_renderer = AmountRenderer(ctx)
 
     def update(self, value):
-        if value is None:
-            return
-        self.units_rdr.update(value.units)
-        self.cost_rdr.update(value.cost)
+        self.units_renderer.update(value.units)
+        self.cost_renderer.update(value.cost)
 
     def prepare(self):
-        self.units_rdr.prepare()
-        self.cost_rdr.prepare()
-
-        units_width = self.units_rdr.width()
-        cost_width = self.cost_rdr.width()
-
-        #fmt_units = '{{{}}}'.format(':{}'.format(units_width) if units_width > 0 else '')
-        fmt_units = '{{:{}}}'.format(units_width)
-
-        if cost_width == 0:
-            self.fmt_with_cost = None # Will not get used.
-            self.fmt_without_cost = fmt_units
-            self.total_width = units_width
-        else:
-            fmt_cost = '{{{{{{:{}}}}}}}'.format(cost_width)
-            self.fmt_with_cost = '{} {}'.format(fmt_units, fmt_cost)
-            self.fmt_without_cost = '{} {}'.format(
-                fmt_units, ' ' * len(fmt_cost.format(self.cost_rdr.format(None))))
-            self.total_width = len(self.fmt_with_cost.format('', ''))
-
-        self.empty = ' ' * self.total_width
+        self.units_renderer.prepare()
+        self.cost_renderer.prepare()
+        units_width = self.units_renderer.width()
+        cost_width = self.cost_renderer.width()
+        self.maxwidth = units_width + cost_width + (3 if cost_width > 0 else 0)
 
     def width(self):
-        return self.total_width
+        return self.maxwidth
 
     def format(self, value):
-        if value is None:
-            return self.empty
-
-        strings = []
-        if self.fmt_with_cost is None:
-            strings.append(
-                self.fmt_without_cost.format(
-                    self.units_rdr.format(value.units)))
-        else:
-            cost = value.cost
-            if cost:
-                strings.append(
-                    self.fmt_with_cost.format(
-                        self.units_rdr.format(value.units),
-                        self.cost_rdr.format(cost)))
-            else:
-                strings.append(
-                    self.fmt_without_cost.format(
-                        self.units_rdr.format(value.units)))
-
-        if len(strings) == 1:
-            return strings[0]
-        if len(strings) == 0:
-            return self.empty
-        return strings
+        units = self.units_renderer.format(value.units)
+        if value.cost is None:
+            return units.ljust(self.maxwidth)
+        cost = self.cost_renderer.format(value.cost)
+        return f'{units} {{{cost}}}'
 
 
 class InventoryRenderer(PositionRenderer):
