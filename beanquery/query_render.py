@@ -316,43 +316,79 @@ class PositionRenderer(ColumnRenderer):
         return f'{units} {{{cost}}}'
 
 
-class InventoryRenderer(PositionRenderer):
-    """A renderer for Inventory instances. Inventories renders as a list of position
-    strings. Both the unit numbers and the cost numbers are aligned, if any.
+class InventoryRenderer(ColumnRenderer):
+    """Renderer for Inventory instances.
+
+    Inventories renders as a list of position strings. The format used
+    differs whether expansion of list-like values to multiple rows in
+    enabled or not.
+
+    When row expansion is enabled, positions in each inventory values
+    are sorted alphabetically by commodity symbol and are formatted
+    with the same position formatter, resulting in all commodity
+    strings to be aligned::
+
+      -  1234.00   USD
+           42      TEST
+      -     0.0001 ETH
+          567.00   USD
+
+    When row expansion is disabled, the position formatters are unique
+    for each commodity symbol and the values are rendered in a table
+    like structure. The positions appear sorted by frequency of
+    occurence in the column and alphabetically by commodity symbol::
+
+      - 1234.00 USD 0.0001 ETH
+      -  567.00 USD            42 TEST
+
+    The separator between positions is determined by ``listsep`` in
+    the rendering context.
+
     """
     dtype = inventory.Inventory
 
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        self.listsep = ctx.listsep
+        # We look this up for each value, it makes sense to cache it
+        # to avoid the attribute lookup in the context.
+        self.expand = ctx.expand
+        # How many times we have seen a commodity.
+        self.counters = collections.defaultdict(int)
+        # Commodity specific renderers.
+        self.renderers = collections.defaultdict(lambda: PositionRenderer(ctx))
+
     def update(self, value):
-        if value is None:
-            return
         for pos in value.get_positions():
-            super().update(pos)
+            # We use the little indexing trick to do not have to
+            # conditionalize this code on whether rows expansion is
+            # enabled or not.
+            self.counters[self.expand or pos.units.currency] += 1
+            self.renderers[self.expand or pos.units.currency].update(pos)
+
+    def prepare(self):
+        for renderer in self.renderers.values():
+            renderer.prepare()
+        self.maxwidth = sum(r.width() + len(self.listsep) for r in self.renderers.values()) - len(self.listsep)
+        # We want to present inventory content sorted by frequency of
+        # appearance and by currency name. Sorting the renderers here
+        # allows to just iterate the renderers in format() method.
+        self.renderers = dict(sorted(self.renderers.items(), key=lambda x: (-self.counters[x[0]], x[0])))
+
+    def width(self):
+        return self.maxwidth
 
     def format(self, value):
         strings = []
-        if self.fmt_with_cost is None:
-            for pos in value.get_positions():
-                strings.append(
-                    self.fmt_without_cost.format(
-                        self.units_rdr.format(pos.units)))
-        else:
-            for pos in value.get_positions():
-                cost = pos.cost
-                if cost:
-                    strings.append(
-                        self.fmt_with_cost.format(
-                            self.units_rdr.format(pos.units),
-                            self.cost_rdr.format(cost)))
-                else:
-                    strings.append(
-                        self.fmt_without_cost.format(
-                            self.units_rdr.format(pos.units)))
-
-        if len(strings) == 1:
-            return strings[0]
-        if len(strings) == 0:
-            return self.empty
-        return strings
+        if self.expand:
+            for pos in sorted(value.get_positions(), key=lambda pos: pos.units.currency):
+                strings.append(self.renderers[self.expand].format(pos))
+            return strings
+        positions = {pos.units.currency: pos for pos in value.get_positions()}
+        for commodity, fmt in self.renderers.items():
+            pos = positions.get(commodity)
+            strings.append(fmt.format(pos) if pos is not None else ' ' * fmt.width())
+        return self.listsep.join(strings)
 
 
 def get_renderers(result_types, result_rows, ctx):
