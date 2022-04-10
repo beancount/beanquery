@@ -23,18 +23,18 @@ class ColumnRendererBase(unittest.TestCase):
     RendererClass = None
 
     def setUp(self):
-        self.dcontext = display_context.DisplayContext()
-        self.dcontext.expand = True
-        self.dcontext.update(D('1.00'), 'USD')
-        self.dcontext.update(D('1.00'), 'CAD')
-        self.dcontext.update(D('1.0000'), 'USD')
-        self.dcontext.update(D('1.0000'), 'USD')
-        self.dcontext.update(D('1.000'), 'HOOL')
-        self.dcontext.update(D('1'), 'CA')
-        self.dcontext.update(D('1.00'), 'AAPL')
+        dcontext = display_context.DisplayContext()
+        dcontext.update(D('1.00'), 'USD')
+        dcontext.update(D('1.00'), 'CAD')
+        dcontext.update(D('1.0000'), 'USD')
+        dcontext.update(D('1.0000'), 'USD')
+        dcontext.update(D('1.000'), 'HOOL')
+        dcontext.update(D('1'), 'CA')
+        dcontext.update(D('1.00'), 'AAPL')
+        self.ctx = query_render.RenderContext(dcontext, expand=True)
 
     def get(self, *values):
-        rdr = self.RendererClass(self.dcontext)
+        rdr = self.RendererClass(self.ctx)
         for value in values:
             rdr.update(value)
         rdr.prepare()
