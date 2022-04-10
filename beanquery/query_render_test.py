@@ -16,6 +16,13 @@ from beancount.core import display_context
 from beanquery import query_render
 
 
+def flatten(values):
+    # Flatten lists of lists.
+    for x in values:
+        if isinstance(x, list):
+            yield from flatten(x)
+        else: yield x
+
 
 class ColumnRendererBase(unittest.TestCase):
 
@@ -44,7 +51,7 @@ class ColumnRendererBase(unittest.TestCase):
         renderer = self.prepare(values)
         width = renderer.width()
         strings = [renderer.format(value) for value in values]
-        self.assertTrue(all(len(s) == width for s in strings))
+        self.assertTrue(all(len(s) == width for s in flatten(strings)))
         return strings
 
 
@@ -286,24 +293,48 @@ class TestPositionRenderer(ColumnRendererBase):
 
 class TestInventoryRenderer(ColumnRendererBase):
 
-    RendererClass = query_render.InventoryRenderer
+    renderer = query_render.InventoryRenderer
 
-    def test_various(self):
-        inv = inventory.from_string('100.00 USD')
-        rdr = self.get(inv)
-        self.assertEqual('100.00   USD',
-                         rdr.format(inv))
+    def setUp(self):
+        super().setUp()
+        # Prime the display context for some known commodities.
+        self.ctx.dcontext = display_context.DisplayContext()
+        self.ctx.dcontext.update(D('1.00'), 'USD')
+        self.ctx.dcontext.update(D('1.00'), 'CAD')
+        self.ctx.dcontext.update(D('1.000'), 'HOOL')
+        self.ctx.dcontext.update(D('1'), 'CA')
+        self.ctx.dcontext.update(D('1.00'), 'AAPL')
 
-        inv = inventory.from_string('5 HOOL {500.23 USD}')
-        rdr = self.get(inv)
-        self.assertEqual('5     HOOL {500.23   USD}',
-                         rdr.format(inv))
+    def test_inventory(self):
+        self.ctx.expand = True
+        self.assertEqual(self.render([I('100 USD')]),[
+            ['100.00 USD']
+        ])
+        self.assertEqual(self.render([I('5 HOOL {500.23 USD}')]), [
+            ['5.000 HOOL {500.23 USD}']
+        ])
+        self.assertEqual(self.render([I('5 HOOL {500.23 USD}, 12.3456 CAAD')]), [
+            ['12.3456 CAAD             ',
+             ' 5.000  HOOL {500.23 USD}'],
+        ])
 
-        inv = inventory.from_string('5 HOOL {500.23 USD}, 12.3456 CAAD')
-        rdr = self.get(inv)
-        self.assertEqual([' 5      HOOL {500.23   USD}',
-                          '12.3456 CAAD               '],
-                         rdr.format(inv))
+    def test_inventory_no_expand(self):
+        self.ctx.expand = False
+        self.ctx.listsep = ' + '
+        self.assertEqual(self.render([I('100 USD')]), [
+            '100.00 USD'
+        ])
+        self.assertEqual(self.render([I('5 HOOL {500.23 USD}')]), [
+            '5.000 HOOL {500.23 USD}'
+        ])
+        self.assertEqual(self.render([I('5 HOOL {500.23 USD}, 12.3456 CAAD')]), [
+            '12.3456 CAAD + 5.000 HOOL {500.23 USD}',
+        ])
+        self.assertEqual(self.render([I('5 HOOL {500.23 USD}, 12.3456 CAAD'),
+                                      I('55 HOOL {50.23 USD}, 2.3 CAAD')]), [
+            '12.3456 CAAD +  5.000 HOOL {500.23 USD}',
+            ' 2.3000 CAAD + 55.000 HOOL { 50.23 USD}',
+        ])
 
 
 class TestQueryRender(unittest.TestCase):
