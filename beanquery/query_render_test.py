@@ -122,34 +122,27 @@ class TestDateRenderer(ColumnRendererBase):
     def test_date(self):
         self.assertEqual(self.render([datetime.date(2014, 10, 3)]), ['2014-10-03'])
 
-class TestIntegerRenderer(ColumnRendererBase):
 
-    RendererClass = query_render.IntegerRenderer
+class TestIntRenderer(ColumnRendererBase):
 
-    def test_integers(self):
-        rdr = self.get(1, 222, 33)
-        self.assertEqual('  0', rdr.format(0))
-        self.assertEqual('  1', rdr.format(1))
-        self.assertEqual('444', rdr.format(444))
+    renderer = query_render.IntRenderer
 
-    def test_integers_negative(self):
-        rdr = self.get(1, -222, 33)
-        self.assertEqual('   0', rdr.format(0))
-        self.assertEqual('   1', rdr.format(1))
-        self.assertEqual(' 444', rdr.format(444))
-        self.assertEqual('-444', rdr.format(-444))
-
-    def test_overflow(self):
-        rdr = self.get(1, 100, 1000)
-        self.assertEqual('   1', rdr.format(1))
-        # Note: Unfortunately we can't quite prevent it with a single format
-        # string, but we don't really need to, so we won't bother.
-        self.assertEqual('3456789', rdr.format(3456789))
-
-    def test_zeros_only(self):
-        rdr = self.get(0)
-        self.assertEqual('1', rdr.format(1))
-
+    def test_integer(self):
+        self.assertEqual(self.render([1, 22, 333]), [
+            '  1',
+            ' 22',
+            '333',
+        ])
+        self.assertEqual(self.render([1, -22, 333]), [
+            '  1',
+            '-22',
+            '333',
+        ])
+        self.assertEqual(self.render([1, 22, -333]), [
+            '   1',
+            '  22',
+            '-333',
+        ])
 
 
 class TestDecimalRenderer(ColumnRendererBase):

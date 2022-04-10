@@ -6,7 +6,6 @@ __license__ = "GNU GPLv2"
 import collections
 import csv
 import datetime
-import math
 
 from decimal import Decimal
 from itertools import zip_longest
@@ -161,34 +160,24 @@ class DateRenderer(ColumnRenderer):
         return value.strftime('%Y-%m-%d')
 
 
-class IntegerRenderer(ColumnRenderer):
-    """A renderer for integers."""
+class IntRenderer(ColumnRenderer):
     dtype = int
 
     def __init__(self, ctx):
-        self.has_negative = False
-        self.max_digits = 0
+        super().__init__(ctx)
+        self.maxwidth = 0
 
     def update(self, value):
-        if value is None:
-            return
-        digits = int(math.log10(abs(value))) + 1 if value else 1
-        self.max_digits = max(self.max_digits, digits)
-        if value < 0:
-            self.has_negative = True
+        self.maxwidth = max(self.maxwidth, len(str(value)))
 
     def prepare(self):
-        self.max_width = (1 if self.has_negative else 0) + self.max_digits
-        self.fmt = '{{:{}{}d}}'.format(' ' if self.has_negative else '',
-                                       self.max_width)
+        self.frmt = str(self.maxwidth)
 
     def width(self):
-        return self.max_width
+        return self.maxwidth
 
     def format(self, value):
-        if value is None:
-            return self.fmt.format('')
-        return self.fmt.format(value)
+        return format(value, self.frmt)
 
 
 class DecimalRenderer(ColumnRenderer):
@@ -598,7 +587,7 @@ RENDERERS = {renderer_cls.dtype: renderer_cls
                                   BoolRenderer,
                                   StringRenderer,
                                   SetRenderer,
-                                  IntegerRenderer,
+                                  IntRenderer,
                                   DecimalRenderer,
                                   DateRenderer,
                                   AmountRenderer,
