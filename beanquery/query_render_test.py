@@ -40,6 +40,39 @@ class ColumnRendererBase(unittest.TestCase):
         rdr.prepare()
         return rdr
 
+    def prepare(self, values):
+        renderer = self.renderer(self.ctx)
+        for value in values:
+            renderer.update(value)
+        renderer.prepare()
+        return renderer
+
+    def render(self, values):
+        renderer = self.prepare(values)
+        width = renderer.width()
+        strings = [renderer.format(value) for value in values]
+        self.assertTrue(all(len(s) == width for s in strings))
+        return strings
+
+
+class TestBoolRenderer(ColumnRendererBase):
+
+    renderer = query_render.BoolRenderer
+
+    def test_bool(self):
+        self.assertEqual(self.render([True, True]), [
+            'TRUE',
+            'TRUE',
+        ])
+        self.assertEqual(self.render([False, True]), [
+            'FALSE',
+            'TRUE ',
+        ])
+        self.assertEqual(self.render([False, False]), [
+            'FALSE',
+            'FALSE',
+        ])
+
 
 class TestStringRenderer(ColumnRendererBase):
 

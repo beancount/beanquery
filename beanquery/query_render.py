@@ -101,26 +101,23 @@ class ObjectRenderer(ColumnRenderer):
 
 
 class BoolRenderer(ColumnRenderer):
-    """A renderer for left-aligned strings."""
     dtype = bool
 
     def __init__(self, ctx):
-        self.maxlen = 0
-        self.seen_false = False
+        super().__init__(ctx)
+        # The minimum width required for "TRUE" or "FALSE".
+        self.maxwidth = 4
 
     def update(self, value):
         if not value:
-            self.seen_false = True
-
-    def prepare(self):
-        self.maxlen = 5 if self.seen_false else 4
-        self.fmt = '{{:<{}.{}}}'.format(self.maxlen, self.maxlen)
+            # With at least one "FALSE" we need 5 characters.
+            self.maxwidth = 5
 
     def width(self):
-        return self.maxlen
+        return self.maxwidth
 
     def format(self, value):
-        return self.fmt.format('TRUE' if value else 'FALSE')
+        return ('TRUE' if value else 'FALSE').ljust(self.maxwidth)
 
 
 class StringRenderer(ColumnRenderer):
