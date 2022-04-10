@@ -101,14 +101,18 @@ class TestStringRenderer(ColumnRendererBase):
             '   ',
         ])
 
-class TestStringSetRenderer(ColumnRendererBase):
 
-    RendererClass = query_render.StringSetRenderer
+class TestSetRenderer(ColumnRendererBase):
 
-    def test_string_set(self):
-        rdr = self.get({}, {'a'}, {'bb', 'cc'})
-        self.assertEqual(['dd', 'e '], rdr.format({'ddd', 'e'}))
+    renderer = query_render.SetRenderer
 
+    def test_stringset(self):
+        self.ctx.listsep = '+'
+        self.assertEqual(self.render([{}, {'aaaa'}, {'bb', 'ccc'}]), [
+            '      ',
+            'aaaa  ',
+            'bb+ccc',
+        ])
 
 class TestDateTimeRenderer(ColumnRendererBase):
 

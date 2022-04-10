@@ -133,29 +133,22 @@ class StringRenderer(ColumnRenderer):
         return value.ljust(self.maxwidth)
 
 
-class StringSetRenderer(ColumnRenderer):
-    """A renderer for sets of strings."""
+class SetRenderer(ColumnRenderer):
     dtype = set
 
     def __init__(self, ctx):
-        self.maxlen = 0
+        super().__init__(ctx)
+        self.maxwidth = 0
+        self.sep = ctx.listsep
 
     def update(self, value):
-        if not value:
-            return
-        self.maxlen = max(max(len(string) for string in value), self.maxlen)
-
-    def prepare(self):
-        self.fmt = '{{:<{:d}.{:d}}}'.format(self.maxlen, self.maxlen)
+        self.maxwidth = max(self.maxwidth, sum(len(x) + len(self.sep) for x in value) - len(self.sep))
 
     def width(self):
-        return self.maxlen
+        return self.maxwidth
 
     def format(self, value):
-        if value:
-            lines = sorted(map(self.fmt.format, value))
-            return lines[0] if len(lines) == 1 else lines
-        return self.fmt.format('')
+        return self.sep.join(str(x) for x in sorted(value)).ljust(self.maxwidth)
 
 
 class DateTimeRenderer(ColumnRenderer):
@@ -611,11 +604,10 @@ RENDERERS = {renderer_cls.dtype: renderer_cls
              for renderer_cls in [ObjectRenderer,
                                   BoolRenderer,
                                   StringRenderer,
-                                  StringSetRenderer,
+                                  SetRenderer,
                                   IntegerRenderer,
                                   DecimalRenderer,
                                   DateTimeRenderer,
-                                  StringSetRenderer,
                                   AmountRenderer,
                                   PositionRenderer,
                                   InventoryRenderer]}
