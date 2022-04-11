@@ -929,7 +929,7 @@ def compile_from(from_clause, environ):
 #   distinct: An optional boolean that requests we should uniquify the result rows.
 #   flatten: An optional boolean that requests we should output a single posting
 #     row for each currency present in an accumulated and output inventory.
-EvalQuery = collections.namedtuple('EvalQuery', ('c_targets c_from c_where '
+EvalQuery = collections.namedtuple('EvalQuery', ('table c_targets c_from c_where '
                                                  'group_indexes having_index '
                                                  'order_spec '
                                                  'limit distinct flatten'))
@@ -952,8 +952,17 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
     if isinstance(select.from_clause, query_parser.Select):
         raise CompilationError("Nested SELECT are not supported yet")
 
-    # Bind the FROM clause expressions.
-    c_from = compile_from(select.from_clause, entries_environ)
+    if isinstance(select.from_clause, query_parser.Table):
+        # we got a table!
+        from beanquery import tables
+        table = tables.get(select.from_clause.name)
+        targets_environ = postings_environ = entries_environ = table
+        # FIXME!!
+        c_from = EvalFrom(EvalConstant(True), None, None, None)
+    else:
+        # Bind the FROM clause expressions.
+        c_from = compile_from(select.from_clause, entries_environ)
+        table = None
 
     # Compile the targets.
     c_targets = compile_targets(select.targets, targets_environ)
@@ -999,7 +1008,8 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
     if select.pivot_by is not None:
         raise CompilationError("The PIVOT BY clause is not supported yet")
 
-    return EvalQuery(c_targets,
+    return EvalQuery(table,
+                     c_targets,
                      c_from,
                      c_where,
                      group_indexes,
