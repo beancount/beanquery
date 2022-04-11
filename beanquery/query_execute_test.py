@@ -474,7 +474,7 @@ class TestExecutePrint(CommonInputBase, QueryBase):
         statement = qc.EvalPrint(
             qc.EvalFrom(
                 qc.Operator(qp.Equal, [
-                    qe.YearEntryColumn(),
+                    qe.Column('year'),
                     qc.EvalConstant(2012),
                 ]),
                 None, None, None))
@@ -514,16 +514,16 @@ class TestAllocation(unittest.TestCase):
 class TestBalanceColumn(unittest.TestCase):
 
     def test_uses_balance_column(self):
-        c_simple = qe.BalanceColumn()
+        c_simple = qe.Column('balance')
         self.assertTrue(qx.uses_balance_column(c_simple))
 
-        c_simple_not = qe.AccountColumn()
+        c_simple_not = qe.Column('account')
         self.assertFalse(qx.uses_balance_column(c_simple_not))
 
-        # c_subexpr = qc.Operator(qp.Equal, [qe.BalanceColumn(), qc.EvalConstant(2012)])
+        # c_subexpr = qc.Operator(qp.Equal, [qe.Column('balance'), qc.EvalConstant(2012)])
         # self.assertTrue(qx.uses_balance_column(c_subexpr))
 
-        c_subexpr_not = qc.Operator(qp.Equal, [qe.AccountColumn(), qc.EvalConstant('Assets')])
+        c_subexpr_not = qc.Operator(qp.Equal, [qe.Column('account'), qc.EvalConstant('Assets')])
         self.assertFalse(qx.uses_balance_column(c_subexpr_not))
 
 
@@ -563,8 +563,8 @@ class TestExecuteNonAggregatedQuery(QueryBase):
                 ('narration', str),
                 ],
             [
-                (datetime.date(2010, 2, 23), '*', '', 'Bla'),
-                (datetime.date(2010, 2, 23), '*', '', 'Bla'),
+                (datetime.date(2010, 2, 23), '*', None, 'Bla'),
+                (datetime.date(2010, 2, 23), '*', None, 'Bla'),
                 ])
 
     def test_non_aggregated_order_by_visible(self):
