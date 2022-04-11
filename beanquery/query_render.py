@@ -26,6 +26,11 @@ class RenderContext:
         self.spaced = spaced
 
 
+# Map of data-types to renderer classes. This is populated by
+# subclassing ColumnRenderer via an __init_subclass__ hook.
+RENDERERS = {}
+
+
 class ColumnRenderer:
     """Base class for classes that render column values.
 
@@ -49,6 +54,10 @@ class ColumnRenderer:
 
     def __init__(self, ctx):
         pass
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        RENDERERS[cls.dtype] = cls
 
     def update(self, value):
         """Update the rendered with the given value.
@@ -569,17 +578,3 @@ def render_csv(result_types, result_rows, dcontext, file, expand=False):
     header_row = [name for name, _ in result_types]
     writer.writerow(header_row)
     writer.writerows(str_rows)
-
-
-# A mapping of data-type -> (render-function, alignment)
-RENDERERS = {renderer_cls.dtype: renderer_cls
-             for renderer_cls in [ObjectRenderer,
-                                  BoolRenderer,
-                                  StringRenderer,
-                                  SetRenderer,
-                                  IntRenderer,
-                                  DecimalRenderer,
-                                  DateRenderer,
-                                  AmountRenderer,
-                                  PositionRenderer,
-                                  InventoryRenderer]}
