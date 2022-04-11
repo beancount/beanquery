@@ -273,10 +273,11 @@ def execute_query(query, entries, options_map):
 
     context = create_row_context(entries, options_map)
 
+    # FIXME!!
     # Filter the entries using the FROM clause.
-    filt_entries = (filter_entries(query.c_from, entries, options_map, context)
-                    if query.c_from is not None else
-                    entries)
+    # filt_entries = (filter_entries(query.c_from, entries, options_map, context)
+    #                 if query.c_from is not None else
+    #                 entries)
 
     # Dispatch between the non-aggregated queries and aggregated queries.
     c_where = query.c_where
@@ -288,20 +289,23 @@ def execute_query(query, entries, options_map):
     if query.group_indexes is None:
         # This is a non-aggregated query.
 
+        for context in query.table:
+            if c_where is None or c_where(context):
+                values = [c_expr(context) for c_expr in c_target_exprs]
+                rows.append(values)
+
         # Iterate over all the postings once.
-        for entry in misc_utils.filter_type(filt_entries, data.Transaction):
-            context.entry = entry
-            for posting in entry.postings:
-                context.posting = posting
-                if c_where is None or c_where(context):
-                    # Compute the balance.
-                    if uses_balance:
-                        context.balance.add_position(posting)
-
-                    # Evaluate all the values.
-                    values = [c_expr(context) for c_expr in c_target_exprs]
-
-                    rows.append(values)
+        # for entry in misc_utils.filter_type(filt_entries, data.Transaction):
+        #     context.entry = entry
+        #     for posting in entry.postings:
+        #         context.posting = posting
+        #         if c_where is None or c_where(context):
+        #             # Compute the balance.
+        #             if uses_balance:
+        #                 context.balance.add_position(posting)
+        #             # Evaluate all the values.
+        #             values = [c_expr(context) for c_expr in c_target_exprs]
+        #             rows.append(values)
     else:
         # This is an aggregated query.
 

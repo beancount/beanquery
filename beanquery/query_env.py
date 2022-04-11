@@ -11,6 +11,7 @@ import collections
 import copy
 import datetime
 import decimal
+import operator
 import re
 import textwrap
 
@@ -695,176 +696,101 @@ class Max(query_compile.EvalAggregator):
 
 # Column accessors for entries.
 
-class IdEntryColumn(query_compile.EvalColumn):
-    "Unique id of a directive."
-    __intypes__ = [data.Transaction]
+COLUMNS = {}
 
-    def __init__(self):
-        super().__init__(str)
+def column(dtype, name=None, help=None):
+    def decorator(func):
+        class Col(query_compile.EvalColumn):
+            def __init__(self):
+                super().__init__(dtype)
+            __call__ = staticmethod(func)
+        Col.__name__ = name or func.__name__
+        Col.__doc__ = help or func.__doc__
+        COLUMNS[Col.__name__] = Col
+        return func
+    return decorator
 
-    def __call__(self, context):
-        return hash_entry(context.entry)
 
-class TypeEntryColumn(query_compile.EvalColumn):
-    "The data type of the directive."
-    __intypes__ = [data.Transaction]
+@column(str, 'id')
+def id_(context):
+    """Unique id of a directive."""
+    return hash_entry(context.entry)
 
-    def __init__(self):
-        super().__init__(str)
 
-    def __call__(self, context):
-        return type(context.entry).__name__.lower()
+@column(str, 'type')
+def type_(context):
+    """The data type of the directive."""
+    return type(context.entry).__name__.lower()
 
-class FilenameEntryColumn(query_compile.EvalColumn):
-    "The filename where the directive was parsed from or created."
-    __equivalent__ = 'entry.meta["filename"]'
-    __intypes__ = [data.Transaction]
 
-    def __init__(self):
-        super().__init__(str)
+@column(str)
+def filename(context):
+    """The filename where the directive was parsed from or created."""
+    return context.entry.meta["filename"]
 
-    def __call__(self, context):
-        return context.entry.meta["filename"]
 
-class LineNoEntryColumn(query_compile.EvalColumn):
-    "The line number from the file the directive was parsed from."
-    __equivalent__ = 'entry.meta["lineno"]'
-    __intypes__ = [data.Transaction]
+@column(int)
+def lineno(context):
+    """The line number from the file the directive was parsed from."""
+    return context.entry.meta["lineno"]
 
-    def __init__(self):
-        super().__init__(int)
 
-    def __call__(self, context):
-        return context.entry.meta["lineno"]
+column(datetime.date, name='date', help="The date of the directive.")(operator.attrgetter('entry.date'))
 
-class DateEntryColumn(query_compile.EvalColumn):
-    "The date of the directive."
-    __equivalent__ = 'entry.date'
-    __intypes__ = [data.Transaction]
+column(int, name='year', help="The year of the date of the directive.")(operator.attrgetter('entry.date.year'))
 
-    def __init__(self):
-        super().__init__(datetime.date)
+column(int, name='month', help="The month of the date of the directive.")(operator.attrgetter('entry.date.month'))
 
-    def __call__(self, context):
-        return context.entry.date
+column(int, name='day', help="The day of the date of the directive.")(operator.attrgetter('entry.date.day'))
 
-class YearEntryColumn(query_compile.EvalColumn):
-    "The year of the date of the directive."
-    __equivalent__ = 'entry.date.year'
-    __intypes__ = [data.Transaction]
 
-    def __init__(self):
-        super().__init__(int)
+@column(str)
+def flag(context):
+    """The flag the transaction."""
+    return context.entry.flag if isinstance(context.entry, Transaction) else None
 
-    def __call__(self, context):
-        return context.entry.date.year
 
-class MonthEntryColumn(query_compile.EvalColumn):
-    "The month of the date of the directive."
-    __equivalent__ = 'entry.date.month'
-    __intypes__ = [data.Transaction]
+@column(str)
+def payee(context):
+    """The payee of the transaction."""
+    if not sinstance(context.entry, Transaction):
+        return None
+    return context.entry.payee or ''
 
-    def __init__(self):
-        super().__init__(int)
 
-    def __call__(self, context):
-        return context.entry.date.month
+@column(str)
+def narration(context):
+    """The narration of the transaction."""
+    if not sinstance(context.entry, Transaction):
+        return None
+    return context.entry.narration or ''
 
-class DayEntryColumn(query_compile.EvalColumn):
-    "The day of the date of the directive."
-    __equivalent__ = 'entry.date.day'
-    __intypes__ = [data.Transaction]
 
-    def __init__(self):
-        super().__init__(int)
-
-    def __call__(self, context):
-        return context.entry.date.day
-
-class FlagEntryColumn(query_compile.EvalColumn):
-    "The flag the transaction."
-    __equivalent__ = 'entry.flag'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return (context.entry.flag
-                if isinstance(context.entry, Transaction)
-                else None)
-
-class PayeeEntryColumn(query_compile.EvalColumn):
-    "The payee of the transaction."
-    __equivalent__ = 'entry.payee'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return (context.entry.payee or ''
-                if isinstance(context.entry, Transaction)
-                else None)
-
-class NarrationEntryColumn(query_compile.EvalColumn):
-    "The narration of the transaction."
-    __equivalent__ = 'entry.narration'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return (context.entry.narration or ''
-                if isinstance(context.entry, Transaction)
-                else None)
-
-# This is convenient, because many times the payee is empty and using a
-# combination produces more compact listings.
-class DescriptionEntryColumn(query_compile.EvalColumn):
-    "A combination of the payee + narration of the transaction, if present."
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return (' | '.join(filter(None, [context.entry.payee,
-                                         context.entry.narration]))
-                if isinstance(context.entry, Transaction)
-                else None)
+@column(str)
+def description(context):
+    """A combination of the payee + narration of the transaction, if present."""
+    if not sinstance(context.entry, Transaction):
+        return None
+    return ' | '.join(filter(None, [context.entry.payee, context.entry.narration]))
 
 
 # A globally available empty set to fill in for None's.
-EMPTY_SET = frozenset()
+EMPTY = frozenset()
 
-class TagsEntryColumn(query_compile.EvalColumn):
-    "The set of tags of the transaction."
-    __equivalent__ = 'entry.tags'
-    __intypes__ = [data.Transaction]
 
-    def __init__(self):
-        super().__init__(set)
+@column(set)
+def tags(context):
+    """The set of tags of the transaction."""
+    if not isinstance(context.entry, Transaction):
+        return EMPTY
+    return context.entry.tags
 
-    def __call__(self, context):
-        return (context.entry.tags or EMPTY_SET
-                if isinstance(context.entry, Transaction)
-                else EMPTY_SET)
-
-class LinksEntryColumn(query_compile.EvalColumn):
-    "The set of links of the transaction."
-    __equivalent__ = 'entry.links'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(set)
-
-    def __call__(self, context):
-        return (context.entry.links or EMPTY_SET
-                if isinstance(context.entry, Transaction)
-                else EMPTY_SET)
-
+@column(set)
+def links(context):
+    """The set of links of the transaction."""
+    if not isinstance(context.entry, Transaction):
+        return EMPTY
+    return context.entry.links
 
 
 class MatchAccount(query_compile.EvalFunction):
@@ -890,22 +816,23 @@ class FilterEntriesEnvironment(query_compile.CompilationEnvironment):
     and other entry types.
     """
     context_name = 'FROM clause'
-    columns = {
-        'id'          : IdEntryColumn,
-        'type'        : TypeEntryColumn,
-        'filename'    : FilenameEntryColumn,
-        'lineno'      : LineNoEntryColumn,
-        'date'        : DateEntryColumn,
-        'year'        : YearEntryColumn,
-        'month'       : MonthEntryColumn,
-        'day'         : DayEntryColumn,
-        'flag'        : FlagEntryColumn,
-        'payee'       : PayeeEntryColumn,
-        'narration'   : NarrationEntryColumn,
-        'description' : DescriptionEntryColumn,
-        'tags'        : TagsEntryColumn,
-        'links'       : LinksEntryColumn,
-        }
+    # columns = {
+    #     'id'          : IdEntryColumn,
+    #     'type'        : TypeEntryColumn,
+    #     'filename'    : FilenameEntryColumn,
+    #     'lineno'      : LineNoEntryColumn,
+    #     'date'        : DateEntryColumn,
+    #     'year'        : YearEntryColumn,
+    #     'month'       : MonthEntryColumn,
+    #     'day'         : DayEntryColumn,
+    #     'flag'        : FlagEntryColumn,
+    #     'payee'       : PayeeEntryColumn,
+    #     'narration'   : NarrationEntryColumn,
+    #     'description' : DescriptionEntryColumn,
+    #     'tags'        : TagsEntryColumn,
+    #     'links'       : LinksEntryColumn,
+    # }
+    columns = copy.copy(COLUMNS)
     functions = copy.copy(SIMPLE_FUNCTIONS)
     functions.update(ENTRY_FUNCTIONS)
 
@@ -914,25 +841,25 @@ class FilterEntriesEnvironment(query_compile.CompilationEnvironment):
 
 # Column accessors for postings.
 
-class IdColumn(query_compile.EvalColumn):
-    "The unique id of the parent transaction for this posting."
-    __intypes__ = [data.Posting]
+# class IdColumn(query_compile.EvalColumn):
+#     "The unique id of the parent transaction for this posting."
+#     __intypes__ = [data.Posting]
 
-    def __init__(self):
-        super().__init__(str)
+#     def __init__(self):
+#         super().__init__(str)
 
-    def __call__(self, context):
-        return hash_entry(context.entry)
+#     def __call__(self, context):
+#         return hash_entry(context.entry)
 
-class TypeColumn(query_compile.EvalColumn):
-    "The data type of the parent transaction for this posting."
-    __intypes__ = [data.Posting]
+# class TypeColumn(query_compile.EvalColumn):
+#     "The data type of the parent transaction for this posting."
+#     __intypes__ = [data.Posting]
 
-    def __init__(self):
-        super().__init__(str)
+#     def __init__(self):
+#         super().__init__(str)
 
-    def __call__(self, context):
-        return type(context.entry).__name__.lower()
+#     def __call__(self, context):
+#         return type(context.entry).__name__.lower()
 
 class FilenameColumn(query_compile.EvalColumn):
     "The filename where the posting was parsed from or created."
@@ -1242,8 +1169,8 @@ class FilterPostingsEnvironment(query_compile.CompilationEnvironment):
     """
     context_name = 'WHERE clause'
     columns = {
-        'id'             : IdColumn,
-        'type'           : TypeColumn,
+        # 'id'             : IdColumn,
+        # 'type'           : TypeColumn,
         'filename'       : FilenameColumn,
         'lineno'         : LineNoColumn,
         'location'       : FileLocationColumn,
@@ -1272,6 +1199,7 @@ class FilterPostingsEnvironment(query_compile.CompilationEnvironment):
         'weight'         : WeightColumn,
         'balance'        : BalanceColumn,
         }
+    columns.update(COLUMNS)
     functions = copy.copy(SIMPLE_FUNCTIONS)
 
 class TargetsEnvironment(FilterPostingsEnvironment):
