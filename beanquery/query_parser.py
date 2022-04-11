@@ -129,6 +129,12 @@ PivotBy = cmptuple('PivotBy', 'columns')
 #   name: A string, the name of the column to access.
 Column = cmptuple('Column', 'name')
 
+# A reference to a table.
+#
+# Attributes:
+#   name: The name of the table.
+Table = cmptuple('Table', 'name')
+
 # A function call.
 #
 # Attributes:
@@ -208,7 +214,7 @@ class Lexer:
 
     # List of valid tokens from the lexer.
     tokens = [
-        'ID', 'INTEGER', 'DECIMAL', 'STRING', 'DATE', 'COMMA', 'SEMI',
+        'ID', 'TABLEID', 'INTEGER', 'DECIMAL', 'STRING', 'DATE', 'COMMA', 'SEMI',
         'LPAREN', 'RPAREN', 'TILDE', 'EQ', 'NE', 'GT', 'GTE', 'LT', 'LTE',
         'ASTERISK', 'SLASH', 'PLUS', 'MINUS',
     ] + list(keywords)
@@ -226,6 +232,11 @@ class Lexer:
             token.value = utoken
         else:
             token.value = token.value.lower()
+        return token
+
+    def t_TABLEID(self, token):
+        r"\#[a-zA-Z_][a-zA-Z0-9_]*"
+        token.value = token.value[1:].lower()
         return token
 
     def t_STRING(self, token):
@@ -374,6 +385,12 @@ class SelectParser(Lexer):
             p[0] = From(p[2], p[3], p[4], p[5])
         else:
             p[0] = None
+
+    def p_from_table(self, p):
+        """
+        from_subselect : FROM TABLEID
+        """
+        p[0] = Table(p[2])
 
     def p_from_subselect(self, p):
         """
