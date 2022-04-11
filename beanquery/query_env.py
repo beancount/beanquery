@@ -17,7 +17,6 @@ import textwrap
 from decimal import Decimal
 
 from beancount.core.number import ZERO
-from beancount.core.data import Transaction
 from beancount.core.compare import hash_entry
 from beancount.core import amount
 from beancount.core import position
@@ -33,9 +32,10 @@ from beancount.utils.date_utils import parse_date_liberally
 from beanquery import query_compile
 from beanquery import types
 
+# pylint: disable=function-redefined
 
-# Non-aggregating functions.
-SIMPLE_FUNCTIONS = collections.defaultdict(list)
+
+FUNCTIONS = collections.defaultdict(list)
 
 
 def function(intypes, outtype, pass_context=False, name=None):
@@ -54,16 +54,16 @@ def function(intypes, outtype, pass_context=False, name=None):
                 return func(*args)
         Func.__name__ = name if name is not None else func.__name__
         Func.__doc__ = func.__doc__
-        SIMPLE_FUNCTIONS[Func.__name__].append(Func)
+        FUNCTIONS[Func.__name__].append(Func)
         return func
     return decorator
 
 
 def Function(name, args):
-    func = types.function_lookup(SIMPLE_FUNCTIONS, name, args)
+    func = types.function_lookup(FUNCTIONS, name, args)
     if func is not None:
         return func(args)
-    func = types.function_lookup(AGGREGATE_FUNCTIONS, name, args)
+    func = types.function_lookup(AGGREGATORS, name, args)
     if func is not None:
         return func(args)
     raise KeyError
@@ -561,8 +561,7 @@ def date_add(x, y):
     return x + datetime.timedelta(days=y)
 
 
-# Aggregate functions.
-AGGREGATE_FUNCTIONS = collections.defaultdict(list)
+AGGREGATORS = collections.defaultdict(list)
 
 
 def aggregator(intypes, name=None):
@@ -570,7 +569,7 @@ def aggregator(intypes, name=None):
         cls.__intypes__ = intypes
         if name is not None:
             cls.__name__ = name
-        AGGREGATE_FUNCTIONS[cls.__name__].append(cls)
+        AGGREGATORS[cls.__name__].append(cls)
         return cls
     return decorator
 
@@ -693,178 +692,122 @@ class Max(query_compile.EvalAggregator):
                 store[self.handle] = value
 
 
-# Column accessors for entries.
+class FilterEntriesEnvironment(query_compile.CompilationEnvironment):
+    name = 'FROM clause'
+    columns = {}
+    functions = FUNCTIONS.copy()
 
-class IdEntryColumn(query_compile.EvalColumn):
-    "Unique id of a directive."
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return hash_entry(context.entry)
-
-class TypeEntryColumn(query_compile.EvalColumn):
-    "The data type of the directive."
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return type(context.entry).__name__.lower()
-
-class FilenameEntryColumn(query_compile.EvalColumn):
-    "The filename where the directive was parsed from or created."
-    __equivalent__ = 'entry.meta["filename"]'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return context.entry.meta["filename"]
-
-class LineNoEntryColumn(query_compile.EvalColumn):
-    "The line number from the file the directive was parsed from."
-    __equivalent__ = 'entry.meta["lineno"]'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(int)
-
-    def __call__(self, context):
-        return context.entry.meta["lineno"]
-
-class DateEntryColumn(query_compile.EvalColumn):
-    "The date of the directive."
-    __equivalent__ = 'entry.date'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(datetime.date)
-
-    def __call__(self, context):
-        return context.entry.date
-
-class YearEntryColumn(query_compile.EvalColumn):
-    "The year of the date of the directive."
-    __equivalent__ = 'entry.date.year'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(int)
-
-    def __call__(self, context):
-        return context.entry.date.year
-
-class MonthEntryColumn(query_compile.EvalColumn):
-    "The month of the date of the directive."
-    __equivalent__ = 'entry.date.month'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(int)
-
-    def __call__(self, context):
-        return context.entry.date.month
-
-class DayEntryColumn(query_compile.EvalColumn):
-    "The day of the date of the directive."
-    __equivalent__ = 'entry.date.day'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(int)
-
-    def __call__(self, context):
-        return context.entry.date.day
-
-class FlagEntryColumn(query_compile.EvalColumn):
-    "The flag the transaction."
-    __equivalent__ = 'entry.flag'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return (context.entry.flag
-                if isinstance(context.entry, Transaction)
-                else None)
-
-class PayeeEntryColumn(query_compile.EvalColumn):
-    "The payee of the transaction."
-    __equivalent__ = 'entry.payee'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return (context.entry.payee or ''
-                if isinstance(context.entry, Transaction)
-                else None)
-
-class NarrationEntryColumn(query_compile.EvalColumn):
-    "The narration of the transaction."
-    __equivalent__ = 'entry.narration'
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return (context.entry.narration or ''
-                if isinstance(context.entry, Transaction)
-                else None)
-
-# This is convenient, because many times the payee is empty and using a
-# combination produces more compact listings.
-class DescriptionEntryColumn(query_compile.EvalColumn):
-    "A combination of the payee + narration of the transaction, if present."
-    __intypes__ = [data.Transaction]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return (' | '.join(filter(None, [context.entry.payee,
-                                         context.entry.narration]))
-                if isinstance(context.entry, Transaction)
-                else None)
+    @classmethod
+    def column(cls, dtype, name=None, help=None):
+        def decorator(func):
+            class Col(query_compile.EvalColumn):
+                def __init__(self):
+                    super().__init__(dtype)
+                __call__ = staticmethod(func)
+            Col.__name__ = name or func.__name__
+            Col.__doc__ = help or func.__doc__
+            cls.columns[Col.__name__] = Col
+            return func
+        return decorator
 
 
-# A globally available empty set to fill in for None's.
-EMPTY_SET = frozenset()
+column = FilterEntriesEnvironment.column
 
-class TagsEntryColumn(query_compile.EvalColumn):
-    "The set of tags of the transaction."
-    __equivalent__ = 'entry.tags'
-    __intypes__ = [data.Transaction]
 
-    def __init__(self):
-        super().__init__(set)
+@column(str, 'id')
+def id_(context):
+    """Unique id of a directive."""
+    return hash_entry(context.entry)
 
-    def __call__(self, context):
-        return (context.entry.tags or EMPTY_SET
-                if isinstance(context.entry, Transaction)
-                else EMPTY_SET)
 
-class LinksEntryColumn(query_compile.EvalColumn):
-    "The set of links of the transaction."
-    __equivalent__ = 'entry.links'
-    __intypes__ = [data.Transaction]
+@column(str, 'type')
+def type_(context):
+    """The data type of the directive."""
+    return type(context.entry).__name__.lower()
 
-    def __init__(self):
-        super().__init__(set)
 
-    def __call__(self, context):
-        return (context.entry.links or EMPTY_SET
-                if isinstance(context.entry, Transaction)
-                else EMPTY_SET)
+@column(str)
+def filename(context):
+    """The filename where the directive was parsed from or created."""
+    return context.entry.meta["filename"]
 
+
+@column(int)
+def lineno(context):
+    """The line number from the file the directive was parsed from."""
+    return context.entry.meta["lineno"]
+
+
+@column(datetime.date)
+def date(context):
+    """The date of the directive."""
+    return context.entry.date
+
+
+@column(int)
+def year(context):
+    """The year of the date year of the directive."""
+    return context.entry.date.year
+
+
+@column(int)
+def month(context):
+    """The year of the date month of the directive."""
+    return context.entry.date.month
+
+
+@column(int)
+def day(context):
+    """The year of the date day of the directive."""
+    return context.entry.date.day
+
+
+@column(str)
+def flag(context):
+    """The flag the transaction."""
+    if not isinstance(context.entry, data.Transaction):
+        return None
+    return context.entry.flag
+
+
+@column(str)
+def payee(context):
+    """The payee of the transaction."""
+    if not isinstance(context.entry, data.Transaction):
+        return None
+    return context.entry.payee
+
+
+@column(str)
+def narration(context):
+    """The narration of the transaction."""
+    if not isinstance(context.entry, data.Transaction):
+        return None
+    return context.entry.narration
+
+
+@column(str)
+def description(context):
+    """A combination of the payee + narration of the transaction, if present."""
+    if not isinstance(context.entry, data.Transaction):
+        return None
+    return ' | '.join(filter(None, [context.entry.payee, context.entry.narration]))
+
+
+@column(set)
+def tags(context):
+    """The set of tags of the transaction."""
+    if not isinstance(context.entry, data.Transaction):
+        return None
+    return context.entry.tags
+
+
+@column(set)
+def links(context):
+    """The set of links of the transaction."""
+    if not isinstance(context.entry, data.Transaction):
+        return None
+    return context.entry.links
 
 
 class MatchAccount(query_compile.EvalFunction):
@@ -882,404 +825,168 @@ class MatchAccount(query_compile.EvalFunction):
 
 
 # Functions defined only on entries.
-ENTRY_FUNCTIONS = { 'has_account': [MatchAccount], }
+FilterEntriesEnvironment.functions['has_account'].append(MatchAccount)
 
 
-class FilterEntriesEnvironment(query_compile.CompilationEnvironment):
-    """An execution context that provides access to attributes on Transactions
-    and other entry types.
-    """
-    context_name = 'FROM clause'
-    columns = {
-        'id'          : IdEntryColumn,
-        'type'        : TypeEntryColumn,
-        'filename'    : FilenameEntryColumn,
-        'lineno'      : LineNoEntryColumn,
-        'date'        : DateEntryColumn,
-        'year'        : YearEntryColumn,
-        'month'       : MonthEntryColumn,
-        'day'         : DayEntryColumn,
-        'flag'        : FlagEntryColumn,
-        'payee'       : PayeeEntryColumn,
-        'narration'   : NarrationEntryColumn,
-        'description' : DescriptionEntryColumn,
-        'tags'        : TagsEntryColumn,
-        'links'       : LinksEntryColumn,
-        }
-    functions = copy.copy(SIMPLE_FUNCTIONS)
-    functions.update(ENTRY_FUNCTIONS)
+class FilterPostingsEnvironment(FilterEntriesEnvironment):
+    name = 'WHERE clause'
+    columns = FilterEntriesEnvironment.columns.copy()
+    functions = FUNCTIONS.copy()
 
 
+column = FilterPostingsEnvironment.column
 
 
-# Column accessors for postings.
-
-class IdColumn(query_compile.EvalColumn):
-    "The unique id of the parent transaction for this posting."
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return hash_entry(context.entry)
-
-class TypeColumn(query_compile.EvalColumn):
-    "The data type of the parent transaction for this posting."
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return type(context.entry).__name__.lower()
-
-class FilenameColumn(query_compile.EvalColumn):
-    "The filename where the posting was parsed from or created."
-    __equivalent__ = 'entry.meta["filename"]'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return context.entry.meta["filename"]
-
-class LineNoColumn(query_compile.EvalColumn):
-    "The line number from the file the posting was parsed from."
-    __equivalent__ = 'entry.meta["lineno"]'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(int)
-
-    def __call__(self, context):
-        return context.entry.meta["lineno"]
-
-class FileLocationColumn(query_compile.EvalColumn):
+@column(str)
+def location(context):
     """The filename:lineno where the posting was parsed from or created.
 
     If you select this column as the first column, because it renders like
     errors, Emacs is able to pick those up and you can navigate between an
     arbitrary list of transactions with next-error and previous-error.
     """
-    __intypes__ = [data.Posting]
+    meta = context.posting.meta
+    return '{:s}:{:d}:'.format(meta['filename'], meta['lineno'])
 
-    def __init__(self):
-        super().__init__(str)
 
-    def __call__(self, context):
-        if context.posting.meta is not None:
-            return '{}:{:d}:'.format(context.posting.meta.get("filename", "N/A"),
-                                     context.posting.meta.get("lineno", 0))
-        return '' # Unknown.
+# redefine FilterEntriesEnvironment's column dropping the entry type check.
+@column(str)
+def flag(context):
+    """The flag of the parent transaction for this posting."""
+    return context.entry.flag
 
-class DateColumn(query_compile.EvalColumn):
-    "The date of the parent transaction for this posting."
-    __equivalent__ = 'entry.date'
-    __intypes__ = [data.Posting]
 
-    def __init__(self):
-        super().__init__(datetime.date)
+# redefine FilterEntriesEnvironment's column dropping the entry type check.
+@column(str)
+def payee(context):
+    """The payee of the parent transaction for this posting."""
+    return context.entry.payee
 
-    def __call__(self, context):
-        return context.entry.date
 
-class YearColumn(query_compile.EvalColumn):
-    "The year of the date of the parent transaction for this posting."
-    __equivalent__ = 'entry.date.year'
-    __intypes__ = [data.Posting]
+# redefine FilterEntriesEnvironment's column dropping the entry type check.
+@column(str)
+def narration(context):
+    """The narration of the parent transaction for this posting."""
+    return context.entry.narration
 
-    def __init__(self):
-        super().__init__(int)
 
-    def __call__(self, context):
-        return context.entry.date.year
-
-class MonthColumn(query_compile.EvalColumn):
-    "The month of the date of the parent transaction for this posting."
-    __equivalent__ = 'entry.date.month'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(int)
-
-    def __call__(self, context):
-        return context.entry.date.month
-
-class DayColumn(query_compile.EvalColumn):
-    "The day of the date of the parent transaction for this posting."
-    __equivalent__ = 'entry.date.day'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(int)
-
-    def __call__(self, context):
-        return context.entry.date.day
-
-class FlagColumn(query_compile.EvalColumn):
-    "The flag of the parent transaction for this posting."
-    __equivalent__ = 'entry.flag'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return context.entry.flag
-
-class PayeeColumn(query_compile.EvalColumn):
-    "The payee of the parent transaction for this posting."
-    __equivalent__ = 'entry.payee'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return context.entry.payee or ''
-
-class NarrationColumn(query_compile.EvalColumn):
-    "The narration of the parent transaction for this posting."
-    __equivalent__ = 'entry.narration'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return context.entry.narration
-
-# This is convenient, because many times the payee is empty and using a
-# combination produces more compact listings.
-class DescriptionColumn(query_compile.EvalColumn):
+# redefine FilterEntriesEnvironment's column dropping the entry type check.
+@column(str)
+def description(context):
     "A combination of the payee + narration for the transaction of this posting."
-    __intypes__ = [data.Posting]
+    return ' | '.join(filter(None, [context.entry.payee, context.entry.narration]))
 
-    def __init__(self):
-        super().__init__(str)
 
-    def __call__(self, context):
-        entry = context.entry
-        return (' | '.join(filter(None, [entry.payee, entry.narration]))
-                if isinstance(entry, Transaction)
-                else None)
-
-class TagsColumn(query_compile.EvalColumn):
+# redefine FilterEntriesEnvironment's column dropping the entry type check.
+@column(set)
+def tags(context):
     "The set of tags of the parent transaction for this posting."
-    __equivalent__ = 'entry.tags'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(set)
-
-    def __call__(self, context):
-        return context.entry.tags or EMPTY_SET
-
-class LinksColumn(query_compile.EvalColumn):
-    "The set of links of the parent transaction for this posting."
-    __equivalent__ = 'entry.links'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(set)
-
-    def __call__(self, context):
-        return context.entry.links or EMPTY_SET
-
-class PostingFlagColumn(query_compile.EvalColumn):
-    "The flag of the posting itself."
-    __equivalent__ = 'posting.flag'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return context.posting.flag
-
-class AccountColumn(query_compile.EvalColumn):
-    "The account of the posting."
-    __equivalent__ = 'posting.account'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return context.posting.account
-
-class OtherAccountsColumn(query_compile.EvalColumn):
-    "The list of other accounts in the transaction, excluding that of this posting."
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(set)
-
-    def __call__(self, context):
-        return sorted({posting.account
-                       for posting in context.entry.postings
-                       if posting is not context.posting})
+    return context.entry.tags
 
 
-class NumberColumn(query_compile.EvalColumn):
-    "The number of units of the posting."
-    __equivalent__ = 'posting.units.number'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(Decimal)
-
-    def __call__(self, context):
-        return context.posting.units.number
-
-class CurrencyColumn(query_compile.EvalColumn):
-    "The currency of the posting."
-    __equivalent__ = 'posting.units.currency'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        return context.posting.units.currency
-
-class CostNumberColumn(query_compile.EvalColumn):
-    "The number of cost units of the posting."
-    __equivalent__ = 'posting.cost.number'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(Decimal)
-
-    def __call__(self, context):
-        cost = context.posting.cost
-        return cost.number if cost else None
-
-class CostCurrencyColumn(query_compile.EvalColumn):
-    "The cost currency of the posting."
-    __equivalent__ = 'posting.cost.currency'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        cost = context.posting.cost
-        return cost.currency if cost else ''
-
-class CostDateColumn(query_compile.EvalColumn):
-    "The cost currency of the posting."
-    __equivalent__ = 'posting.cost.date'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(datetime.date)
-
-    def __call__(self, context):
-        cost = context.posting.cost
-        return cost.date if cost else None
-
-class CostLabelColumn(query_compile.EvalColumn):
-    "The cost currency of the posting."
-    __equivalent__ = 'posting.cost.label'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(str)
-
-    def __call__(self, context):
-        cost = context.posting.cost
-        return cost.label if cost else ''
-
-class PositionColumn(query_compile.EvalColumn):
-    "The position for the posting. These can be summed into inventories."
-    __equivalent__ = 'posting'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(position.Position)
-
-    def __call__(self, context):
-        posting = context.posting
-        return position.Position(posting.units, posting.cost)
-
-class PriceColumn(query_compile.EvalColumn):
-    "The price attached to the posting."
-    __equivalent__ = 'posting.price'
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(amount.Amount)
-
-    def __call__(self, context):
-        return context.posting.price
-
-class WeightColumn(query_compile.EvalColumn):
-    "The computed weight used for this posting."
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(amount.Amount)
-
-    def __call__(self, context):
-        return convert.get_weight(context.posting)
-
-class BalanceColumn(query_compile.EvalColumn):
-    "The balance for the posting. These can be summed into inventories."
-    __intypes__ = [data.Posting]
-
-    def __init__(self):
-        super().__init__(inventory.Inventory)
-
-    def __call__(self, context):
-        return copy.copy(context.balance)
+# redefine FilterEntriesEnvironment's column dropping the entry type check.
+@column(set)
+def links(context):
+    """The set of links of the parent transaction for this posting."""
+    return context.entry.links
 
 
-class FilterPostingsEnvironment(query_compile.CompilationEnvironment):
-    """An execution context that provides access to attributes on Postings.
-    """
-    context_name = 'WHERE clause'
-    columns = {
-        'id'             : IdColumn,
-        'type'           : TypeColumn,
-        'filename'       : FilenameColumn,
-        'lineno'         : LineNoColumn,
-        'location'       : FileLocationColumn,
-        'date'           : DateColumn,
-        'year'           : YearColumn,
-        'month'          : MonthColumn,
-        'day'            : DayColumn,
-        'flag'           : FlagColumn,
-        'payee'          : PayeeColumn,
-        'narration'      : NarrationColumn,
-        'description'    : DescriptionColumn,
-        'tags'           : TagsColumn,
-        'links'          : LinksColumn,
-        'posting_flag'   : PostingFlagColumn,
-        'account'        : AccountColumn,
-        'other_accounts' : OtherAccountsColumn,
-        'number'         : NumberColumn,
-        'currency'       : CurrencyColumn,
-        'cost_number'    : CostNumberColumn,
-        'cost_currency'  : CostCurrencyColumn,
-        'cost_date'      : CostDateColumn,
-        'cost_label'     : CostLabelColumn,
-        'position'       : PositionColumn,
-        'change'         : PositionColumn,  # Backwards compatible.
-        'price'          : PriceColumn,
-        'weight'         : WeightColumn,
-        'balance'        : BalanceColumn,
-        }
-    functions = copy.copy(SIMPLE_FUNCTIONS)
+@column(str)
+def posting_flag(context):
+    """The flag of the posting itself."""
+    return context.posting.flag
+
+
+@column(str, 'account')
+def account_(context):
+    """The account of the posting."""
+    return context.posting.account
+
+
+@column(set)
+def other_accounts(context):
+    """The list of other accounts in the transaction, excluding that of this posting."""
+    return sorted({posting.account for posting in context.entry.postings if posting is not context.posting})
+
+
+@column(Decimal)
+def number(context):
+    """The number of units of the posting."""
+    return context.posting.units.number
+
+
+@column(str)
+def currency(context):
+    """The currency of the posting."""
+    return context.posting.units.currency
+
+
+@column(Decimal)
+def cost_number(context):
+    """The number of cost units of the posting."""
+    cost = context.posting.cost
+    return cost.number if cost else None
+
+
+@column(str)
+def cost_currency(context):
+    """The cost currency of the posting."""
+    cost = context.posting.cost
+    return cost.currency if cost else None
+
+
+@column(datetime.date)
+def cost_date(context):
+    """The cost currency of the posting."""
+    cost = context.posting.cost
+    return cost.date if cost else None
+
+
+@column(str)
+def cost_label(context):
+    """The cost currency of the posting."""
+    cost = context.posting.cost
+    return cost.label if cost else ''
+
+
+@column(position.Position, 'position')
+def position_(context):
+    """The position for the posting. These can be summed into inventories."""
+    posting = context.posting
+    return position.Position(posting.units, posting.cost)
+
+
+@column(amount.Amount)
+def price(context):
+    """The price attached to the posting."""
+    return context.posting.price
+
+
+@column(amount.Amount)
+def weight(context):
+    """The computed weight used for this posting."""
+    return convert.get_weight(context.posting)
+
+
+@column(inventory.Inventory)
+def balance(context):
+    """The balance for the posting. These can be summed into inventories."""
+    return copy.copy(context.balance)
+
 
 class TargetsEnvironment(FilterPostingsEnvironment):
     """An execution context that provides access to attributes on Postings.
     """
-    context_name = 'SELECT list'
-    functions = copy.copy(FilterPostingsEnvironment.functions)
-    functions.update(AGGREGATE_FUNCTIONS)
+    name = 'SELECT list'
+    functions = FilterPostingsEnvironment.functions.copy()
+    functions.update(AGGREGATORS)
 
     # The list of columns that a wildcard will expand into.
     wildcard_columns = 'date flag payee narration position'.split()
+
+
+def Column(name):
+    column = TargetsEnvironment.columns.get(name)
+    if column is not None:
+        return column()
+    raise KeyError(name)

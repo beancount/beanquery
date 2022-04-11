@@ -160,7 +160,7 @@ def uses_balance_column(c_expr):
     Returns:
       A boolean, true if the expression contains a BalanceColumn node.
     """
-    return (isinstance(c_expr, query_env.BalanceColumn) or
+    return ((isinstance(c_expr, query_compile.EvalColumn) and type(c_expr).__name__ == 'balance') or
             any(uses_balance_column(c_node) for c_node in c_expr.childnodes()))
 
 

@@ -6,7 +6,6 @@ import unittest
 from decimal import Decimal
 
 from beancount.core.number import D
-from beancount.core import position
 from beancount.parser import parser
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
@@ -36,37 +35,6 @@ class TestCompileDataTypes(unittest.TestCase):
     def test_compile_Last(self):
         c_last = qe.Last([qc.EvalConstant(17.)])
         self.assertEqual(float, c_last.dtype)
-
-    def test_compile_columns(self):
-        class_types = [
-            # Postings accessors.
-            (qe.TypeColumn, str),
-            (qe.FilenameColumn, str),
-            (qe.LineNoColumn, int),
-            (qe.DateColumn, datetime.date),
-            (qe.FlagColumn, str),
-            (qe.PayeeColumn, str),
-            (qe.NarrationColumn, str),
-            (qe.TagsColumn, set),
-            (qe.LinksColumn, set),
-            (qe.AccountColumn, str),
-            (qe.NumberColumn, Decimal),
-            (qe.CurrencyColumn, str),
-            (qe.PositionColumn, position.Position),
-            # Entries accessors.
-            (qe.TypeEntryColumn, str),
-            (qe.FilenameEntryColumn, str),
-            (qe.LineNoEntryColumn, int),
-            (qe.DateEntryColumn, datetime.date),
-            (qe.FlagEntryColumn, str),
-            (qe.PayeeEntryColumn, str),
-            (qe.NarrationEntryColumn, str),
-            (qe.TagsEntryColumn, set),
-            (qe.LinksEntryColumn, set),
-        ]
-        for cls, dtype in class_types:
-            instance = cls()
-            self.assertEqual(dtype, instance.dtype)
 
 
 class TestEnv(unittest.TestCase):

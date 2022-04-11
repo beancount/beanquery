@@ -19,21 +19,21 @@ class TestCompileExpression(unittest.TestCase):
 
     def test_expr_column(self):
         self.assertEqual(
-            qe.FilenameColumn(),
+            qe.Column('filename'),
             qc.compile_expression(
                 qp.Column('filename'),
                 qe.TargetsEnvironment()))
 
     def test_expr_function(self):
         self.assertEqual(
-            qe.SumPosition([qe.PositionColumn()]),
+            qe.SumPosition([qe.Column('position')]),
             qc.compile_expression(
                 qp.Function('sum', [qp.Column('position')]),
                 qe.TargetsEnvironment()))
 
     def test_expr_unaryop(self):
         self.assertEqual(
-            qc.Operator(qp.Not, [qe.AccountColumn()]),
+            qc.Operator(qp.Not, [qe.Column('account')]),
             qc.compile_expression(
                 qp.Not(qp.Column('account')),
                 qe.TargetsEnvironment()))
@@ -41,7 +41,7 @@ class TestCompileExpression(unittest.TestCase):
     def test_expr_binaryop(self):
         self.assertEqual(
             qc.Operator(qp.Equal, [
-                qe.DateColumn(),
+                qe.Column('date'),
                 qc.EvalConstant(datetime.date(2014, 1, 1))
             ]),
             qc.compile_expression(
@@ -75,13 +75,13 @@ class TestCompileAggregateChecks(unittest.TestCase):
         columns, aggregates = qc.get_columns_and_aggregates(
             qc.Operator(qp.And, [
                 qc.Operator(qp.Equal, [
-                    qe.LineNoColumn(),
+                    qe.Column('lineno'),
                     qc.EvalConstant(42),
                 ]),
                 qc.Operator(qp.Or, [
                     qc.Operator(qp.Not, [
                         qc.Operator(qp.Equal, [
-                            qe.DateColumn(),
+                            qe.Column('date'),
                             qc.EvalConstant(datetime.date(2014, 1, 1)),
                         ]),
                     ]),
@@ -93,14 +93,14 @@ class TestCompileAggregateChecks(unittest.TestCase):
         columns, aggregates = qc.get_columns_and_aggregates(
             qc.Operator(qp.And, [
                 qc.Operator(qp.Equal, [
-                    qe.LineNoColumn(),
+                    qe.Column('lineno'),
                     qc.EvalConstant(42),
                 ]),
                 qc.Operator(qp.Or, [
                     qc.Operator(qp.Not, [
                         qc.Operator(qp.Not, [
                             qc.Operator(qp.Equal, [
-                                qe.DateColumn(),
+                                qe.Column('date'),
                                 qc.EvalConstant(datetime.date(2014, 1, 1)),
                             ]),
                         ]),
@@ -113,39 +113,39 @@ class TestCompileAggregateChecks(unittest.TestCase):
 
     def test_get_columns_and_aggregates(self):
         # Simple column.
-        c_query = qe.PositionColumn()
+        c_query = qe.Column('position')
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 0), (len(columns), len(aggregates)))
         self.assertFalse(qc.is_aggregate(c_query))
 
         # Multiple columns.
-        c_query = qc.Operator(qp.And, [qe.PositionColumn(), qe.DateColumn()])
+        c_query = qc.Operator(qp.And, [qe.Column('position'), qe.Column('date')])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((2, 0), (len(columns), len(aggregates)))
         self.assertFalse(qc.is_aggregate(c_query))
 
         # Simple aggregate.
-        c_query = qe.SumPosition([qe.PositionColumn()])
+        c_query = qe.SumPosition([qe.Column('position')])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((0, 1), (len(columns), len(aggregates)))
         self.assertTrue(qc.is_aggregate(c_query))
 
         # Multiple aggregates.
-        c_query = qc.Operator(qp.And, [qe.First([qe.DateColumn()]), qe.Last([qe.FlagColumn()])])
+        c_query = qc.Operator(qp.And, [qe.First([qe.Column('date')]), qe.Last([qe.Column('flag')])])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((0, 2), (len(columns), len(aggregates)))
         self.assertTrue(qc.is_aggregate(c_query))
 
         # Simple non-aggregate function.
-        c_query = qe.Function('length', [qe.AccountColumn()])
+        c_query = qe.Function('length', [qe.Column('account')])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 0), (len(columns), len(aggregates)))
         self.assertFalse(qc.is_aggregate(c_query))
 
         # Mix of column and aggregates (this is used to detect this illegal case).
         c_query = qc.Operator(qp.And, [
-            qe.Function('length', [qe.AccountColumn()]),
-            qe.SumPosition([qe.PositionColumn()]),
+            qe.Function('length', [qe.Column('account')]),
+            qe.SumPosition([qe.Column('position')]),
         ])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 1), (len(columns), len(aggregates)))
@@ -369,8 +369,8 @@ class TestCompileFundamentals(CompileSelectBase):
         self.assertEqual(expr, qc.EvalQuery([
             qc.EvalTarget(
                 qc.EvalCoalesce([
-                    qe.NarrationColumn(),
-                    qe.Function('str', [qe.DateColumn()]),
+                    qe.Column('narration'),
+                    qe.Function('str', [qe.Column('date')]),
                     qc.EvalConstant('~'),
                 ]), 'expr', False)
         ], None, None, None, None, None, None, None))
@@ -422,9 +422,9 @@ class TestCompileSelect(CompileSelectBase):
         # Test the wildcard expansion.
         query = self.compile("SELECT length(account), account as a, date;")
         self.assertEqual(
-            [qc.EvalTarget(qe.Function('length', [qe.AccountColumn()]), 'length(account)', False),
-             qc.EvalTarget(qe.AccountColumn(), 'a', False),
-             qc.EvalTarget(qe.DateColumn(), 'date', False)],
+            [qc.EvalTarget(qe.Function('length', [qe.Column('account')]), 'length(account)', False),
+             qc.EvalTarget(qe.Column('account'), 'a', False),
+             qc.EvalTarget(qe.Column('date'), 'date', False)],
             query.c_targets)
 
     def test_compile_mixed_aggregates(self):
@@ -816,7 +816,7 @@ class TestTranslationBalance(CompileSelectBase):
             qc.EvalPrint(
                 qc.EvalFrom(
                     qc.Operator(qp.Equal, [
-                        qe.YearEntryColumn(),
+                        qe.Column('year'),
                         qc.EvalConstant(2014),
                     ]), None, None, None)),
             """PRINT FROM year = 2014;""")
