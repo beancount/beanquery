@@ -53,7 +53,8 @@ class ColumnRenderer:
     dtype = None
 
     def __init__(self, ctx):
-        pass
+        self.maxwidth = 0
+        self.prepared = False
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -68,11 +69,20 @@ class ColumnRenderer:
         """
 
     def prepare(self):
-        """Prepare to render all values of a column."""
+        """Prepare to render the column.
 
+        Returns:
+          Computed column width.
+
+        """
+        self.prepared = True
+        return self.maxwidth
+
+    @property
     def width(self):
-        """Return the computed width of this column."""
-        raise NotImplementedError
+        if not self.prepared:
+            raise RuntimeError('width property access before calling prepare()')
+        return self.maxwidth
 
     def format(self, value):
         """Format the value.
@@ -90,15 +100,8 @@ class ColumnRenderer:
 class ObjectRenderer(ColumnRenderer):
     dtype = object
 
-    def __init__(self, ctx):
-        super().__init__(ctx)
-        self.maxwidth = 0
-
     def update(self, value):
         self.maxwidth = max(self.maxwidth, len(str(value)))
-
-    def width(self):
-        return self.maxwidth
 
     def format(self, value):
         return str(value).ljust(self.maxwidth)
@@ -117,9 +120,6 @@ class BoolRenderer(ColumnRenderer):
             # With at least one "FALSE" we need 5 characters.
             self.maxwidth = 5
 
-    def width(self):
-        return self.maxwidth
-
     def format(self, value):
         return ('TRUE' if value else 'FALSE').ljust(self.maxwidth)
 
@@ -127,15 +127,8 @@ class BoolRenderer(ColumnRenderer):
 class StringRenderer(ColumnRenderer):
     dtype = str
 
-    def __init__(self, ctx):
-        super().__init__(ctx)
-        self.maxwidth = 0
-
     def update(self, value):
         self.maxwidth = max(self.maxwidth, len(value))
-
-    def width(self):
-        return self.maxwidth
 
     def format(self, value):
         return value.ljust(self.maxwidth)
@@ -146,14 +139,10 @@ class SetRenderer(ColumnRenderer):
 
     def __init__(self, ctx):
         super().__init__(ctx)
-        self.maxwidth = 0
         self.sep = ctx.listsep
 
     def update(self, value):
         self.maxwidth = max(self.maxwidth, sum(len(x) + len(self.sep) for x in value) - len(self.sep))
-
-    def width(self):
-        return self.maxwidth
 
     def format(self, value):
         return self.sep.join(str(x) for x in sorted(value)).ljust(self.maxwidth)
@@ -162,8 +151,9 @@ class SetRenderer(ColumnRenderer):
 class DateRenderer(ColumnRenderer):
     dtype = datetime.date
 
-    def width(self):
-        return 10
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        self.maxwidth = 10
 
     def format(self, value):
         return value.strftime('%Y-%m-%d')
@@ -172,18 +162,12 @@ class DateRenderer(ColumnRenderer):
 class IntRenderer(ColumnRenderer):
     dtype = int
 
-    def __init__(self, ctx):
-        super().__init__(ctx)
-        self.maxwidth = 0
-
     def update(self, value):
         self.maxwidth = max(self.maxwidth, len(str(value)))
 
     def prepare(self):
         self.frmt = str(self.maxwidth)
-
-    def width(self):
-        return self.maxwidth
+        return super().prepare()
 
     def format(self, value):
         return format(value, self.frmt)
@@ -220,9 +204,7 @@ class DecimalRenderer(ColumnRenderer):
 
     def prepare(self):
         self.maxwidth = self.nintegral + self.nfractional + (1 if self.nfractional > 0 else 0)
-
-    def width(self):
-        return self.maxwidth
+        return super().prepare()
 
     def format(self, value):
         n = value.as_tuple()
@@ -260,7 +242,6 @@ class AmountRenderer(ColumnRenderer):
         self.dcontext = display_context.DisplayContext()
         # Maximum width of the commodity symbol.
         self.curwidth = 0
-        self.maxwidth = 0
 
     def update(self, value):
         # Need to handle None to reuse this in PositionRenderer.
@@ -275,9 +256,7 @@ class AmountRenderer(ColumnRenderer):
         for commodity in self.dcontext.ccontexts:
             if commodity != '__default__':
                 self.maxwidth = max(self.maxwidth, len(self.func(zero, commodity)) + 1 + self.curwidth)
-
-    def width(self):
-        return self.maxwidth
+        return super().prepare()
 
     def format(self, value):
         return f'{self.func(value.number, value.currency)} {value.currency:<{self.curwidth}}'
@@ -308,14 +287,10 @@ class PositionRenderer(ColumnRenderer):
         self.cost_renderer.update(value.cost)
 
     def prepare(self):
-        self.units_renderer.prepare()
-        self.cost_renderer.prepare()
-        units_width = self.units_renderer.width()
-        cost_width = self.cost_renderer.width()
+        units_width = self.units_renderer.prepare()
+        cost_width = self.cost_renderer.prepare()
         self.maxwidth = units_width + cost_width + (3 if cost_width > 0 else 0)
-
-    def width(self):
-        return self.maxwidth
+        return super().prepare()
 
     def format(self, value):
         units = self.units_renderer.format(value.units)
@@ -376,16 +351,12 @@ class InventoryRenderer(ColumnRenderer):
             self.renderers[self.expand or pos.units.currency].update(pos)
 
     def prepare(self):
-        for renderer in self.renderers.values():
-            renderer.prepare()
-        self.maxwidth = sum(r.width() + len(self.listsep) for r in self.renderers.values()) - len(self.listsep)
+        self.maxwidth = sum(r.prepare() + len(self.listsep) for r in self.renderers.values()) - len(self.listsep)
         # We want to present inventory content sorted by frequency of
         # appearance and by currency name. Sorting the renderers here
         # allows to just iterate the renderers in format() method.
         self.renderers = dict(sorted(self.renderers.items(), key=lambda x: (-self.counters[x[0]], x[0])))
-
-    def width(self):
-        return self.maxwidth
+        return super().prepare()
 
     def format(self, value):
         strings = []
@@ -396,7 +367,7 @@ class InventoryRenderer(ColumnRenderer):
         positions = {pos.units.currency: pos for pos in value.get_positions()}
         for commodity, fmt in self.renderers.items():
             pos = positions.get(commodity)
-            strings.append(fmt.format(pos) if pos is not None else ' ' * fmt.width())
+            strings.append(fmt.format(pos) if pos is not None else ' ' * fmt.width)
         return self.listsep.join(strings)
 
 
@@ -411,29 +382,16 @@ def get_renderers(result_types, result_rows, ctx):
     Returns:
       A list of subclass instances of ColumnRenderer.
     """
-    renderers = [RENDERERS[dtype](ctx) for name, dtype in result_types]
-
-    # Prime and prepare each of the renderers with the date in order to be ready
-    # to begin rendering with correct alignment.
-    for row in result_rows:
-        for value, renderer in zip(row, renderers):
-            if value is not None:
-                renderer.update(value)
-
-    for renderer in renderers:
-        renderer.prepare()
-
-    return renderers
 
 
-def render_rows(result_types, result_rows, ctx):
+def render_rows(columns, rows, ctx):
     """Render the result of executing a query in text format.
 
     Args:
-      result_types: A list of items describing the names and data types of the items in
-        each column.
-      result_rows: A list of ResultRow instances.
-      ctx: The rendering contect
+      columns: A list of (name, dtype) tuples describing the table columns.
+      rows: A list of ResultRow instances to be rendered.
+      ctx: The rendering contect.
+
     """
     # Important notes:
     #
@@ -444,11 +402,15 @@ def render_rows(result_types, result_rows, ctx):
     #   formats in order to be importable in a spreadsheet in a way that numbers
     #   are usable.
 
-    if result_rows:
-        assert len(result_types) == len(result_rows[0])
-
     # Create column renderers.
-    renderers = get_renderers(result_types, result_rows, ctx)
+    renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
+
+    # Prime renderers.
+    for row in rows:
+        for value, renderer in zip(row, renderers):
+            if value is not None:
+                renderer.update(value)
+    widths = [render.prepare() for render in renderers]
 
     # Precompute a spacing row.
     if ctx.spaced:
@@ -456,7 +418,7 @@ def render_rows(result_types, result_rows, ctx):
 
     # Render all the columns of all the rows to strings.
     str_rows = []
-    for row in result_rows:
+    for row in rows:
         # Rendering each row involves rendering all the columns, each of which
         # produces one or more lines for its value, and then aligning those
         # columns together to produce a final list of rendered row. This means
@@ -502,7 +464,7 @@ def render_rows(result_types, result_rows, ctx):
         if ctx.spaced:
             str_rows.append(spacing_row)
 
-    return str_rows, renderers
+    return str_rows, widths
 
 
 def render_text(result_types, result_rows, dcontext, file, expand=False, boxed=False, spaced=False):
@@ -520,13 +482,11 @@ def render_text(result_types, result_rows, dcontext, file, expand=False, boxed=F
         results have a lot of rows that render over multiple lines.
     """
     ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=' ')
-    str_rows, renderers = render_rows(result_types, result_rows, ctx)
+    str_rows, widths = render_rows(result_types, result_rows, ctx)
 
     # Compute a final format strings.
-    formats = ['{{:{}}}'.format(max(renderer.width(), 1))
-               for renderer in renderers]
-    header_formats = ['{{:^{}.{}}}'.format(renderer.width(), renderer.width())
-                      for renderer in renderers]
+    formats = ['{{:{}}}'.format(max(width, 1)) for width in widths]
+    header_formats = ['{{:^{}.{}}}'.format(width, width) for width in widths]
     if boxed:
         line_formatter = '| ' + ' | '.join(formats) + ' |\n'
         line_body = '-' + '-+-'.join(('-' * len(fmt.format(''))) for fmt in formats) + "-"

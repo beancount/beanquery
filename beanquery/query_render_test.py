@@ -36,15 +36,29 @@ class ColumnRendererBase(unittest.TestCase):
         renderer = self.renderer(self.ctx)
         for value in values:
             renderer.update(value)
-        renderer.prepare()
-        return renderer
+        width = renderer.prepare()
+        return renderer, width
 
     def render(self, values):
-        renderer = self.prepare(values)
-        width = renderer.width()
+        renderer, width = self.prepare(values)
         strings = [renderer.format(value) for value in values]
         self.assertTrue(all(len(s) == width for s in flatten(strings)))
         return strings
+
+
+class TestColumnRenderer(ColumnRendererBase):
+
+    renderer = query_render.ColumnRenderer
+
+    def test_interface(self):
+        renderer = self.renderer(self.ctx)
+        with self.assertRaises(RuntimeError):
+            w = renderer.width
+        w = renderer.prepare()
+        self.assertEqual(w, 0)
+        self.assertEqual(renderer.width, 0)
+        with self.assertRaises(NotImplementedError):
+            renderer.format(None)
 
 
 class ObjectRenderer(ColumnRendererBase):
