@@ -3,13 +3,14 @@ __license__ = "GNU GPLv2"
 
 import datetime
 import io
+import textwrap
 import unittest
 
 from decimal import Decimal
 
 from beancount.core import display_context
 from beancount.core.amount import A
-from beancount.core.inventory import from_string as I
+from beancount.core.inventory import Inventory, from_string as I
 from beancount.core.number import D
 from beancount.core.position import from_string as P
 
@@ -341,67 +342,162 @@ class TestInventoryRenderer(ColumnRendererBase):
         ])
 
 
-class TestQueryRender(unittest.TestCase):
-
-    def assertMultiLineEqualNoWS(self, expected, actual):
-        for left, right in zip_longest(
-                expected.strip().splitlines(), actual.strip().splitlines()):
-            self.assertEqual(left.strip(), right.strip())
+class TestQueryRenderText(unittest.TestCase):
 
     def setUp(self):
         self.dcontext = display_context.DisplayContext()
-        self.dcontext.update(D('1.00'), 'USD')
-        self.dcontext.update(D('1.00'), 'CAD')
 
-    def test_render_str(self):
-        types = [('account', str)]
-        Row = collections.namedtuple('Row', [name for name, type in types])
-        rows = [
-            Row('Assets:US:Babble:Vacation'),
-            Row('Expenses:Vacation'),
-            Row('Income:US:Babble:Vacation'),
-        ]
+    def render(self, types, rows, **kwargs):
         oss = io.StringIO()
-        query_render.render_text(types, rows, self.dcontext, oss)
-        # FIXME:
-        # with box():
-        #     print(oss.getvalue())
+        query_render.render_text(types, rows, self.dcontext, oss, **kwargs)
+        return oss.getvalue()
 
-    def test_render_Decimal(self):
-        types = [('number', Decimal)]
-        Row = collections.namedtuple('TestRow', [name for name, type in types])
-        rows = [
-            Row(D('123.1')),
-            Row(D('234.12')),
-            Row(D('345.123')),
-            Row(D('456.1234')),
-            Row(D('3456.1234')),
-        ]
-        oss = io.StringIO()
-        query_render.render_text(types, rows, self.dcontext, oss)
-        self.assertMultiLineEqualNoWS("""
-           number
-           ---------
-            123.1
-            234.12
-            345.123
-            456.1234
-           3456.1234
-        """, oss.getvalue())
+    def test_render_simple(self):
+        self.assertEqual(self.render(
+            [('x', int), ('y', int), ('z', int)],
+            [(1, 2, 3), (4, 5, 6)]), textwrap.dedent(
+                """\
+                x y z
+                - - -
+                1 2 3
+                4 5 6
+                """))
 
-        # Test it with commas too.
-        # FIXME: This should ideally render with commas, but the renderers don't
-        # support that yet. I wrote the test to show it.  See discussion at
-        # https://groups.google.com/d/msgid/beancount/CAK21%2BhMdq4KtZrm7pX9EZ1-tRWi7THMWzybS5B%3Dumb6OSK03Qw%40mail.gmail.com
-        self.dcontext.set_commas(True)
+    def test_render_boxed(self):
+        self.assertEqual(self.render(
+            [('x', int), ('y', int), ('z', int)],
+            [(1, 2, 3), (4, 5, 6)], boxed=True), textwrap.dedent(
+                """\
+                +---+---+---+
+                | x | y | z |
+                +---+---+---+
+                | 1 | 2 | 3 |
+                | 4 | 5 | 6 |
+                +---+---+---+
+                """))
+
+    def test_render_header_centering(self):
+        self.assertEqual(self.render(
+            [('x', int), ('y', int), ('z', int)],
+            [(1, 22222, 3), (4, 5, 6)]), textwrap.dedent(
+                """\
+                x   y   z
+                - ----- -
+                1 22222 3
+                4     5 6
+                """))
+
+    def test_render_header_truncation(self):
+        self.assertEqual(self.render(
+            [('x', int), ('abcdefg', int), ('z', int)],
+            [(1, 222, 3), (4, 5, 6)]), textwrap.dedent(
+                """\
+                x abc z
+                - --- -
+                1 222 3
+                4   5 6
+                """))
+
+    def test_render_missing_values(self):
+        self.assertEqual(self.render(
+            [('xx', int), ('yy', int), ('zz', int)],
+            [(12, None, 34), (None, 56, 78)]), textwrap.dedent(
+                """\
+                xx yy zz
+                -- -- --
+                12    34
+                   56 78
+                """))
+
+    def test_render_missing_values_boxed(self):
+        self.assertEqual(self.render(
+            [('xx', int), ('yy', int), ('zz', int)],
+            [(12, None, 34), (None, 56, 78)], boxed=True), textwrap.dedent(
+                """\
+                +----+----+----+
+                | xx | yy | zz |
+                +----+----+----+
+                | 12 |    | 34 |
+                |    | 56 | 78 |
+                +----+----+----+
+                """))
+
+    def test_render_expand(self):
+        self.assertEqual(self.render(
+            [('x', int), ('inv', Inventory), ('q', int)],
+            [(11, I('1.00 USD, 1.00 EUR, 1 TESTS'), 2),
+             (33, I('2.00 EUR, 42 TESTS'), 4)], expand=True, boxed=True), textwrap.dedent(
+                 """\
+                 +----+-------------+---+
+                 | x  |     inv     | q |
+                 +----+-------------+---+
+                 | 11 |  1.00 EUR   | 2 |
+                 |    |  1    TESTS |   |
+                 |    |  1.00 USD   |   |
+                 | 33 |  2.00 EUR   | 4 |
+                 |    | 42    TESTS |   |
+                 +----+-------------+---+
+                 """))
+
+    def test_render_spaced(self):
+        self.assertEqual(self.render(
+            [('x', int)],
+            [(1, ), (22, ), (333, )], spaced=True, boxed=True), textwrap.dedent(
+                """\
+                +-----+
+                |  x  |
+                +-----+
+                |   1 |
+                |     |
+                |  22 |
+                |     |
+                | 333 |
+                |     |
+                +-----+
+                """))
+
+
+class TestQueryRenderCSV(unittest.TestCase):
+
+    def setUp(self):
+        self.dcontext = display_context.DisplayContext()
+
+    def render(self, types, rows, **kwargs):
         oss = io.StringIO()
-        query_render.render_text(types, rows, self.dcontext, oss)
-        self.assertMultiLineEqualNoWS("""
-            number
-            ---------
-             123.1
-             234.12
-             345.123
-             456.1234
-           3456.1234
-        """, oss.getvalue())
+        query_render.render_csv(types, rows, self.dcontext, oss, **kwargs)
+        # The csv modules emits DOS-style newlines.
+        return oss.getvalue().replace('\r\n', '\n')
+
+    def test_render_simple(self):
+        self.assertEqual(self.render(
+            [('x', int), ('y', int), ('z', int)],
+            [(1, 2, 3), (4, 5, 6)]), textwrap.dedent(
+                """\
+                x,y,z
+                1,2,3
+                4,5,6
+                """))
+
+    def test_render_missing(self):
+        self.assertEqual(self.render(
+            [('x', int), ('y', int), ('z', int)],
+            [(None, 2, 3), (4, None, 6)]), textwrap.dedent(
+                """\
+                x,y,z
+                 ,2,3
+                4, ,6
+                """))
+
+    def test_render_expand(self):
+        self.assertEqual(self.render(
+            [('x', int), ('inv', Inventory), ('q', int)],
+            [(11, I('1.00 USD, 1.00 EUR, 1 TESTS'), 2),
+             (33, I('2.00 EUR, 42 TESTS'), 4)], expand=True), "\n".join([
+                 "x,inv,q",
+                 "11, 1.00 EUR  ,2",
+                 "  , 1    TESTS, ",
+                 "  , 1.00 USD  , ",
+                 "33, 2.00 EUR  ,4",
+                 "  ,42    TESTS, ",
+                 "",
+             ]))

@@ -8,7 +8,6 @@ import csv
 import datetime
 
 from decimal import Decimal
-from itertools import zip_longest
 
 from beancount.core import amount
 from beancount.core import display_context
@@ -371,156 +370,95 @@ class InventoryRenderer(ColumnRenderer):
         return self.listsep.join(strings)
 
 
-def get_renderers(result_types, result_rows, ctx):
-    """Create renderers for each column and prepare them with the given data.
+def render_rows(rows, renderers, ctx):
+    """Render results set row."""
 
-    Args:
-      result_types: A list of items describing the names and data types of the items in
-        each column.
-      result_rows: A list of ResultRow instances.
-      ctx: A RdenderContext object holding configuration.
-    Returns:
-      A list of subclass instances of ColumnRenderer.
-    """
+    # Filler for missing values.
+    missing = [''.rjust(renderer.width) for renderer in renderers]
+
+    for row in rows:
+
+        # Render the row cells. Do not pass missing values to the
+        # renderers but substitute them with the appropriate
+        # placeholder string.
+        cells = [render.format(field) if field is not None else x for render, field, x in zip(renderers, row, missing)]
+
+        if not any(isinstance(cell, list) for cell in cells):
+            # No multi line cells. Yield the row.
+            yield cells
+
+        else:
+            # At least one multi line cell. Ensure that all cells are lists.
+            cells = [cell if isinstance(cell, list) else [cell] for cell in cells]
+
+            # Compute the maximum number of lines in any cell.
+            nlines = max(len(cell) for cell in cells)
+
+            # Add placeholder lines to short multi line cells.
+            for cell, placeholder in zip(cells, missing):
+                if len(cell) < nlines:
+                    cell.extend([placeholder] * (nlines - len(cell)))
+
+            # Yield the obtained rows.
+            for x in zip(*cells):
+                yield x
+
+        # Add spacing row in needed.
+        if ctx.spaced:
+            yield missing
 
 
-def render_rows(columns, rows, ctx):
+def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced=False):
     """Render the result of executing a query in text format.
 
     Args:
-      columns: A list of (name, dtype) tuples describing the table columns.
-      rows: A list of ResultRow instances to be rendered.
-      ctx: The rendering contect.
+      columns: A list of (name, dtype) tuples descrining the table columns.
+      rows: A list of ResultRow instances holding the table data.
+      dcontext: A DisplayContext object prepared for rendering numbers.
+      file: A file object to render the results to.
+      expand: When true expand columns that render to lists to multiple rows.
+      boxed: When true draw an ascii-art table borders.
+      spaced: When true insert an empty line between rows.
 
     """
-    # Important notes:
-    #
-    # * Some of the data fields must be rendered on multiple lines. This code
-    #   deals with this.
-    #
-    # * Some of the fields must be split into multiple fields for certain
-    #   formats in order to be importable in a spreadsheet in a way that numbers
-    #   are usable.
-
-    # Create column renderers.
+    ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=' ')
     renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
+    headers = [name for name, dtype in columns]
 
-    # Prime renderers.
+    # Prime the renderers.
     for row in rows:
         for value, renderer in zip(row, renderers):
             if value is not None:
                 renderer.update(value)
+
+    # Compute columns widths.
     widths = [render.prepare() for render in renderers]
 
-    # Precompute a spacing row.
-    if ctx.spaced:
-        spacing_row = [''] * len(renderers)
-
-    # Render all the columns of all the rows to strings.
-    str_rows = []
-    for row in rows:
-        # Rendering each row involves rendering all the columns, each of which
-        # produces one or more lines for its value, and then aligning those
-        # columns together to produce a final list of rendered row. This means
-        # that a single result row may result in multiple rendered rows.
-
-        # Render all the columns of a row into either strings or lists of
-        # strings. This routine also computes the maximum number of rows that a
-        # rendered value will generate.
-        exp_row = []
-        max_lines = 1
-        for value, renderer in zip(row, renderers):
-            # Update the column renderer.
-            exp_lines = renderer.format(value) if value is not None else ''
-            if isinstance(exp_lines, list):
-                if ctx.expand:
-                    max_lines = max(max_lines, len(exp_lines))
-                else:
-                    # Join the lines onto a single cell.
-                    exp_lines = ctx.listsep.join(exp_lines)
-            exp_row.append(exp_lines)
-
-        # If all the values were rendered directly to strings, this is a row that
-        # renders on a single line. Just append this one row. This is the common
-        # case.
-        if max_lines == 1:
-            str_rows.append(exp_row)
-
-        # Some of the values rendered to more than one line; we need to render
-        # them on separate lines and insert filler.
-        else:
-            # Make sure all values in the column are wrapped in sequences.
-            exp_row = [exp_value if isinstance(exp_value, list) else (exp_value,)
-                       for exp_value in exp_row]
-
-            # Create a matrix of the column.
-            str_lines = [[] for _ in range(max_lines)]
-            for exp_value in exp_row:
-                for index, exp_line in zip_longest(range(max_lines), exp_value,
-                                                   fillvalue=''):
-                    str_lines[index].append(exp_line)
-            str_rows.extend(str_lines)
-
-        if ctx.spaced:
-            str_rows.append(spacing_row)
-
-    return str_rows, widths
-
-
-def render_text(result_types, result_rows, dcontext, file, expand=False, boxed=False, spaced=False):
-    """Render the result of executing a query in text format.
-
-    Args:
-      result_types: A list of items describing the names and data types of the items in
-        each column.
-      result_rows: A list of ResultRow instances.
-      dcontext: A DisplayContext object prepared for rendering numbers.
-      file: A file object to render the results to.
-      expand: A boolean, if true, expand columns that render to lists on multiple rows.
-      boxed: A boolean, true if we should render the results in a fancy-looking ASCII box.
-      spaced: If true, leave an empty line between each of the rows. This is useful if the
-        results have a lot of rows that render over multiple lines.
-    """
-    ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=' ')
-    str_rows, widths = render_rows(result_types, result_rows, ctx)
-
-    # Compute a final format strings.
-    formats = ['{{:{}}}'.format(max(width, 1)) for width in widths]
-    header_formats = ['{{:^{}.{}}}'.format(width, width) for width in widths]
+    # Initialize table style.
     if boxed:
-        line_formatter = '| ' + ' | '.join(formats) + ' |\n'
-        line_body = '-' + '-+-'.join(('-' * len(fmt.format(''))) for fmt in formats) + "-"
-        top_line = ",{}.\n".format(line_body)
-        middle_line = "+{}+\n".format(line_body)
-        bottom_line = "`{}'\n".format(line_body)
-
-        # Compute the header.
-        header_formatter = '| ' + ' | '.join(header_formats) + ' |\n'
-        header_line = header_formatter.format(*[name for name, _ in result_types])
+        frmt = '| {} |\n'
+        colsep = ' | '
+        top = middle = bottom = '+-{}-+\n'.format('-+-'.join(''.rjust(width, '-') for width in widths))
     else:
-        line_formatter = ' '.join(formats) + '\n'
-        line_body = ' '.join(('-' * len(fmt.format(''))) for fmt in formats)
-        top_line = None
-        middle_line = "{}\n".format(line_body)
-        bottom_line = None
+        frmt = '{}\n'
+        colsep = ' '
+        top = bottom = ''
+        middle = '{}\n'.format(' '.join(''.rjust(width, '-') for width in widths))
 
-        # Compute the header.
-        header_formatter = ' '.join(header_formats) + '\n'
-        header_line = header_formatter.format(*[name for name, _ in result_types])
+    # Header.
+    file.write(top)
+    file.write(frmt.format(colsep.join(header[:width].center(width) for header, width in zip(headers, widths))))
+    file.write(middle)
 
-    # Render each string row to a single line.
-    if top_line:
-        file.write(top_line)
-    file.write(header_line)
-    file.write(middle_line)
-    for str_row in str_rows:
-        line = line_formatter.format(*str_row)
-        file.write(line)
-    if bottom_line:
-        file.write(bottom_line)
+    # Rows.
+    for row in render_rows(rows, renderers, ctx):
+        file.write(frmt.format(colsep.join(row)))
+
+    # Footer.
+    file.write(bottom)
 
 
-def render_csv(result_types, result_rows, dcontext, file, expand=False):
+def render_csv(columns, rows, dcontext, file, expand=False):
     """Render the result of executing a query in text format.
 
     Args:
@@ -531,10 +469,20 @@ def render_csv(result_types, result_rows, dcontext, file, expand=False):
       file: A file object to render the results to.
       expand: A boolean, if true, expand columns that render to lists on multiple rows.
     """
-    ctx = RenderContext(dcontext, expand=expand, spaced=False)
-    str_rows, renderers = render_rows(result_types, result_rows, ctx)
+    ctx = RenderContext(dcontext, expand=expand, spaced=False, listsep=', ')
+    renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
+    headers = [name for name, dtype in columns]
 
+    # Prime the renderers.
+    for row in rows:
+        for value, renderer in zip(row, renderers):
+            if value is not None:
+                renderer.update(value)
+
+    # Prepare the renders.
+    widths = [render.prepare() for render in renderers]
+
+    # Write the CSV file.
     writer = csv.writer(file)
-    header_row = [name for name, _ in result_types]
-    writer.writerow(header_row)
-    writer.writerows(str_rows)
+    writer.writerow(headers)
+    writer.writerows(render_rows(rows, renderers, ctx))
