@@ -20,5 +20,20 @@ jobs:
         with:
           python-version: '3.10'
       - run: pip install -r requirements.txt click ply python-dateutil coverage
-      - run: python -m coverage run --branch -m unittest beanquery/query_parser_test.py
-      - run: python -m coverage report --precision=2 --fail-under=100 beanquery/query_parser.py
+      - name: Run coverage
+        # Check tests coverage. Instead of checking project coverage of
+        # all the tests we check that each module is exaustively tested
+        # by the dedicated units tests.
+        run: |
+          echo '{
+
+            "beanquery/query_parser.py": "beanquery/query_parser_test.py",
+            "beanquery/query_render.py": "beanquery/query_render_test.py"
+
+          }' | jq -rc 'to_entries | .[] | (.key + "=" + .value)' | while IFS='=' read src test
+          do
+            echo python -m coverage run --branch --include "$src" -m unittest "$test"
+            python -m coverage run --branch --include "$src" -m unittest $test
+            echo python -m coverage report --precision=2 --fail-under=100 "$src"
+            python -m coverage report --precision=2 --fail-under=100 "$src"
+          done
