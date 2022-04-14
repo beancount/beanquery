@@ -336,37 +336,61 @@ class InventoryRenderer(ColumnRenderer):
         # We look this up for each value, it makes sense to cache it
         # to avoid the attribute lookup in the context.
         self.expand = ctx.expand
-        # How many times we have seen a commodity.
-        self.counters = collections.defaultdict(int)
+        # How many times at most we have seen a commodity in an inventory.
+        self.counts = collections.defaultdict(int)
         # Commodity specific renderers.
         self.renderers = collections.defaultdict(lambda: PositionRenderer(ctx))
+        # How many distinct commodity need to be rendered.
+        self.distinct = 0
 
     def update(self, value):
         for pos in value.get_positions():
             # We use the little indexing trick to do not have to
             # conditionalize this code on whether rows expansion is
             # enabled or not.
-            self.counters[self.expand or pos.units.currency] += 1
             self.renderers[self.expand or pos.units.currency].update(pos)
+        counts = collections.Counter(pos.units.currency for pos in value.get_positions())
+        for key, value in counts.items():
+            self.counts[key] = max(self.counts[key], value)
 
     def prepare(self):
-        self.maxwidth = sum(r.prepare() + len(self.listsep) for r in self.renderers.values()) - len(self.listsep)
-        # We want to present inventory content sorted by frequency of
-        # appearance and by currency name. Sorting the renderers here
-        # allows to just iterate the renderers in format() method.
-        self.renderers = dict(sorted(self.renderers.items(), key=lambda x: (-self.counters[x[0]], x[0])))
+        if self.expand:
+            self.maxwidth = self.renderers[self.expand].prepare()
+        else:
+            for commodity, renderer in self.renderers.items():
+                w = renderer.prepare()
+                self.distinct += self.counts[commodity]
+                self.maxwidth += self.counts[commodity] * (w + len(self.listsep))
+            self.maxwidth -= len(self.listsep)
         return super().prepare()
 
+    @staticmethod
+    def positionsortkey(position):
+        # Sort positions combining fields in a more intuitive way than the default.
+        return (position.units.currency, -position.units.number,
+                (position.cost.currency, -position.cost.number, position.cost.date) if position.cost else ())
+
     def format(self, value):
-        strings = []
+        # Expanded row format.
         if self.expand:
-            for pos in sorted(value.get_positions(), key=lambda pos: pos.units.currency):
+            strings = []
+            for pos in sorted(value.get_positions(), key=self.positionsortkey):
                 strings.append(self.renderers[self.expand].format(pos))
             return strings
-        positions = {pos.units.currency: pos for pos in value.get_positions()}
-        for commodity, fmt in self.renderers.items():
-            pos = positions.get(commodity)
-            strings.append(fmt.format(pos) if pos is not None else ' ' * fmt.width)
+        # Too many distinct commodities to present in tabular format.
+        if self.distinct > 5:
+            strings = []
+            for pos in sorted(value.get_positions(), key=self.positionsortkey):
+                strings.append(self.renderers[pos.units.currency].format(pos))
+            return self.listsep.join(strings).ljust(self.maxwidth)
+        # Tabular format with same commodity positions vertically aligned.
+        positions = collections.defaultdict(list)
+        for pos in sorted(value.get_positions(), key=self.positionsortkey):
+            positions[pos.units.currency].append(pos)
+        strings = []
+        for commodity, renderer in sorted(self.renderers.items()):
+            strings += [renderer.format(pos) for pos in positions[commodity]]
+            strings += [''.ljust(renderer.width)] * (self.counts[commodity] - len(positions[commodity]))
         return self.listsep.join(strings)
 
 
@@ -421,7 +445,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced
       spaced: When true insert an empty line between rows.
 
     """
-    ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=' ')
+    ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep='  ')
     renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
     headers = [name for name, dtype in columns]
 

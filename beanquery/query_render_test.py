@@ -310,6 +310,16 @@ class TestInventoryRenderer(ColumnRendererBase):
         self.ctx.dcontext.update(D('1'), 'CA')
         self.ctx.dcontext.update(D('1.00'), 'AAPL')
 
+    def test_position_sortkey(self):
+        inventory = I('1 AAAAA, 5 SHARE {100 USD}, 5 SHARE {200 USD}, 5 TESTS {666 USD}')
+        self.assertEqual(
+            sorted(inventory, key=query_render.InventoryRenderer.positionsortkey), [
+                P('1 AAAAA'),
+                P('5 SHARE {200 USD}'),
+                P('5 SHARE {100 USD}'),
+                P('5 TESTS {666 USD}'),
+            ])
+
     def test_inventory(self):
         self.ctx.expand = True
         self.assertEqual(self.render([I('100 USD')]),[
@@ -323,9 +333,9 @@ class TestInventoryRenderer(ColumnRendererBase):
              ' 5.000  HOOL {500.23 USD}'],
         ])
 
-    def test_inventory_no_expand(self):
+    def test_inventory_tabular(self):
         self.ctx.expand = False
-        self.ctx.listsep = ' + '
+        self.ctx.listsep = ' & '
         self.assertEqual(self.render([I('100 USD')]), [
             '100.00 USD'
         ])
@@ -333,12 +343,26 @@ class TestInventoryRenderer(ColumnRendererBase):
             '5.000 HOOL {500.23 USD}'
         ])
         self.assertEqual(self.render([I('5 HOOL {500.23 USD}, 12.3456 CAAD')]), [
-            '12.3456 CAAD + 5.000 HOOL {500.23 USD}',
+            '12.3456 CAAD & 5.000 HOOL {500.23 USD}',
         ])
         self.assertEqual(self.render([I('5 HOOL {500.23 USD}, 12.3456 CAAD'),
                                       I('55 HOOL {50.23 USD}, 2.3 CAAD')]), [
-            '12.3456 CAAD +  5.000 HOOL {500.23 USD}',
-            ' 2.3000 CAAD + 55.000 HOOL { 50.23 USD}',
+            '12.3456 CAAD &  5.000 HOOL {500.23 USD}',
+            ' 2.3000 CAAD & 55.000 HOOL { 50.23 USD}',
+        ])
+        self.assertEqual(self.render([I('5 HOOL {500.23 USD}, 1 HOOL {567.89 USD}'),
+                                      I('55 HOOL {50.23 USD}, 2.3 CAAD')]), [
+            '         &  5.000 HOOL {500.23 USD} &  1.000 HOOL {567.89 USD}',
+            '2.3 CAAD & 55.000 HOOL { 50.23 USD} &                         ',
+        ])
+
+    def test_inventory_too_many(self):
+        self.ctx.expand = False
+        self.ctx.listsep = ' & '
+        self.assertEqual(self.render([I('10 AA, 2 BB, 3 CC, 4 DD'),
+                                      I('5 AA, 6 EE, 7 FF')]), [
+            '10 AA & 2 BB & 3 CC & 4 DD              ',
+            ' 5 AA & 6 EE & 7 FF                     ',
         ])
 
 
