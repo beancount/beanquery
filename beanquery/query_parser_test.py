@@ -448,22 +448,23 @@ class TestSelectOrderBy(QueryParserTestBase):
 
 class TestSelectPivotBy(QueryParserTestBase):
 
-    def test_pivotby_one(self):
-        self.assertParse("SELECT * PIVOT BY a;",
-            Select(qp.Wildcard(),
-                   pivot_by=qp.PivotBy([qp.Column('a')])))
-
-    def test_pivotby_many(self):
-        self.assertParse("SELECT * PIVOT BY a, b, c;",
-            Select(qp.Wildcard(),
-                   pivot_by=qp.PivotBy([
-                       qp.Column('a'),
-                       qp.Column('b'),
-                       qp.Column('c')])))
-
-    def test_pivotby_empty(self):
+    def test_pivotby(self):
         with self.assertRaises(qp.ParseError):
             self.parse("SELECT * PIVOT BY;")
+
+        with self.assertRaises(qp.ParseError):
+            self.parse("SELECT * PIVOT BY a;")
+
+        with self.assertRaises(qp.ParseError):
+            self.parse("SELECT * PIVOT BY a, b, c")
+
+        self.assertParse(
+            "SELECT * PIVOT BY a, b",
+            Select(qp.Wildcard(), pivot_by=qp.PivotBy([qp.Column('a'), qp.Column('b')])))
+
+        self.assertParse(
+            "SELECT * PIVOT BY 1, 2",
+            Select(qp.Wildcard(), pivot_by=qp.PivotBy([1, 2])))
 
 
 class TestSelectOptions(QueryParserTestBase):

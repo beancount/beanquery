@@ -228,10 +228,61 @@ def create_row_context(entries, options_map):
     return context
 
 
+def execute_query(query, entries, options):
+    """Given a compiled select statement, execute the query.
+
+    Args:
+      query: The query to execute.
+      entries: A list of directives.
+      options: A parser's option_map.
+
+    Returns:
+        A list of (name, dtype) tuples describing the results set
+        table and a list of ResultRow tuples with the data.item pairs.
+
+    """
+
+    if isinstance(query, query_compile.EvalQuery):
+        return execute_select(query, entries, options)
+
+    if isinstance(query, query_compile.EvalPivot):
+        columns, rows = execute_select(query.query, entries, options)
+
+        col1, col2 = query.pivots
+        othercols = [i for i in range(len(columns)) if i not in query.pivots]
+        nother = len(othercols)
+        other = lambda x: tuple(x[i] for i in othercols)
+        keys = sorted(set(row[col2] for row in rows))
+
+        # Compute the new column names and dtypes.
+        if nother > 1:
+            it = itertools.product(keys, other(columns))
+            names = [f'{columns[col1].name}/{columns[col2].name}'] + [f'{key}/{col.name}' for key, col in it]
+        else:
+            names = [f'{columns[col1].name}/{columns[col2].name}'] + [f'{key}' for key in keys]
+        dtypes = ([columns[col1].dtype] + [col.dtype for col in other(columns)] * len(keys))
+        columns = [Column(name, dtype) for name, dtype in zip(names, dtypes)]
+
+        # Populate the pivoted table.
+        pivoted = []
+        rows.sort(key=operator.itemgetter(col1))
+        for field1, group in itertools.groupby(rows, key=operator.itemgetter(col1)):
+            outrow = [field1] + [None] * (len(columns) - 1)
+            for row in group:
+                index = keys.index(row[col2]) * nother + 1
+                outrow[index:index+nother] = other(row)
+            pivoted.append(tuple(outrow))
+
+        return columns, pivoted
+
+    # Not reached.
+    raise RuntimeError
+
+
 Column = collections.namedtuple('Column', 'name dtype')
 
 
-def execute_query(query, entries, options_map):
+def execute_select(query, entries, options_map):
     """Given a compiled select statement, execute the query.
 
     Args:
