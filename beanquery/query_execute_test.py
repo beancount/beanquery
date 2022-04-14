@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from beancount.core.number import D
 from beancount.core import inventory
+from beancount.core.inventory import from_string as I
 from beancount.parser import cmptest
 from beancount.utils import misc_utils
 from beancount import loader
@@ -1248,5 +1249,119 @@ class TestArithmeticFunctions(QueryBase):
             [(D("0"),)])
 
 
-if __name__ == '__main__':
-    unittest.main()
+class TestExecutePivot(QueryBase):
+
+    def setUp(self):
+        super().setUp()
+        self.entries, errors, self.options = loader.load_string(self.data, dedent=True)
+        self.assertFalse(errors)
+
+    def execute(self, query):
+        query = self.compile(query)
+        return qx.execute_query(query, self.entries, self.options)
+
+    data = """
+      2012-01-01 open Assets:Cash
+      2012-01-01 open Expenses:Aaa
+      2012-01-01 open Expenses:Bbb
+
+      2012-01-01 * "Test"
+        Expenses:Bbb  1.00 USD
+        Assets:Cash
+
+      2012-01-01 * "Test"
+        Expenses:Aaa  2.00 USD
+        Assets:Cash
+
+      2012-02-02 * "Test"
+        Expenses:Aaa  3.00 USD
+        Assets:Cash
+
+      2013-01-01 * "Test"
+        Expenses:Aaa  4.00 USD
+        Assets:Cash
+
+      2014-02-02 * "Test"
+        Expenses:Bbb  5.00 USD
+        Assets:Cash
+
+      2014-03-03 * "Test"
+        Expenses:Aaa  6.00 USD
+        Assets:Cash
+
+      2013-01-01 * "Test"
+        Expenses:Bbb  7.00 USD
+        Assets:Cash
+
+      2015-04-04 * "Test"
+        Expenses:Aaa  8.00 USD
+        Assets:Cash
+    """
+
+    def test_pivot_one_column(self):
+        self.assertEqual(self.execute("""
+            SELECT
+              account,
+              year(date) AS year,
+              sum(cost(position)) AS balance
+            WHERE
+              account ~ 'Expenses'
+            GROUP BY 1, 2
+            PIVOT BY 1, 2"""), (
+            [
+                ('account/year', str),
+                ('2012', inventory.Inventory),
+                ('2013', inventory.Inventory),
+                ('2014', inventory.Inventory),
+                ('2015', inventory.Inventory),
+            ],
+            [
+                ('Expenses:Aaa', I('5.00 USD'), I('4.00 USD'), I('6.00 USD'), I('8.00 USD')),
+                ('Expenses:Bbb', I('1.00 USD'), I('7.00 USD'), I('5.00 USD'), None),
+            ]))
+
+    def test_pivot_one_column_by_name(self):
+        self.assertEqual(self.execute("""
+            SELECT
+              account,
+              year(date) AS year,
+              sum(cost(position)) AS balance
+            WHERE
+              account ~ 'Expenses'
+            GROUP BY 1, 2
+            PIVOT BY account, year"""), (
+            [
+                ('account/year', str),
+                ('2012', inventory.Inventory),
+                ('2013', inventory.Inventory),
+                ('2014', inventory.Inventory),
+                ('2015', inventory.Inventory),
+            ],
+            [
+                ('Expenses:Aaa', I('5.00 USD'), I('4.00 USD'), I('6.00 USD'), I('8.00 USD')),
+                ('Expenses:Bbb', I('1.00 USD'), I('7.00 USD'), I('5.00 USD'), None),
+            ]))
+
+    def test_pivot_two_column(self):
+        self.assertEqual(self.execute("""
+            SELECT
+              account,
+              year(date) AS year,
+              sum(cost(position)) AS balance,
+              last(date) AS updated
+            WHERE
+              account ~ 'Expenses' AND
+              year >= 2014
+            GROUP BY 1, 2
+            PIVOT BY 1, 2"""), (
+            [
+                ('account/year', str),
+                ('2014/balance', inventory.Inventory),
+                ('2014/updated', datetime.date),
+                ('2015/balance', inventory.Inventory),
+                ('2015/updated', datetime.date),
+            ],
+            [
+                ('Expenses:Aaa', I('6.00 USD'), datetime.date(2014, 3, 3), I('8.00 USD'), datetime.date(2015, 4, 4)),
+                ('Expenses:Bbb', I('5.00 USD'), datetime.date(2014, 2, 2), None, None),
+            ]))

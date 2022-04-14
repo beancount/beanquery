@@ -472,12 +472,17 @@ class SelectParser(Lexer):
         """
         p[0] = p[1]
 
-    def p_pivot_by(self, p):
+    def p_pivot_by_empty(self, p):
         """
         pivot_by : empty
-                 | PIVOT BY column_list
         """
-        p[0] = PivotBy(p[3]) if len(p) == 4 else None
+        p[0] = None
+
+    def p_pivot_by(self, p):
+        """
+        pivot_by : PIVOT BY column_or_index COMMA column_or_index
+        """
+        p[0] = PivotBy([p[3], p[5]])
 
     def p_limit(self, p):
         """
@@ -620,12 +625,12 @@ class SelectParser(Lexer):
         """
         p[0] = Column(p[1])
 
-    def p_column_list(self, p):
+    def p_column_or_index(self, p):
         """
-        column_list : column
-                    | column_list COMMA column
+        column_or_index : column
+                        | INTEGER
         """
-        p[0] = self.handle_comma_separated_list(p)
+        p[0] = p[1]
 
     def p_literal(self, p):
         """

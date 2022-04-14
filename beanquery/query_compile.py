@@ -876,6 +876,51 @@ def compile_order_by(order_by, c_targets, environ):
     return new_targets[len(c_targets):], order_spec
 
 
+def compile_pivot_by(pivot_by, targets, group_indexes):
+    """Compiles a PIVOT BY clause.
+
+    Resolve and validate columns references in the PIVOT BY clause.
+    The PIVOT BY clause accepts two name od index references to
+    columns in the SELECT targets list. The second columns should be a
+    GROUP BY column so that the values of the pivot column are unique.
+
+    """
+    if pivot_by is None:
+        return None
+
+    indexes = []
+    names = {target.name: index for index, target in enumerate(targets)}
+
+    for column in pivot_by.columns:
+
+        # Process target references by index.
+        if isinstance(column, int):
+            index = column - 1
+            if not 0 <= index < len(targets):
+                raise CompilationError(f'Invalid PIVOT BY column index {column}')
+            indexes.append(index)
+            continue
+
+        # Process target references by name.
+        if isinstance(column, query_parser.Column):
+            index = names.get(column.name, None)
+            if index is None:
+                raise CompilationError(f'PIVOT BY column {column!r} is not in the targets list')
+            indexes.append(index)
+            continue
+
+        # Not reached.
+        raise RuntimeError
+
+    # Sanity checks.
+    if indexes[0] == indexes[1]:
+        raise CompilationError('The two PIVOT BY columns cannot be the same column')
+    if indexes[1] not in group_indexes:
+        raise CompilationError('The second PIVOT BY column must be a GROUP BY column')
+
+    return indexes
+
+
 # A compile FROM clause.
 #
 # Attributes:
@@ -931,6 +976,19 @@ EvalQuery = collections.namedtuple('EvalQuery', ('c_targets c_from c_where '
                                                  'group_indexes having_index '
                                                  'order_spec '
                                                  'limit distinct'))
+
+
+# A compiled query with a PIVOT BY clause.
+#
+# The PIVOT BY clause causes the structure of the returned table to be
+# fundamentally alterede, thus it makes sense to model it as a
+# distinct operation.
+#
+# Attributes:
+#   query: The underlying EvalQuery.
+#   pivots: The pivot columns indexes
+EvalPivot = collections.namedtuple('EvalPivot', 'query pivots')
+
 
 def compile_select(select, targets_environ, postings_environ, entries_environ):
     """Prepare an AST for a Select statement into a very rudimentary execution tree.
@@ -993,18 +1051,20 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
                 "All non-aggregates must be covered by GROUP-BY clause in aggregate query; "
                 "the following targets are missing: {}".format(",".join(missing_names)))
 
-    # Check that PIVOT-BY is not supported yet.
-    if select.pivot_by is not None:
-        raise CompilationError("The PIVOT BY clause is not supported yet")
+    query = EvalQuery(c_targets,
+                      c_from,
+                      c_where,
+                      group_indexes,
+                      having_index,
+                      order_spec,
+                      select.limit,
+                      select.distinct)
 
-    return EvalQuery(c_targets,
-                     c_from,
-                     c_where,
-                     group_indexes,
-                     having_index,
-                     order_spec,
-                     select.limit,
-                     select.distinct)
+    pivots = compile_pivot_by(select.pivot_by, c_targets, group_indexes)
+    if pivots:
+        return EvalPivot(query, pivots)
+
+    return query
 
 
 def transform_journal(journal):
