@@ -927,12 +927,10 @@ def compile_from(from_clause, environ):
 #     This list may refer to either aggregates or non-aggregates.
 #   limit: An optional integer used to cut off the number of result rows returned.
 #   distinct: An optional boolean that requests we should uniquify the result rows.
-#   flatten: An optional boolean that requests we should output a single posting
-#     row for each currency present in an accumulated and output inventory.
 EvalQuery = collections.namedtuple('EvalQuery', ('c_targets c_from c_where '
                                                  'group_indexes having_index '
                                                  'order_spec '
-                                                 'limit distinct flatten'))
+                                                 'limit distinct'))
 
 def compile_select(select, targets_environ, postings_environ, entries_environ):
     """Prepare an AST for a Select statement into a very rudimentary execution tree.
@@ -1006,8 +1004,7 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
                      having_index,
                      order_spec,
                      select.limit,
-                     select.distinct,
-                     select.flatten)
+                     select.distinct)
 
 
 def transform_journal(journal):
@@ -1038,7 +1035,7 @@ def transform_journal(journal):
     return query_parser.Select(cooked_select.targets,
                                journal.from_clause,
                                cooked_select.where_clause,
-                               None, None, None, None, None, None)
+                               None, None, None, None, None)
 
 
 def transform_balances(balances):
@@ -1068,7 +1065,7 @@ def transform_balances(balances):
                                balances.where_clause,
                                cooked_select.group_by,
                                cooked_select.order_by,
-                               None, None, None, None)
+                               None, None, None)
 
 
 # A compiled print statement, ready for execution.

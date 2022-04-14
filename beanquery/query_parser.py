@@ -33,10 +33,9 @@ from beancount.utils.misc_utils import cmptuple
 #   pivot_by: An instance of 'PivotBy', or None if absent.
 #   limit: An integer, or None is absent.
 #   distinct: A boolean value (True), or None if absent.
-#   flatten: A boolean value (True), or None if absent.
 Select = collections.namedtuple(
     'Select', ('targets from_clause where_clause '
-               'group_by order_by pivot_by limit distinct flatten'))
+               'group_by order_by pivot_by limit distinct'))
 
 # A select query that produces final balances for accounts.
 # This is equivalent to
@@ -202,8 +201,8 @@ class Lexer:
     keywords = {
         'SELECT', 'AS', 'FROM', 'WHERE', 'OPEN', 'CLOSE', 'CLEAR', 'ON',
         'BALANCES', 'JOURNAL', 'PRINT', 'AT', 'GROUP', 'BY', 'HAVING',
-        'ORDER', 'DESC', 'ASC', 'PIVOT', 'LIMIT', 'FLATTEN', 'DISTINCT',
-        'AND', 'OR', 'NOT', 'IN', 'IS', 'TRUE', 'FALSE', 'NULL',
+        'ORDER', 'DESC', 'ASC', 'PIVOT', 'LIMIT', 'DISTINCT', 'AND',
+        'OR', 'NOT', 'IN', 'IS', 'TRUE', 'FALSE', 'NULL',
     }
 
     # List of valid tokens from the lexer.
@@ -331,9 +330,9 @@ class SelectParser(Lexer):
     def p_select_statement(self, p):
         """
         select_statement : SELECT distinct target_spec from_subselect where \
-                           group_by order_by pivot_by limit flatten
+                           group_by order_by pivot_by limit
         """
-        p[0] = Select(p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[2], p[10])
+        p[0] = Select(p[3], p[4], p[5], p[6], p[7], p[8], p[9], p[2])
 
     def p_distinct(self, p):
         """
@@ -487,13 +486,6 @@ class SelectParser(Lexer):
               | LIMIT INTEGER
         """
         p[0] = p[2] if len(p) == 3 else None
-
-    def p_flatten(self, p):
-        """
-        flatten : empty
-                | FLATTEN
-        """
-        p[0] = True if p[1] == 'FLATTEN' else None
 
 
     precedence = [

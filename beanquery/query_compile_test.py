@@ -348,8 +348,8 @@ class TestCompileFundamentals(CompileSelectBase):
                 qc.Operator(qp.Add, [
                     qc.EvalConstant(1),
                     qc.EvalConstant(1)
-                ]), 'expr', False)],
-            None, None, None, None, None, None, None, None))
+                ]), 'expr', False)
+        ], None, None, None, None, None, None, None))
 
         expr = self.compile("SELECT 1 + meta('int') AS expr")
         self.assertEqual(expr, qc.EvalQuery([
@@ -361,8 +361,8 @@ class TestCompileFundamentals(CompileSelectBase):
                             qc.EvalConstant('int'),
                         ]),
                     ]),
-                ]), 'expr', False)],
-            None, None, None, None, None, None, None, None))
+                ]), 'expr', False)
+        ], None, None, None, None, None, None, None))
 
     def test_coalesce(self):
         expr = self.compile("SELECT coalesce(narration, str(date), '~') AS expr")
@@ -372,8 +372,8 @@ class TestCompileFundamentals(CompileSelectBase):
                     qe.NarrationColumn(),
                     qe.Function('str', [qe.DateColumn()]),
                     qc.EvalConstant('~'),
-                ]), 'expr', False)],
-            None, None, None, None, None, None, None, None))
+                ]), 'expr', False)
+        ], None, None, None, None, None, None, None))
 
         with self.assertRaises(qc.CompilationError):
             self.compile("SELECT coalesce(narration, date, 1)")
@@ -687,7 +687,7 @@ class TestTranslationJournal(CompileSelectBase):
     def test_journal(self):
         journal = self.parse("JOURNAL;")
         select = qc.transform_journal(journal)
-        self.assertEqual(
+        self.assertEqual(select,
             qp.Select([
                 qp.Target(qp.Column('date'), None),
                 qp.Target(qp.Column('flag'), None),
@@ -698,70 +698,68 @@ class TestTranslationJournal(CompileSelectBase):
                 qp.Target(qp.Column('account'), None),
                 qp.Target(qp.Column('position'), None),
                 qp.Target(qp.Column('balance'), None),
-            ], None, None, None, None, None, None, None, None),
-            select)
+            ],
+            None, None, None, None, None, None, None))
 
     def test_journal_with_account(self):
         journal = self.parse("JOURNAL 'liabilities';")
         select = qc.transform_journal(journal)
-        self.assertEqual(
-            qp.Select([
-                qp.Target(qp.Column('date'), None),
-                qp.Target(qp.Column('flag'), None),
-                qp.Target(qp.Function('maxwidth', [qp.Column('payee'),
-                                                   qp.Constant(48)]), None),
-                qp.Target(qp.Function('maxwidth', [qp.Column('narration'),
-                                                   qp.Constant(80)]), None),
-                qp.Target(qp.Column('account'), None),
-                qp.Target(qp.Column('position'), None),
-                qp.Target(qp.Column('balance'), None),
-            ],
-                      None,
-                      qp.Match(qp.Column('account'), qp.Constant('liabilities')),
-                      None, None, None, None, None, None),
-            select)
+        self.assertEqual(select, qp.Select([
+            qp.Target(qp.Column('date'), None),
+            qp.Target(qp.Column('flag'), None),
+            qp.Target(qp.Function('maxwidth', [
+                qp.Column('payee'),
+                qp.Constant(48)]), None),
+            qp.Target(qp.Function('maxwidth', [
+                qp.Column('narration'),
+                qp.Constant(80)]), None),
+            qp.Target(qp.Column('account'), None),
+            qp.Target(qp.Column('position'), None),
+            qp.Target(qp.Column('balance'), None),
+        ],
+        None,
+        qp.Match(qp.Column('account'), qp.Constant('liabilities')),
+        None, None, None, None, None))
 
     def test_journal_with_account_and_from(self):
         journal = self.parse("JOURNAL 'liabilities' FROM year = 2014;")
         select = qc.transform_journal(journal)
-        self.assertEqual(
-            qp.Select([
-                qp.Target(qp.Column('date'), None),
-                qp.Target(qp.Column('flag'), None),
-                qp.Target(qp.Function('maxwidth', [qp.Column('payee'),
-                                                   qp.Constant(48)]), None),
-                qp.Target(qp.Function('maxwidth', [qp.Column('narration'),
-                                                   qp.Constant(80)]), None),
-                qp.Target(qp.Column('account'), None),
-                qp.Target(qp.Column('position'), None),
-                qp.Target(qp.Column('balance'), None),
-            ],
-                      qp.From(qp.Equal(qp.Column('year'), qp.Constant(2014)),
-                              None, None, None),
-                      qp.Match(qp.Column('account'), qp.Constant('liabilities')),
-                      None, None, None, None, None, None),
-            select)
+        self.assertEqual(select, qp.Select([
+            qp.Target(qp.Column('date'), None),
+            qp.Target(qp.Column('flag'), None),
+            qp.Target(qp.Function('maxwidth', [
+                qp.Column('payee'),
+                qp.Constant(48)]), None),
+            qp.Target(qp.Function('maxwidth', [
+                qp.Column('narration'),
+                qp.Constant(80)]), None),
+            qp.Target(qp.Column('account'), None),
+            qp.Target(qp.Column('position'), None),
+            qp.Target(qp.Column('balance'), None),
+        ],
+        qp.From(qp.Equal(qp.Column('year'), qp.Constant(2014)), None, None, None),
+        qp.Match(qp.Column('account'), qp.Constant('liabilities')),
+        None, None, None, None, None))
 
     def test_journal_with_account_func_and_from(self):
         journal = self.parse("JOURNAL 'liabilities' AT cost FROM year = 2014;")
         select = qc.transform_journal(journal)
-        self.assertEqual(
-            qp.Select([
-                qp.Target(qp.Column('date'), None),
-                qp.Target(qp.Column('flag'), None),
-                qp.Target(qp.Function('maxwidth', [qp.Column('payee'),
-                                                   qp.Constant(48)]), None),
-                qp.Target(qp.Function('maxwidth', [qp.Column('narration'),
-                                                   qp.Constant(80)]), None),
-                qp.Target(qp.Column('account'), None),
-                qp.Target(qp.Function('cost', [qp.Column('position')]), None),
-                qp.Target(qp.Function('cost', [qp.Column('balance')]), None),
-            ],
-                      qp.From(qp.Equal(qp.Column('year'), qp.Constant(2014)),
-                              None, None, None),
-                      qp.Match(qp.Column('account'), qp.Constant('liabilities')),
-                      None, None, None, None, None, None),
-            select)
+        self.assertEqual(select, qp.Select([
+            qp.Target(qp.Column('date'), None),
+            qp.Target(qp.Column('flag'), None),
+            qp.Target(qp.Function('maxwidth', [
+                qp.Column('payee'),
+                qp.Constant(48)]), None),
+            qp.Target(qp.Function('maxwidth', [
+                qp.Column('narration'),
+                qp.Constant(80)]), None),
+            qp.Target(qp.Column('account'), None),
+            qp.Target(qp.Function('cost', [qp.Column('position')]), None),
+            qp.Target(qp.Function('cost', [qp.Column('balance')]), None),
+        ],
+        qp.From(qp.Equal(qp.Column('year'), qp.Constant(2014)), None, None, None),
+        qp.Match(qp.Column('account'), qp.Constant('liabilities')),
+        None, None, None, None, None))
 
 
 class TestTranslationBalance(CompileSelectBase):
@@ -775,46 +773,40 @@ class TestTranslationBalance(CompileSelectBase):
     def test_balance(self):
         balance = self.parse("BALANCES;")
         select = qc.transform_balances(balance)
-        self.assertEqual(
-            qp.Select([
-                qp.Target(qp.Column('account'), None),
-                qp.Target(qp.Function('sum', [qp.Column('position')]), None),
-                ], None, None, self.group_by, self.order_by,
-                      None, None, None, None),
-            select)
+        self.assertEqual(select, qp.Select([
+            qp.Target(qp.Column('account'), None),
+            qp.Target(qp.Function('sum', [
+                qp.Column('position')
+            ]), None),
+        ],
+        None, None, self.group_by, self.order_by, None, None, None))
 
     def test_balance_with_units(self):
         balance = self.parse("BALANCES AT cost;")
         select = qc.transform_balances(balance)
-        self.assertEqual(
-            qp.Select([
-                qp.Target(qp.Column('account'), None),
-                qp.Target(qp.Function('sum',
-                                      [qp.Function('cost',
-                                                   [qp.Column('position')])]), None)],
-                      None, None, self.group_by, self.order_by,
-                      None, None, None, None),
-            select)
+        self.assertEqual(select, qp.Select([
+            qp.Target(qp.Column('account'), None),
+            qp.Target(qp.Function('sum', [
+                qp.Function('cost', [
+                    qp.Column('position')
+                ])
+            ]), None)
+        ],
+        None, None, self.group_by, self.order_by, None, None, None))
 
     def test_balance_with_units_and_from(self):
         balance = self.parse("BALANCES AT cost FROM year = 2014;")
         select = qc.transform_balances(balance)
-        self.assertEqual(
-            qp.Select([
-                qp.Target(qp.Column('account'), None),
-                qp.Target(qp.Function('sum', [qp.Function('cost',
-                                                          [qp.Column('position')])]), None),
-                ],
-                      qp.From(qp.Equal(qp.Column('year'), qp.Constant(2014)),
-                              None, None, None),
-                      None,
-                      self.group_by,
-                      self.order_by,
-                      None, None, None, None),
-            select)
-
-
-class TestCompilePrint(CompileSelectBase):
+        self.assertEqual(select, qp.Select([
+            qp.Target(qp.Column('account'), None),
+            qp.Target(qp.Function('sum', [
+                qp.Function('cost', [
+                    qp.Column('position')
+                ])
+            ]), None),
+        ],
+        qp.From(qp.Equal(qp.Column('year'), qp.Constant(2014)), None, None, None),
+        None, self.group_by, self.order_by, None, None, None))
 
     def test_print(self):
         self.assertCompile(qc.EvalPrint(None), "PRINT;")
@@ -828,7 +820,3 @@ class TestCompilePrint(CompileSelectBase):
                         qc.EvalConstant(2014),
                     ]), None, None, None)),
             """PRINT FROM year = 2014;""")
-
-
-if __name__ == '__main__':
-    unittest.main()
