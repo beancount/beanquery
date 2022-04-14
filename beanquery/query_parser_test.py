@@ -16,8 +16,7 @@ def Select(targets, from_clause=None, where_clause=None, **kwargs):
                     order_by=None,
                     pivot_by=None,
                     limit=None,
-                    distinct=None,
-                    flatten=None)
+                    distinct=None)
     defaults.update(kwargs)
     return qp.Select(**defaults)
 
@@ -476,14 +475,6 @@ class TestSelectOptions(QueryParserTestBase):
     def test_limit_present(self):
         self.assertParse(
             "SELECT * LIMIT 45;", Select(qp.Wildcard(), limit=45))
-
-    def test_flatten(self):
-        self.assertParse(
-            "SELECT * FLATTEN;", Select(qp.Wildcard(), flatten=True))
-
-    def test_limit_and_flatten(self):
-        self.assertParse(
-            "SELECT * LIMIT 1 FLATTEN;", Select(qp.Wildcard(), limit=1, flatten=True))
 
     def test_limit_empty(self):
         with self.assertRaises(qp.ParseError):

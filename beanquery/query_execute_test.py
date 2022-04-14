@@ -1248,44 +1248,5 @@ class TestArithmeticFunctions(QueryBase):
             [(D("0"),)])
 
 
-
-class TestExecuteFlatten(QueryBase):
-
-    def test_flatten_results(self):
-        ## FIXME: We need some dedicated tests of flattening results.
-        pass
-
-    INPUT = """
-
-      plugin "beancount.plugins.auto_accounts"
-
-      2010-02-23 *
-        Assets:Something       5.00 USD
-        Assets:Something       2.00 CAD
-        Assets:Something       4 HOOL {531.20 USD}
-        Equity:Rest
-
-    """
-
-    @unittest.skip('FIXME: Bring this back in')
-    def test_flatten(self):
-        self.check_query(
-            self.INPUT,
-            """
-            SELECT account, sum(position)
-            WHERE account = 'Assets:Something'
-            GROUP BY account
-            FLATTEN;
-            """,
-            [
-                ('account', str),
-                ('sum_position', inventory.Inventory),
-                ],
-            [
-                ('Assets:Something',
-                 inventory.from_string("5.00 USD, 2.00 CAD, 4 HOOL {531.20 USD}")),
-                ])
-
-
 if __name__ == '__main__':
     unittest.main()
