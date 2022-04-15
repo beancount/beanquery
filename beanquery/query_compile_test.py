@@ -422,7 +422,7 @@ class TestCompileSelect(CompileSelectBase):
         # Test the wildcard expansion.
         query = self.compile("SELECT length(account), account as a, date;")
         self.assertEqual(
-            [qc.EvalTarget(qe.Function('length', [qe.AccountColumn()]), 'length_account', False),
+            [qc.EvalTarget(qe.Function('length', [qe.AccountColumn()]), 'length(account)', False),
              qc.EvalTarget(qe.AccountColumn(), 'a', False),
              qc.EvalTarget(qe.DateColumn(), 'date', False)],
             query.c_targets)

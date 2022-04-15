@@ -8,7 +8,6 @@ import datetime
 import enum
 import io
 import numbers
-import re
 
 import dateutil.parser
 
@@ -752,21 +751,20 @@ def get_expression_name(expr):
         return expr.name.lower()
 
     if isinstance(expr, Function):
-        names = [expr.fname.lower()]
-        for operand in expr.operands:
-            names.append(get_expression_name(operand))
-        return '_'.join(names)
+        operands = ', '.join(get_expression_name(operand) for operand in expr.operands)
+        return f'{expr.fname.lower()}({operands})'
 
     if isinstance(expr, Constant):
-        return 'c{}'.format(re.sub('[^a-z0-9]+', '_', str(expr.value)))
+        if isinstance(expr.value, str):
+            return repr(expr.value)
+        return str(expr.value)
 
     if isinstance(expr, UnaryOp):
-        return '_'.join([type(expr).__name__.lower(),
-                         get_expression_name(expr.operand)])
+        operand = get_expression_name(expr.operand)
+        return f'{type(expr).__name__.lower()}({operand})'
 
     if isinstance(expr, BinaryOp):
-        return '_'.join([type(expr).__name__.lower(),
-                         get_expression_name(expr.left),
-                         get_expression_name(expr.right)])
+        operands = ', '.join(get_expression_name(operand) for operand in (expr.left, expr.right))
+        return f'{type(expr).__name__.lower()}({operands})'
 
     raise NotImplementedError

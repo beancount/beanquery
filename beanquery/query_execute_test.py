@@ -574,7 +574,7 @@ class TestExecuteNonAggregatedQuery(QueryBase):
             """,
             [
                 ('account', str),
-                ('length_account', int),
+                ('length(account)', int),
                 ],
             [
                 ('Expenses:Restaurant', 19),
@@ -645,8 +645,8 @@ class TestExecuteAggregatedQuery(QueryBase):
             SELECT first(account), last(account);
             """,
             [
-                ('first_account', str),
-                ('last_account', str),
+                ('first(account)', str),
+                ('last(account)', str),
                 ],
             [
                 ('Assets:Bank:Checking', 'Expenses:Restaurant'),
@@ -719,7 +719,7 @@ class TestExecuteAggregatedQuery(QueryBase):
             GROUP BY account;
             """,
             [
-                ('count_position', int),
+                ('count(position)', int),
                 ],
             [
                 (1,),
@@ -941,7 +941,7 @@ class TestExecuteAggregatedQuery(QueryBase):
             """,
             [
                 ('account', str),
-                ('sum_number', Decimal),
+                ('sum(number)', Decimal),
             ],
             [
                 ('Expenses:Bar', D(2.0)),

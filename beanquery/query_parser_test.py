@@ -619,21 +619,23 @@ class TestExpressionName(QueryParserTestBase):
 
     def test_function(self):
         name = qp.get_expression_name(qp.Function('length', [qp.Column('date')]))
-        self.assertEqual(name, 'length_date')
+        self.assertEqual(name, 'length(date)')
 
     def test_constant(self):
         name = qp.get_expression_name(qp.Constant(17))
-        self.assertEqual(name, 'c17')
+        self.assertEqual(name, '17')
         name = qp.get_expression_name(qp.Constant(datetime.date(2014, 1, 1)))
-        self.assertEqual(name, 'c2014_01_01')
+        self.assertEqual(name, '2014-01-01')
+        name = qp.get_expression_name(qp.Constant('abc'))
+        self.assertEqual(name, "'abc'")
 
     def test_unary(self):
         name = qp.get_expression_name(qp.Not(qp.Column('account')))
-        self.assertEqual(name, 'not_account')
+        self.assertEqual(name, 'not(account)')
 
     def test_binary(self):
-        name = qp.get_expression_name(qp.And(qp.Column('account'), qp.Column('date')))
-        self.assertEqual(name, 'and_account_date')
+        name = qp.get_expression_name(qp.And(qp.Column('a'), qp.Column('b')))
+        self.assertEqual(name, 'and(a, b)')
 
     def test_unknown(self):
         with self.assertRaises(RuntimeError):
