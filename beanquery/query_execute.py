@@ -246,13 +246,6 @@ def execute_query(query, entries, options_map):
                     for target in query.c_targets
                     if target.name is not None]
 
-    # Create a class for each final result.
-    # pylint: disable=invalid-name
-    ResultRow = collections.namedtuple('ResultRow',
-                                       [target.name
-                                        for target in query.c_targets
-                                        if target.name is not None])
-
     # Pre-compute lists of the expressions to evaluate.
     group_indexes = (set(query.group_indexes)
                      if query.group_indexes is not None
@@ -386,15 +379,15 @@ def execute_query(query, entries, options_map):
             # smaller than anything else.
             rows.sort(key=nullitemgetter(*indexes), reverse=reverse)
 
-    # Extract final results, in sorted order.
-    result_rows = [ResultRow._make(row[index] for index in result_indexes) for row in rows]
+    # Convert results into list of tuples.
+    rows = [tuple(row[i] for i in result_indexes) for row in rows]
 
     # Apply distinct.
     if query.distinct:
-        result_rows = list(misc_utils.uniquify(result_rows))
+        rows = list(misc_utils.uniquify(rows))
 
     # Apply limit.
     if query.limit is not None:
-        result_rows = result_rows[:query.limit]
+        rows = rows[:query.limit]
 
-    return result_types, result_rows
+    return result_types, rows
