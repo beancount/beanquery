@@ -228,6 +228,9 @@ def create_row_context(entries, options_map):
     return context
 
 
+Column = collections.namedtuple('Column', 'name dtype')
+
+
 def execute_query(query, entries, options_map):
     """Given a compiled select statement, execute the query.
 
@@ -242,7 +245,7 @@ def execute_query(query, entries, options_map):
           'result_types'.
     """
     # Figure out the result types that describe what we return.
-    result_types = [(target.name, target.c_expr.dtype)
+    result_types = [Column(target.name, target.c_expr.dtype)
                     for target in query.c_targets
                     if target.name is not None]
 
