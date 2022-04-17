@@ -536,6 +536,10 @@ class BQLShell(DispatchingShell):
         """
         return self.on_Select(balance)
 
+    def on_CreateTable(self, statement):
+        statement = query_compile.compile(statement, None, None, None)
+        query_execute.execute_create_table(statement)
+
     def help_targets(self):
         template = textwrap.dedent("""
 

@@ -956,6 +956,9 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
         # we got a table!
         from beanquery import tables
         table = tables.get(select.from_clause.name)
+        if table is None:
+            breakpoint()
+            raise CompilationError(f'unknown table {select.from_clause.name!r}')
         targets_environ = postings_environ = entries_environ = table
         # FIXME!!
         c_from = EvalFrom(EvalConstant(True), None, None, None)
@@ -1100,6 +1103,12 @@ def compile_print(print_stmt, env_entries):
     return EvalPrint(c_from)
 
 
+EvalCreateTable = collections.namedtuple('EvalCreateTable', 'name columns uri')
+
+def compile_create_table(statement):
+    return EvalCreateTable(*statement)
+
+
 # pylint: disable=redefined-builtin
 def compile(statement, targets_environ, postings_environ, entries_environ):
     """Prepare an AST any of the statement into an executable statement.
@@ -1124,5 +1133,7 @@ def compile(statement, targets_environ, postings_environ, entries_environ):
         return compile_select(statement, targets_environ, postings_environ, entries_environ)
     if isinstance(statement, query_parser.Print):
         return compile_print(statement, entries_environ)
+    if isinstance(statement, query_parser.CreateTable):
+        return compile_create_table(statement)
 
-    raise CompilationError("Cannot compile a statement of type '{}'".format(type(statement)))
+    raise NotImplementedError

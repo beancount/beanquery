@@ -456,3 +456,13 @@ def flatten_results(result_types, result_rows):
                     for name, result_type in result_types]
 
     return output_types, output_rows
+
+
+def execute_create_table(stmt):
+    from beanquery import tables
+    from beanquery import csvtable
+
+    import urllib.parse
+
+    handler = tables.SCHEMES.get(urllib.parse.urlparse(stmt.uri).scheme)
+    table = handler(stmt.name, stmt.uri, stmt.columns)

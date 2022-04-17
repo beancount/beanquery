@@ -1,12 +1,24 @@
 from beanquery import query_env
 
+SCHEMES = {}
+
 
 class Table:
-    columns = {}
+    scheme = None
     functions = {}
+
+    def __init__(self):
+        self.columns = {}
 
     def __iter__(self):
         raise NotImplementedError
+
+    def __init_subclass__(cls):
+        SCHEMES[cls.scheme] = cls
+
+    @property
+    def wildcard_columns(self):
+        return self.columns.keys()
 
     def get_column(self, name):
         """Return a column accessor for the given named column.
@@ -46,3 +58,7 @@ TABLES = {
 
 def get(name):
     return TABLES.get(name)
+
+
+def register(name, table):
+    TABLES[name] = table

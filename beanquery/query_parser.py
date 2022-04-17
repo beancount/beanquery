@@ -19,7 +19,8 @@ from beancount.core.number import D
 from beancount.utils.misc_utils import cmptuple
 
 
-# pylint: disable=invalid-name
+# A CREATE TABLE statement.
+CreateTable = collections.namedtuple('CreateTable', 'name columns source')
 
 # A 'select' query action.
 #
@@ -210,6 +211,7 @@ class Lexer:
         'BALANCES', 'JOURNAL', 'PRINT', 'AT', 'GROUP', 'BY', 'HAVING',
         'ORDER', 'DESC', 'ASC', 'PIVOT', 'LIMIT', 'FLATTEN', 'DISTINCT',
         'AND', 'OR', 'NOT', 'IN', 'IS', 'TRUE', 'FALSE', 'NULL',
+        'CREATE', 'TABLE', 'USING',
     }
 
     # List of valid tokens from the lexer.
@@ -731,6 +733,7 @@ class Parser(SelectParser):
                   | balances_statement
                   | journal_statement
                   | print_statement
+                  | create_statement
         """
         p[0] = p[1]
 
@@ -765,6 +768,31 @@ class Parser(SelectParser):
         print_statement : PRINT from
         """
         p[0] = Print(p[2])
+
+    def p_id_type_list(self, p):
+        """
+        id_type_list : ID ID
+        """
+        p[0] = [(p[1], p[2])]
+
+    def p_id_type_list_many(self, p):
+        """
+        id_type_list : id_type_list COMMA id_type_list
+        """
+        p[0] = p[1] + p[3]
+
+    def p_create_statement(self, p):
+        """
+        create_statement : CREATE TABLE ID USING STRING
+        """
+        p[0] = CreateTable(p[3], None, p[5])
+
+    def p_create_statement_columns(self, p):
+        """
+        create_statement : CREATE TABLE ID LPAREN id_type_list RPAREN USING STRING
+        """
+        p[0] = CreateTable(p[3], p[5], p[8])
+
 
 
 def get_expression_name(expr):
