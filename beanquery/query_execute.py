@@ -149,7 +149,7 @@ def execute_query(query):
             names = [f'{columns[col1].name}/{columns[col2].name}'] + [f'{key}/{col.name}' for key, col in it]
         else:
             names = [f'{columns[col1].name}/{columns[col2].name}'] + [f'{key}' for key in keys]
-        dtypes = ([columns[col1].dtype] + [col.dtype for col in other(columns)] * len(keys))
+        dtypes = [columns[col1].dtype] + [col.dtype for col in other(columns)] * len(keys)
         columns = [Column(name, dtype) for name, dtype in zip(names, dtypes)]
 
         # Populate the pivoted table.
