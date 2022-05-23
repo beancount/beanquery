@@ -20,7 +20,6 @@ from beancount.core import prices
 from beancount.utils import misc_utils
 
 from beanquery import query_compile
-from beanquery import query_env
 
 
 def filter_entries(c_from, entries, options_map, context):
@@ -124,6 +123,8 @@ class Allocator:
 class RowContext:
     """A dumb container for information used by a row expression."""
 
+    rowid = None
+
     # The current posting being evaluated.
     posting = None
 
@@ -151,17 +152,11 @@ class RowContext:
     # A storage area for computing aggregate expression.
     store = None
 
-
-def uses_balance_column(c_expr):
-    """Return true if the expression accesses the special 'balance' column.
-
-    Args:
-      c_expr: A compiled expression tree (an EvalNode node).
-    Returns:
-      A boolean, true if the expression contains a BalanceColumn node.
-    """
-    return ((isinstance(c_expr, query_compile.EvalColumn) and type(c_expr).__name__ == 'balance') or
-            any(uses_balance_column(c_node) for c_node in c_expr.childnodes()))
+    # The context hash is used in caching column accessor functions.
+    # Instead than hashing the row context content, use the rowid as
+    # hash.
+    def __hash__(self):
+        return self.rowid
 
 
 class NullType:
@@ -216,7 +211,9 @@ def nullitemgetter(item, *items):
 def create_row_context(entries, options_map):
     """Create the context container which we will use to evaluate rows."""
     context = RowContext()
+    context.rowid = 0
     context.balance = inventory.Inventory()
+    context.balance_update_rowid = -1
 
     # Initialize some global properties for use by some of the accessors.
     context.options_map = options_map
@@ -311,12 +308,6 @@ def execute_select(query, entries, options_map):
                       if c_target.name]
     order_spec = query.order_spec
 
-    # Figure out if we need to compute balance.
-    uses_balance = any(uses_balance_column(c_expr)
-                       for c_expr in itertools.chain(
-                               [c_target.c_expr for c_target in query.c_targets],
-                               [query.c_where] if query.c_where else []))
-
     context = create_row_context(entries, options_map)
 
     # Filter the entries using the FROM clause.
@@ -338,15 +329,10 @@ def execute_select(query, entries, options_map):
         for entry in misc_utils.filter_type(filt_entries, data.Transaction):
             context.entry = entry
             for posting in entry.postings:
+                context.rowid += 1
                 context.posting = posting
                 if c_where is None or c_where(context):
-                    # Compute the balance.
-                    if uses_balance:
-                        context.balance.add_position(posting)
-
-                    # Evaluate all the values.
                     values = [c_expr(context) for c_expr in c_target_exprs]
-
                     rows.append(values)
     else:
         # This is an aggregated query.
@@ -375,15 +361,12 @@ def execute_select(query, entries, options_map):
         for entry in misc_utils.filter_type(filt_entries, data.Transaction):
             context.entry = entry
             for posting in entry.postings:
+                context.rowid += 1
                 context.posting = posting
                 if c_where is None or c_where(context):
-                    # Compute the balance.
-                    if uses_balance:
-                        context.balance.add_position(posting)
 
                     # Compute the non-aggregate expressions.
-                    row_key = tuple(c_expr(context)
-                                    for c_expr in c_nonaggregate_exprs)
+                    row_key = tuple(c_expr(context) for c_expr in c_nonaggregate_exprs)
 
                     # Get an appropriate store for the unique key of this row.
                     try:
