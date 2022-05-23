@@ -14,6 +14,7 @@ import decimal
 import re
 import textwrap
 
+from functools import lru_cache as cache
 from decimal import Decimal
 
 from beancount.core.number import ZERO
@@ -969,8 +970,15 @@ def weight(context):
 
 
 @column(inventory.Inventory)
+@cache(maxsize=1)
 def balance(context):
     """The balance for the posting. These can be summed into inventories."""
+    # Caching protects against multiple balance updates per row when
+    # the columns appears more than once in the execurted query. The
+    # rowid in the row context guarantees that otherwise identical
+    # rows do not hit the cache and thus that the balance is correctly
+    # updated.
+    context.balance.add_position(context.posting)
     return copy.copy(context.balance)
 
 
