@@ -707,7 +707,7 @@ class FilterEntriesEnvironment(query_compile.CompilationEnvironment):
                 __call__ = staticmethod(func)
             Col.__name__ = name or func.__name__
             Col.__doc__ = help or func.__doc__
-            cls.columns[Col.__name__] = Col
+            cls.columns[Col.__name__] = Col()
             return func
         return decorator
 
@@ -996,5 +996,5 @@ class TargetsEnvironment(FilterPostingsEnvironment):
 def Column(name):
     column = TargetsEnvironment.columns.get(name)
     if column is not None:
-        return column()
+        return column
     raise KeyError(name)
