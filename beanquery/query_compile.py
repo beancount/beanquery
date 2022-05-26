@@ -408,7 +408,7 @@ class CompilationEnvironment:
     column accessors specific to the particular row objects that we will access.
     """
     # The name of the context.
-    context_name = None
+    name = None
 
     # Maps of names to evaluators for columns and functions.
     columns = None
@@ -419,11 +419,10 @@ class CompilationEnvironment:
         Args:
           name: A string, the name of the column to access.
         """
-        try:
-            return self.columns[name]()
-        except KeyError as exc:
-            raise CompilationError("Invalid column name '{}' in {} context.".format(
-                name, self.context_name)) from exc
+        column = self.columns.get(name)
+        if column is not None:
+            return column
+        raise CompilationError(f'Invalid column "{name}" in {self.name}')
 
     def get_function(self, name, operands):
         """Return a function accessor for the given named function.
@@ -436,7 +435,7 @@ class CompilationEnvironment:
             return func(operands)
 
         sig = '{}({})'.format(name, ', '.join(operand.dtype.__name__ for operand in operands))
-        raise CompilationError(f'Unknown function "{sig}" in {self.context_name}')
+        raise CompilationError(f'Unknown function "{sig}" in {self.name}')
 
 
 class AttributeColumn(EvalColumn):

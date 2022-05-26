@@ -676,7 +676,7 @@ def generate_env_attributes(wrapper, fields, aggregates=False):
             signature = '\n'.join(_format(func) for func in field)
             doc = field[0].__doc__ or ''
         else:
-            signature = '{} [{}]'.format(name, field().dtype.__name__.lower())
+            signature = '{} [{}]'.format(name, field.dtype.__name__.lower())
             doc = field.__doc__ or ''
         entries.append((name, signature, wrapper.fill(re.sub(r'[ \n\t]+', ' ', doc))))
 
