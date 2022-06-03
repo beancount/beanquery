@@ -827,7 +827,9 @@ def compile_order_by(order_by, c_targets, environ):
     # References by name are converted to indexes. New expressions are
     # inserted into the list of targets as invisible targets.
     targets_name_map = {target.name: index for index, target in enumerate(c_targets)}
-    for column, descending in order_by:
+    for spec in order_by:
+        column = spec.column
+        descending = spec.ordering
         index = None
 
         # Process target references by index.
