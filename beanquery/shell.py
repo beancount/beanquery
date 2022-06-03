@@ -206,16 +206,6 @@ class DispatchingShell(cmd.Cmd):
             else:
                 print("Invalid number of arguments.", file=self.outfile)
 
-    def do_lex(self, line):
-        "Just run the lexer on the following command and print the output."
-        try:
-            for tok in self.parser.tokenize(line):
-                print(tok)
-        except query_parser.ParseError as exc:
-            print(exc, file=self.outfile)
-
-    do_tokenize = do_lex
-
     def do_parse(self, line):
         "Just run the parser on the following command and print the output."
         print(f"INPUT: {line!r}", file=self.outfile)

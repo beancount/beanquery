@@ -44,25 +44,6 @@ class QueryParserTestBase(unittest.TestCase):
         self.assertEqual(expr.from_clause, expected)
 
 
-class TestLexer(unittest.TestCase):
-
-    def setUp(self):
-        self.parser = qp.Parser()
-
-    def tokenize(self, string):
-        return [(tok.type, tok.value) for tok in self.parser.tokenize(string)]
-
-    def test_tokens(self):
-        self.assertEqual(self.tokenize("id42"), [('ID', 'id42')])
-        self.assertEqual(self.tokenize("ab_"), [('ID', 'ab_')])
-        self.assertEqual(self.tokenize("42"), [('INTEGER', 42)])
-        self.assertEqual(self.tokenize("4.2"), [('DECIMAL', D('4.2'))])
-        self.assertEqual(self.tokenize("'abc'"), [('STRING', 'abc')])
-        self.assertEqual(self.tokenize("'1'"), [('STRING', '1')])
-        self.assertEqual(self.tokenize("1970-01-01"), [('DATE', datetime.date(1970, 1, 1))])
-        with self.assertRaises(qp.ParseError):
-            self.tokenize(".foo")
-
 class TestParseSelect(QueryParserTestBase):
 
     def test_select(self):
@@ -648,3 +629,7 @@ class TestRepr(unittest.TestCase):
     def test_ordering(self):
         self.assertEqual(repr(qp.Ordering.ASC), 'Ordering.ASC')
         self.assertEqual(repr(qp.Ordering.DESC), 'Ordering.DESC')
+
+    def test_ast_node(self):
+        self.assertEqual(repr(qp.Constant(1)), 'Constant(value=1)')
+        self.assertEqual(repr(qp.Not(qp.Constant(False))), 'Not(operand=Constant(value=False))')

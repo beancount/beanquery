@@ -1,0 +1,294 @@
+@@grammar :: BQL
+@@parseinfo :: True
+@@ignorecase :: True
+@@keyword :: 'AND' 'AS' 'ASC' 'BY' 'DESC' 'DISTINCT' 'FALSE' 'FROM'
+    'GROUP' 'HAVING' 'IN' 'IS' 'LIMIT' 'NOT' 'OR' 'ORDER' 'PIVOT'
+    'SELECT' 'TRUE' 'WHERE'
+@@keyword :: 'BALANCES' 'CLEAR' 'CLOSE' 'JOURNAL' 'ON' 'OPEN' 'PRINT'
+@@comments :: /(\/\*([^*]|[\r\n]|(\*+([^*\/]|[\r\n])))*\*+\/)/
+@@eol_comments :: /\;[^\n]*?$/
+
+bql
+    = @:statement [';'] $
+    ;
+
+statement
+    =
+    | select
+    | balances
+    | journal
+    | print
+    ;
+
+select::Select
+    = 'SELECT' ['DISTINCT' distinct:`True`] targets:(','.{ target }+ | wildcard)
+      ['FROM' from_clause:(subselect | from)]
+      ['WHERE' where_clause:expression]
+      ['GROUP' 'BY' group_by:groupby]
+      ['ORDER' 'BY' order_by:','.{order}+]
+      ['PIVOT' 'BY' pivot_by:pivotby]
+      ['LIMIT' limit:integer]
+    ;
+
+subselect
+    = '(' @:select ')'
+    ;
+
+from::From
+    = expression:[expression]
+      ['OPEN' ('ON' open:date | {} open:`True`)]
+      ['CLOSE' ('ON' close:date | {} close:`True`)]
+      ['CLEAR' clear:`True`]
+    ;
+
+table::Table
+    = '#' name:identifier
+    ;
+
+groupby::GroupBy
+    = columns:','.{ (integer | expression) }+ ['HAVING' having:expression]
+    ;
+
+order::OrderBy
+    = column:(integer | expression) ordering:ordering
+    ;
+
+ordering
+    = ['DESC' | 'ASC']
+    ;
+
+pivotby::PivotBy
+    = columns+:(integer | column) ',' columns+:(integer | column)
+    ;
+
+target::Target
+    = expression:expression ['AS' name:identifier]
+    ;
+
+expression
+    =
+    | disjunction
+    | conjunction
+    ;
+
+disjunction
+    =
+    | or
+    | conjunction
+    ;
+
+or::Or::BinaryOp
+    = left:conjunction 'OR' right:conjunction
+    ;
+
+conjunction
+    =
+    | and
+    | inversion
+    ;
+
+and::And::BinaryOp
+    = left:inversion 'AND' right:inversion
+    ;
+
+inversion
+    =
+    | not
+    | comparison
+    ;
+
+not::Not::UnaryOp
+    = 'NOT' operand:inversion
+    ;
+
+comparison
+    =
+    | lt
+    | lte
+    | gt
+    | gte
+    | eq
+    | neq
+    | in
+    | match
+    | isnull
+    | isnotnull
+    | sum
+    ;
+
+lt::Less::BinaryOp
+    = left:sum '<' right:sum
+    ;
+
+lte::LessEq::BinaryOp
+    = left:sum '<=' right:sum
+    ;
+
+gt::Greater::BinaryOp
+    = left:sum '>' right:sum
+    ;
+
+gte::GreaterEq::BinaryOp
+    = left:sum '>=' right:sum
+    ;
+
+eq::Equal::BinaryOp
+    = left:sum '=' right:sum
+    ;
+
+neq::NotEqual::BinaryOp
+    = left:sum '!=' right:sum
+    ;
+
+in::Contains::BinaryOp
+    = left:sum 'IN' right:sum
+    ;
+
+match::Match::BinaryOp
+    = left:sum '~' right:sum
+    ;
+
+isnull::IsNull::UnaryOp
+    = operand:sum 'IS' 'NULL'
+    ;
+
+isnotnull::IsNotNull::UnaryOp
+    = operand:sum 'IS' 'NOT' 'NULL'
+    ;
+
+sum
+    =
+    | add
+    | sub
+    | term
+    ;
+
+add::Add::BinaryOp
+    = left:sum '+' ~ right:term
+    ;
+
+sub::Sub::BinaryOp
+    = left:sum '-' ~ right:term
+    ;
+
+term
+    =
+    | mul
+    | div
+    | factor
+    ;
+
+mul::Mul::BinaryOp
+    = left:term '*' ~ right:factor
+    ;
+
+div::Div::BinaryOp
+    = left:term '/' ~ right:factor
+    ;
+
+factor
+    =
+    | unary
+    | '(' @:expression ')'
+    ;
+
+unary
+    =
+    | uplus
+    | uminus
+    | literal
+    ;
+
+uplus
+    = '+' @:literal
+    ;
+
+uminus::Neg::UnaryOp
+    = '-' operand:factor
+    ;
+
+literal
+    =
+    | select
+    | function
+    | constant
+    | column
+    ;
+
+function::Function
+    = fname:identifier '(' operands:','.{ expression } ')'
+    ;
+
+column::Column
+    = name:identifier
+    ;
+
+value
+    =
+    | date
+    | decimal
+    | integer
+    | string
+    | null
+    | boolean
+    ;
+
+constant::Constant
+    = value:(value | list)
+    ;
+
+list
+    = '(' &( value ',') @:','.{ (value | ()) }+ ')'
+    ;
+
+@name
+identifier
+    = /[a-zA-Z_][a-zA-Z0-9_]*/
+    ;
+
+wildcard
+    = '*'
+    ;
+
+string
+    = /(\"[^\"]*\"|\'[^\']*\')/
+    ;
+
+boolean
+    = 'TRUE' | 'FALSE'
+    ;
+
+null
+    = 'NULL'
+    ;
+
+integer
+    = /\d+/
+    ;
+
+decimal
+    = /([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)/
+    ;
+
+date
+    = /(\d\d\d\d-\d\d-\d\d|\#(?:\"[^\"]*\"|\'[^\']*\'))/
+    ;
+
+balances::Balances
+    = 'BALANCES'
+      ['AT' summary_func:identifier]
+      ['FROM' from_clause:from]
+      ['WHERE' where_clause:expression]
+    ;
+
+journal::Journal
+    = 'JOURNAL'
+      [account:string]
+      ['AT' summary_func:identifier]
+      ['FROM' from_clause:from]
+    ;
+
+print::Print
+    = 'PRINT'
+      ['FROM' from_clause:from]
+    ;
