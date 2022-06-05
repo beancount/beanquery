@@ -9,6 +9,7 @@ disable=
   design,
   fixme,
   invalid-name,
+  isinstance-second-argument-not-valid-type,
   locally-disabled,
   missing-class-docstring,
   missing-docstring,
