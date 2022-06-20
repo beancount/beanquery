@@ -276,6 +276,7 @@ def contains_(x, y):
 
 _comparisons = [
     (query_parser.Equal, operator.eq),
+    (query_parser.NotEqual, operator.ne),
     (query_parser.Greater, operator.gt),
     (query_parser.GreaterEq, operator.ge),
     (query_parser.Less, operator.lt),
