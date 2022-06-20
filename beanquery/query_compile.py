@@ -11,6 +11,7 @@ import collections
 import copy
 import datetime
 import re
+import numbers
 import operator
 from decimal import Decimal
 
@@ -484,6 +485,13 @@ def compile_expression(expr, environ):
             # therefore it gets special threatment here.
             return EvalCoalesce(operands)
         return environ.get_function(expr.fname, operands)
+
+    if isinstance(expr, query_parser.Neg):
+        # Optimization: when the argument is a numeric constant,
+        # rewrite the constant instead than emitting an unary
+        # operation.
+        if isinstance(expr.operand, query_parser.Constant) and isinstance(expr.operand.value, numbers.Number):
+            return EvalConstant(-expr.operand.value)
 
     if isinstance(expr, query_parser.UnaryOp):
         operand = compile_expression(expr.operand, environ)
