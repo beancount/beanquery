@@ -7,7 +7,6 @@ import collections
 import datetime
 import enum
 import io
-import numbers
 
 import dateutil.parser
 
@@ -506,9 +505,7 @@ class SelectParser(Lexer):
 
     def p_expression_uminus(self, p):
         "expression : MINUS expression %prec UMINUS"
-        # Optimization: if the argument is a numeric constant, rewrite
-        # the constant instead than emitting a unary operation.
-        p[0] = Constant(-p[2].value) if isinstance(p[2], Constant) and isinstance(p[2].value, numbers.Number) else Neg(p[2])
+        p[0] = Neg(p[2])
 
     def p_expression_uplus(self, p):
         "expression : PLUS expression %prec UPLUS"

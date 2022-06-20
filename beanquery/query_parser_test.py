@@ -176,7 +176,7 @@ class TestParseSelect(QueryParserTestBase):
         self.assertParseTarget("SELECT 2 - 3;", qp.Sub(qp.Constant(2), qp.Constant(3)))
         self.assertParseTarget("SELECT 2-3;", qp.Sub(qp.Constant(2), qp.Constant(3)))
         self.assertParseTarget("SELECT +2;", qp.Constant(2))
-        self.assertParseTarget("SELECT -2;", qp.Constant(-2))
+        self.assertParseTarget("SELECT -2;", qp.Neg(qp.Constant(2)))
         # silly, fails at compile time
         self.assertParseTarget("SELECT -'abc';", qp.Neg(qp.Constant('abc')))
 
