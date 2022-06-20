@@ -141,13 +141,12 @@ class TestParseSelect(QueryParserTestBase):
     def test_expressions(self):
         # comparison operators
         self.assertParseTarget("SELECT a = 42;", qp.Equal(qp.Column('a'), qp.Constant(42)))
-        self.assertParseTarget("SELECT a != 42;", qp.Not(qp.Equal(qp.Column('a'), qp.Constant(42))))
+        self.assertParseTarget("SELECT a != 42;", qp.NotEqual(qp.Column('a'), qp.Constant(42)))
         self.assertParseTarget("SELECT a > 42;", qp.Greater(qp.Column('a'), qp.Constant(42)))
         self.assertParseTarget("SELECT a >= 42;", qp.GreaterEq(qp.Column('a'), qp.Constant(42)))
         self.assertParseTarget("SELECT a < 42;", qp.Less(qp.Column('a'), qp.Constant(42)))
         self.assertParseTarget("SELECT a <= 42;", qp.LessEq(qp.Column('a'), qp.Constant(42)))
         self.assertParseTarget("SELECT a ~ 'abc';", qp.Match(qp.Column('a'), qp.Constant('abc')))
-        self.assertParseTarget("SELECT a != 42;", qp.Not(qp.Equal(qp.Column('a'), qp.Constant(42))))
         self.assertParseTarget("SELECT not a;", qp.Not(qp.Column('a')))
         self.assertParseTarget("SELECT a IS NULL;", qp.IsNull(qp.Column('a')))
         self.assertParseTarget("SELECT a IS NOT NULL;", qp.IsNotNull(qp.Column('a')))
@@ -193,15 +192,15 @@ class TestParseSelect(QueryParserTestBase):
 
     def test_complex_expressions(self):
         self.assertParseTarget(
-            "SELECT a != (b != (42 AND 17));",
-            qp.Not(qp.Equal(
-                qp.Column('a'),
-                qp.Not(
-                    qp.Equal(
+            "SELECT NOT a = (b != (42 AND 17));",
+            qp.Not(
+                qp.Equal(
+                    qp.Column('a'),
+                    qp.NotEqual(
                         qp.Column('b'),
                         qp.And(
                             qp.Constant(42),
-                            qp.Constant(17)))))))
+                            qp.Constant(17))))))
 
 
 class TestSelectPrecedence(QueryParserTestBase):
@@ -216,7 +215,7 @@ class TestSelectPrecedence(QueryParserTestBase):
         self.assertParseTarget(
             "SELECT a = 2 AND b != 3;",
             qp.And(qp.Equal(qp.Column('a'), qp.Constant(2)),
-                   qp.Not(qp.Equal(qp.Column('b'), qp.Constant(3)))))
+                   qp.NotEqual(qp.Column('b'), qp.Constant(3))))
 
         self.assertParseTarget(
             "SELECT not a AND b;",

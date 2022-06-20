@@ -168,6 +168,7 @@ class Or(BinaryOp): pass
 
 # Equality and inequality comparison operators.
 class Equal(BinaryOp): pass
+class NotEqual(BinaryOp): pass
 class Greater(BinaryOp): pass
 class GreaterEq(BinaryOp): pass
 class Less(BinaryOp): pass
@@ -543,7 +544,7 @@ class SelectParser(Lexer):
 
     def p_expression_ne(self, p):
         "expression : expression NE expression"
-        p[0] = Not(Equal(p[1], p[3]))
+        p[0] = NotEqual(p[1], p[3])
 
     def p_expression_gt(self, p):
         "expression : expression GT expression"
