@@ -440,27 +440,6 @@ class CompilationEnvironment:
         raise CompilationError(f'Unknown function "{sig}" in {self.name}')
 
 
-class AttributeColumn(EvalColumn):
-    def __init__(self, name):
-        super().__init__(object)
-        self.name = name
-
-    def __call__(self, row):
-        return getattr(row, self.name)
-
-
-class ResultSetEnvironment(CompilationEnvironment):
-    """An execution context that provides access to attributes from a result set.
-    """
-    context_name = 'sub-query'
-
-    def get_column(self, name):
-        """Override the column getter to provide a single attribute getter.
-        """
-        # FIXME: How do we figure out the data type here? We need the context.
-        return AttributeColumn(name)
-
-
 def compile_expression(expr, environ):
     """Bind an expression to its execution context.
 
