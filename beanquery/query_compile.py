@@ -27,6 +27,10 @@ SUPPORT_IMPLICIT_GROUPBY = True
 class CompilationError(Exception):
     """A compiler/interpreter error."""
 
+    def __init__(self, message, ast=None):
+        super().__init__(message)
+        self.parseinfo = ast.parseinfo if ast is not None else None
+
 
 class EvalNode:
     __slots__ = ('dtype',)
@@ -408,35 +412,9 @@ class CompilationEnvironment:
     """Base class for all compilation contexts. A compilation context provides
     column accessors specific to the particular row objects that we will access.
     """
-    # The name of the context.
-    name = None
-
     # Maps of names to evaluators for columns and functions.
-    columns = None
-    functions = None
-
-    def get_column(self, name):
-        """Return a column accessor for the given named column.
-        Args:
-          name: A string, the name of the column to access.
-        """
-        column = self.columns.get(name)
-        if column is not None:
-            return column
-        raise CompilationError(f'Invalid column "{name}" in {self.name}')
-
-    def get_function(self, name, operands):
-        """Return a function accessor for the given named function.
-        Args:
-          name: A string, the name of the function to access.
-        """
-
-        func = types.function_lookup(self.functions, name, operands)
-        if func is not None:
-            return func(operands)
-
-        sig = '{}({})'.format(name, ', '.join(operand.dtype.__name__ for operand in operands))
-        raise CompilationError(f'Unknown function "{sig}" in {self.name}')
+    columns = {}
+    functions = {}
 
 
 def compile_expression(expr, environ):
@@ -453,7 +431,10 @@ def compile_expression(expr, environ):
         return None
 
     if isinstance(expr, query_parser.Column):
-        return environ.get_column(expr.name)
+        column = environ.columns.get(expr.name)
+        if column is not None:
+            return column
+        raise CompilationError(f'column "{expr.name}" does not exist', expr)
 
     if isinstance(expr, query_parser.Function):
         operands = [compile_expression(operand, environ) for operand in expr.operands]
@@ -462,7 +443,11 @@ def compile_expression(expr, environ):
             # not really fit our model for function evaluation,
             # therefore it gets special threatment here.
             return EvalCoalesce(operands)
-        function = environ.get_function(expr.fname, operands)
+        function = types.function_lookup(environ.functions, expr.fname, operands)
+        if function is None:
+            sig = '{}({})'.format(expr.fname, ', '.join(f'{operand.dtype.__name__.lower()}' for operand in operands))
+            raise CompilationError(f'no function matches "{sig}" name and argument types', expr)
+        function = function(operands)
         # Constants folding.
         if all(isinstance(operand, EvalConstant) for operand in operands) and function.pure:
             return EvalConstant(function(None), function.dtype)
@@ -506,7 +491,7 @@ def compile_expression(expr, environ):
                 name = types.MAP.get(target)
                 if name is None:
                     break
-                left = environ.get_function(name, [left])
+                left = types.function_lookup(environ.functions, name, [left])([left])
                 continue
             if right.dtype is object and left.dtype is not object:
                 target = left.dtype
@@ -518,7 +503,7 @@ def compile_expression(expr, environ):
                 name = types.MAP.get(target)
                 if name is None:
                     break
-                right = environ.get_function(name, [right])
+                right = types.function_lookup(environ.functions, name, [right])([right])
                 continue
 
             # Failure.

@@ -703,7 +703,6 @@ class Max(query_compile.EvalAggregator):
 
 
 class FilterEntriesEnvironment(query_compile.CompilationEnvironment):
-    name = 'FROM clause'
     columns = {}
     functions = FUNCTIONS.copy()
 
@@ -821,7 +820,6 @@ def links(context):
 
 
 class FilterPostingsEnvironment(FilterEntriesEnvironment):
-    name = 'WHERE clause'
     columns = FilterEntriesEnvironment.columns.copy()
     functions = FUNCTIONS.copy()
 
@@ -976,7 +974,6 @@ def balance(context):
 class TargetsEnvironment(FilterPostingsEnvironment):
     """An execution context that provides access to attributes on Postings.
     """
-    name = 'SELECT list'
     functions = FilterPostingsEnvironment.functions.copy()
     functions.update(AGGREGATORS)
 
