@@ -386,6 +386,14 @@ def account_sortkey(context, acc):
     index, name = account_types.get_account_sort_key(context.account_types, acc)
     return '{}-{}'.format(index, name)
 
+
+@function([str], str, pass_context=True)
+def has_account(context, pattern):
+    """True if the transaction has at least one posting matching the regular expression argument."""
+    search = re.compile(pattern, re.IGNORECASE).search
+    return any(search(account) for account in getters.get_entry_accounts(context.entry))
+
+
 # Note: Don't provide this, because polymorphic multiplication on Amount,
 # Position, Inventory isn't supported yet.
 #
@@ -809,24 +817,6 @@ def links(context):
     if not isinstance(context.entry, data.Transaction):
         return None
     return context.entry.links
-
-
-class MatchAccount(query_compile.EvalFunction):
-    """A predicate, true if the transaction has at least one posting matching
-    the regular expression argument."""
-    __intypes__ = [str]
-
-    def __init__(self, operands):
-        super().__init__(operands, bool)
-
-    def __call__(self, context):
-        pattern = self.operands[0](context)
-        search = re.compile(pattern, re.IGNORECASE).search
-        return any(search(account) for account in getters.get_entry_accounts(context.entry))
-
-
-# Functions defined only on entries.
-FilterEntriesEnvironment.functions['has_account'].append(MatchAccount)
 
 
 class FilterPostingsEnvironment(FilterEntriesEnvironment):
