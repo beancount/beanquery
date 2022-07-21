@@ -73,12 +73,12 @@ class TestCompileAggregateChecks(unittest.TestCase):
 
     def test_is_aggregate_derived(self):
         columns, aggregates = qc.get_columns_and_aggregates(
-            qc.Operator(qp.And, [
+            qc.EvalAnd([
                 qc.Operator(qp.Equal, [
                     qe.Column('lineno'),
                     qc.EvalConstant(42),
                 ]),
-                qc.Operator(qp.Or, [
+                qc.EvalOr([
                     qc.Operator(qp.Not, [
                         qc.Operator(qp.Equal, [
                             qe.Column('date'),
@@ -91,12 +91,12 @@ class TestCompileAggregateChecks(unittest.TestCase):
         self.assertEqual((2, 0), (len(columns), len(aggregates)))
 
         columns, aggregates = qc.get_columns_and_aggregates(
-            qc.Operator(qp.And, [
+            qc.EvalAnd([
                 qc.Operator(qp.Equal, [
                     qe.Column('lineno'),
                     qc.EvalConstant(42),
                 ]),
-                qc.Operator(qp.Or, [
+                qc.EvalOr([
                     qc.Operator(qp.Not, [
                         qc.Operator(qp.Not, [
                             qc.Operator(qp.Equal, [
@@ -119,7 +119,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
         self.assertFalse(qc.is_aggregate(c_query))
 
         # Multiple columns.
-        c_query = qc.Operator(qp.And, [qe.Column('position'), qe.Column('date')])
+        c_query = qc.EvalAnd([qe.Column('position'), qe.Column('date')])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((2, 0), (len(columns), len(aggregates)))
         self.assertFalse(qc.is_aggregate(c_query))
@@ -131,7 +131,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
         self.assertTrue(qc.is_aggregate(c_query))
 
         # Multiple aggregates.
-        c_query = qc.Operator(qp.And, [qe.First([qe.Column('date')]), qe.Last([qe.Column('flag')])])
+        c_query = qc.EvalAnd([qe.First([qe.Column('date')]), qe.Last([qe.Column('flag')])])
         columns, aggregates = qc.get_columns_and_aggregates(c_query)
         self.assertEqual((0, 2), (len(columns), len(aggregates)))
         self.assertTrue(qc.is_aggregate(c_query))
@@ -143,7 +143,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
         self.assertFalse(qc.is_aggregate(c_query))
 
         # Mix of column and aggregates (this is used to detect this illegal case).
-        c_query = qc.Operator(qp.And, [
+        c_query = qc.EvalAnd([
             qe.Function('length', [qe.Column('account')]),
             qe.SumPosition([qe.Column('position')]),
         ])
@@ -193,11 +193,11 @@ class TestCompileDataTypes(unittest.TestCase):
         self.assertEqual(bool, c_match.dtype)
 
     def test_compile_And(self):
-        c_and = qc.Operator(qp.And, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_and = qc.EvalAnd([qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_and.dtype)
 
     def test_compile_Or(self):
-        c_or = qc.Operator(qp.Or, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_or = qc.EvalOr([qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_or.dtype)
 
     def test_compile_Mul(self):

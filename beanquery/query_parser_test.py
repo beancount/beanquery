@@ -133,8 +133,11 @@ class TestParseSelect(QueryParserTestBase):
         self.assertParseTarget("SELECT a IS NOT NULL;", qp.IsNotNull(qp.Column('a')))
 
         # bool expressions
-        self.assertParseTarget("SELECT a AND b;", qp.And(qp.Column('a'), qp.Column('b')))
-        self.assertParseTarget("SELECT a OR b;", qp.Or(qp.Column('a'), qp.Column('b')))
+        self.assertParseTarget("SELECT a AND b;", qp.And([qp.Column('a'), qp.Column('b')]))
+        self.assertParseTarget("SELECT a AND b AND c;", qp.And([qp.Column('a'), qp.Column('b'), qp.Column('c')]))
+        self.assertParseTarget("SELECT a OR b;", qp.Or([qp.Column('a'), qp.Column('b')]))
+        self.assertParseTarget("SELECT a OR b OR c;", qp.Or([qp.Column('a'), qp.Column('b'), qp.Column('c')]))
+        self.assertParseTarget("SELECT a AND b OR c;", qp.Or([qp.And([qp.Column('a'), qp.Column('b')]), qp.Column('c')]))
         self.assertParseTarget("SELECT NOT a;", qp.Not(qp.Column('a')))
 
         # math expressions with identifiers
@@ -179,9 +182,9 @@ class TestParseSelect(QueryParserTestBase):
                     qp.Column('a'),
                     qp.NotEqual(
                         qp.Column('b'),
-                        qp.And(
+                        qp.And([
                             qp.Constant(42),
-                            qp.Constant(17))))))
+                            qp.Constant(17)])))))
 
 
 class TestSelectPrecedence(QueryParserTestBase):
@@ -190,22 +193,22 @@ class TestSelectPrecedence(QueryParserTestBase):
 
         self.assertParseTarget(
             "SELECT a AND b OR c AND d;",
-            qp.Or(qp.And(qp.Column('a'), qp.Column('b')),
-                  qp.And(qp.Column('c'), qp.Column('d'))))
+            qp.Or([qp.And([qp.Column('a'), qp.Column('b')]),
+                   qp.And([qp.Column('c'), qp.Column('d')])]))
 
         self.assertParseTarget(
             "SELECT a = 2 AND b != 3;",
-            qp.And(qp.Equal(qp.Column('a'), qp.Constant(2)),
-                   qp.NotEqual(qp.Column('b'), qp.Constant(3))))
+            qp.And([qp.Equal(qp.Column('a'), qp.Constant(2)),
+                    qp.NotEqual(qp.Column('b'), qp.Constant(3))]))
 
         self.assertParseTarget(
             "SELECT not a AND b;",
-            qp.And(qp.Not(qp.Column('a')), qp.Column('b')))
+            qp.And([qp.Not(qp.Column('a')), qp.Column('b')]))
 
         self.assertParseTarget(
             "SELECT a + b AND c - d;",
-            qp.And(qp.Add(qp.Column('a'), qp.Column('b')),
-                   qp.Sub(qp.Column('c'), qp.Column('d'))))
+            qp.And([qp.Add(qp.Column('a'), qp.Column('b')),
+                    qp.Sub(qp.Column('c'), qp.Column('d'))]))
 
         self.assertParseTarget(
             "SELECT a * b + c / d - 3;",
@@ -220,19 +223,19 @@ class TestSelectPrecedence(QueryParserTestBase):
 
         self.assertParseTarget(
             "SELECT 'orange' IN tags AND 'bananas' IN tags;",
-            qp.And(
+            qp.And([
                 qp.Contains(
                     qp.Constant('orange'),
                     qp.Column('tags')),
                 qp.Contains(
                     qp.Constant('bananas'),
-                    qp.Column('tags'))))
+                    qp.Column('tags'))]))
 
 
 class TestSelectFrom(QueryParserTestBase):
 
     def test_select_from(self):
-        expr = qp.Equal(qp.Column('d'), qp.And(qp.Function('max', [qp.Column('e')]), qp.Constant(17)))
+        expr = qp.Equal(qp.Column('d'), qp.And([qp.Function('max', [qp.Column('e')]), qp.Constant(17)]))
 
         with self.assertRaises(qp.ParseError):
             self.parse("SELECT a, b FROM;")
@@ -281,7 +284,7 @@ class TestSelectFrom(QueryParserTestBase):
 class TestSelectWhere(QueryParserTestBase):
 
     def test_where(self):
-        expr = qp.Equal(qp.Column('d'), qp.And(qp.Function('max', [qp.Column('e')]), qp.Constant(17)))
+        expr = qp.Equal(qp.Column('d'), qp.And([qp.Function('max', [qp.Column('e')]), qp.Constant(17)]))
         self.assertParse(
             "SELECT a, b WHERE d = (max(e) and 17);",
             Select([
@@ -296,7 +299,7 @@ class TestSelectWhere(QueryParserTestBase):
 class TestSelectFromAndWhere(QueryParserTestBase):
 
     def test_from_and_where(self):
-        expr = qp.Equal(qp.Column('d'), qp.And(qp.Function('max', [qp.Column('e')]), qp.Constant(17)))
+        expr = qp.Equal(qp.Column('d'), qp.And([qp.Function('max', [qp.Column('e')]), qp.Constant(17)]))
         self.assertParse(
             "SELECT a, b FROM d = (max(e) and 17) WHERE d = (max(e) and 17);",
             Select([

@@ -77,8 +77,8 @@ disjunction
     | conjunction
     ;
 
-or::Or::BinaryOp
-    = left:conjunction 'OR' right:conjunction
+or::Or::BoolOp
+    = args+:conjunction { 'OR' args+:conjunction }+
     ;
 
 conjunction
@@ -87,8 +87,8 @@ conjunction
     | inversion
     ;
 
-and::And::BinaryOp
-    = left:inversion 'AND' right:inversion
+and::And::BoolOp
+    = args+:inversion { 'AND' args+:inversion }+
     ;
 
 inversion
