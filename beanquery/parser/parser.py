@@ -469,14 +469,22 @@ class BQLParser(Parser):
     @nomemo
     def _or_(self):  # noqa
         self._conjunction_()
-        self.name_last_node('left')
-        self._token('OR')
-        self._conjunction_()
-        self.name_last_node('right')
+        self.add_last_node_to_name('args')
+
+        def block1():
+            self._token('OR')
+            self._conjunction_()
+            self.add_last_node_to_name('args')
+
+            self._define(
+                [],
+                ['args']
+            )
+        self._positive_closure(block1)
 
         self._define(
-            ['left', 'right'],
-            []
+            [],
+            ['args']
         )
 
     @tatsumasu()
@@ -496,14 +504,22 @@ class BQLParser(Parser):
     @nomemo
     def _and_(self):  # noqa
         self._inversion_()
-        self.name_last_node('left')
-        self._token('AND')
-        self._inversion_()
-        self.name_last_node('right')
+        self.add_last_node_to_name('args')
+
+        def block1():
+            self._token('AND')
+            self._inversion_()
+            self.add_last_node_to_name('args')
+
+            self._define(
+                [],
+                ['args']
+            )
+        self._positive_closure(block1)
 
         self._define(
-            ['left', 'right'],
-            []
+            [],
+            ['args']
         )
 
     @tatsumasu()

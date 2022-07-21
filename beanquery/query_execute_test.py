@@ -279,7 +279,7 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 1 and FALSE", False)
         self.assertResult("SELECT 'something' and FALSE", False)
         self.assertResult("SELECT 1.0 and FALSE", False)
-        self.assertResult("SELECT TRUE and meta('missing')", False)
+        self.assertResult("SELECT TRUE and meta('missing')", None, bool)
         self.assertResult("SELECT TRUE and not meta('missing')", True)
 
         # or

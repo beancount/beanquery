@@ -243,15 +243,18 @@ UnaryOp = node('UnaryOp', 'operand')
 #   right: An expression, the right operand.
 BinaryOp = node('BinaryOp', 'left right')
 
+# Base class for boolean operators.
+BoolOp = node('BoolOp', 'args')
+
 # Negation operator.
 class Not(UnaryOp): pass
 
 class IsNull(UnaryOp): pass
 class IsNotNull(UnaryOp): pass
 
-# Logical and/or operators.
-class And(BinaryOp): pass
-class Or(BinaryOp): pass
+# Boolean operators.
+class And(BoolOp): pass
+class Or(BoolOp): pass
 
 # Equality and inequality comparison operators.
 class Equal(BinaryOp): pass

@@ -301,14 +301,39 @@ for node, op in _comparisons:
         binaryop(node, intypes, bool)(op)
 
 
-@binaryop(query_parser.And, [types.Any, types.Any], bool, nullsafe=True)
-def and_(x, y):
-    return bool(x) and bool(y)
+class EvalAnd(EvalNode):
+    __slots__ = ('args',)
+
+    def __init__(self, args):
+        super().__init__(bool)
+        self.args = args
+
+    def __call__(self, context):
+        for arg in self.args:
+            value = arg(context)
+            if value is None:
+                return None
+            if not value:
+                return False
+        return True
 
 
-@binaryop(query_parser.Or, [types.Any, types.Any], bool, nullsafe=True)
-def or_(x, y):
-    return bool(x) or bool(y)
+class EvalOr(EvalNode):
+    __slots__ = ('args',)
+
+    def __init__(self, args):
+        super().__init__(bool)
+        self.args = args
+
+    def __call__(self, context):
+        r = False
+        for arg in self.args:
+            value = arg(context)
+            if value is None:
+                r = None
+            if value:
+                return True
+        return r
 
 
 class EvalCoalesce(EvalNode):
@@ -435,6 +460,12 @@ def compile_expression(expr, environ):
         if column is not None:
             return column
         raise CompilationError(f'column "{expr.name}" does not exist', expr)
+
+    if isinstance(expr, query_parser.Or):
+        return EvalOr([compile_expression(arg, environ) for arg in expr.args])
+
+    if isinstance(expr, query_parser.And):
+        return EvalAnd([compile_expression(arg, environ) for arg in expr.args])
 
     if isinstance(expr, query_parser.Function):
         operands = [compile_expression(operand, environ) for operand in expr.operands]
