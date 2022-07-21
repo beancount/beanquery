@@ -309,20 +309,20 @@ def or_(x, y):
 
 
 class EvalCoalesce(EvalNode):
-    __slots__ = ('expressions',)
+    __slots__ = ('args',)
 
-    def __init__(self, expressions):
-        for expr in expressions:
-            if expr.dtype != expressions[0].dtype:
-                dtypes = ', '.join(expr.dtype.__name__ for expr in expressions)
+    def __init__(self, args):
+        for arg in args:
+            if arg.dtype != args[0].dtype:
+                dtypes = ', '.join(arg.dtype.__name__ for arg in args)
                 raise CompilationError(
                     f"coalesce() function arguments must have uniform type, found: {dtypes}")
-        super().__init__(expressions[0].dtype)
-        self.expressions = expressions
+        super().__init__(args[0].dtype)
+        self.args = args
 
     def __call__(self, context):
-        for expr in self.expressions:
-            value = expr(context)
+        for arg in self.args:
+            value = arg(context)
             if value is not None:
                 return value
         return None
