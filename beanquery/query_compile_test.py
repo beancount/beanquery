@@ -217,16 +217,6 @@ class TestCompileDataTypes(unittest.TestCase):
         self.assertEqual(int, c_plus.dtype)
 
 
-class TestCompileMisc(unittest.TestCase):
-
-    def test_find_unique_names(self):
-        self.assertEqual('date', qc.find_unique_name('date', {}))
-        self.assertEqual('date', qc.find_unique_name('date', {'account', 'number'}))
-        self.assertEqual('date_1', qc.find_unique_name('date', {'date', 'number'}))
-        self.assertEqual('date_2',
-                         qc.find_unique_name('date', {'date', 'date_1', 'date_3'}))
-
-
 class CompileSelectBase(unittest.TestCase):
 
     maxDiff = 8192

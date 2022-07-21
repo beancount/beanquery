@@ -33,6 +33,13 @@ class Node:
     def __repr__(self):
         return self._frmt.format(self) # pylint: disable=no-member
 
+    @property
+    def text(self):
+        if not self.parseinfo:  # pylint: disable=no-member
+            return ''
+        text = self.parseinfo.tokenizer.text
+        return text[self.parseinfo.pos:self.parseinfo.endpos]
+
 
 def node(name, attributes):
     """Manufacture an AST node class.
@@ -276,32 +283,3 @@ class Mul(BinaryOp): pass
 class Div(BinaryOp): pass
 class Add(BinaryOp): pass
 class Sub(BinaryOp): pass
-
-
-def get_expression_name(expr):
-    """Come up with a reasonable identifier for an expression.
-
-    Args:
-      expr: An expression node.
-    """
-    if isinstance(expr, Column):
-        return expr.name.lower()
-
-    if isinstance(expr, Function):
-        operands = ', '.join(get_expression_name(operand) for operand in expr.operands)
-        return f'{expr.fname.lower()}({operands})'
-
-    if isinstance(expr, Constant):
-        if isinstance(expr.value, str):
-            return repr(expr.value)
-        return str(expr.value)
-
-    if isinstance(expr, UnaryOp):
-        operand = get_expression_name(expr.operand)
-        return f'{type(expr).__name__.lower()}({operand})'
-
-    if isinstance(expr, BinaryOp):
-        operands = ', '.join(get_expression_name(operand) for operand in (expr.left, expr.right))
-        return f'{type(expr).__name__.lower()}({operands})'
-
-    raise NotImplementedError
