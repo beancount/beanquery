@@ -612,24 +612,6 @@ def is_hashable_type(node):
     return not issubclass(node.dtype, inventory.Inventory)
 
 
-def find_unique_name(name, allocated_set):
-    """Come up with a unique name for 'name' amongst 'allocated_set'.
-
-    Args:
-      name: A string, the prefix of the name to find a unique for.
-      allocated_set: A set of string, the set of already allocated names.
-    Returns:
-      A unique name. 'allocated_set' is unmodified.
-    """
-    # Make sure the name is unique.
-    prefix = name
-    i = 1
-    while name in allocated_set:
-        name = '{}_{}'.format(prefix, i)
-        i += 1
-    return name
-
-
 # A compiled target.
 #
 # Attributes:
@@ -638,6 +620,23 @@ def find_unique_name(name, allocated_set):
 #     target that gets evaluated but not displayed.
 #   is_aggregate: A boolean, true if 'c_expr' is an aggregate.
 EvalTarget = collections.namedtuple('EvalTarget', 'c_expr name is_aggregate')
+
+
+def get_target_name(target):
+    """Compute the target name.
+
+    This uses the same algorithm used by SQLite. If the target has an
+    AS clause assigning it a name, that will be the name used. If the
+    target refers directly to a column, then the target name is the
+    column name. Otherwise use the expression text.
+
+    """
+    if target.name is not None:
+        return target.name
+    if isinstance(target.expression, query_parser.Column):
+        return target.expression.name
+    return target.expression.text.strip()
+
 
 def compile_targets(targets, environ):
     """Compile the targets and check for their validity. Process wildcard.
@@ -656,14 +655,10 @@ def compile_targets(targets, environ):
 
     # Compile targets.
     c_targets = []
-    target_names = set()
     for target in targets:
         c_expr = compile_expression(target.expression, environ)
-        target_name = find_unique_name(
-            target.name or query_parser.get_expression_name(target.expression),
-            target_names)
-        target_names.add(target_name)
-        c_targets.append(EvalTarget(c_expr, target_name, is_aggregate(c_expr)))
+        name = get_target_name(target)
+        c_targets.append(EvalTarget(c_expr, name, is_aggregate(c_expr)))
 
         columns, aggregates = get_columns_and_aggregates(c_expr)
 
