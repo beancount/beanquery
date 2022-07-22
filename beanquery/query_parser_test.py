@@ -224,12 +224,8 @@ class TestSelectPrecedence(QueryParserTestBase):
         self.assertParseTarget(
             "SELECT 'orange' IN tags AND 'bananas' IN tags;",
             qp.And([
-                qp.Contains(
-                    qp.Constant('orange'),
-                    qp.Column('tags')),
-                qp.Contains(
-                    qp.Constant('bananas'),
-                    qp.Column('tags'))]))
+                qp.In(qp.Constant('orange'), qp.Column('tags')),
+                qp.In(qp.Constant('bananas'), qp.Column('tags'))]))
 
 
 class TestSelectFrom(QueryParserTestBase):

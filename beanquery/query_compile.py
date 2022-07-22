@@ -271,10 +271,10 @@ def match_(x, y):
     return bool(re.search(y, x, re.IGNORECASE))
 
 
-@binaryop(query_parser.Contains, [types.Any, set], bool)
-@binaryop(query_parser.Contains, [types.Any, list], bool)
-@binaryop(query_parser.Contains, [types.Any, dict], bool)
-def contains_(x, y):
+@binaryop(query_parser.In, [types.Any, set], bool)
+@binaryop(query_parser.In, [types.Any, list], bool)
+@binaryop(query_parser.In, [types.Any, dict], bool)
+def in_(x, y):
     return operator.contains(y, x)
 
 
