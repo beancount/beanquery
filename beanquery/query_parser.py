@@ -275,7 +275,7 @@ class LessEq(BinaryOp): pass
 class Match(BinaryOp): pass
 
 # Membership operators.
-class Contains(BinaryOp): pass
+class In(BinaryOp): pass
 
 # Arithmetic operators.
 class Neg(UnaryOp): pass

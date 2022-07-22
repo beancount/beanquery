@@ -140,7 +140,7 @@ neq::NotEqual::BinaryOp
     = left:sum '!=' right:sum
     ;
 
-in::Contains::BinaryOp
+in::In::BinaryOp
     = left:sum 'IN' right:sum
     ;
 

@@ -299,7 +299,7 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT meta('missing') IS NOT NULL", False)
         self.assertResult("SELECT meta('int') IS NOT NULL", True)
 
-        # contains
+        # in
         self.assertResult("SELECT 'tag' IN tags", False)
         self.assertResult("SELECT 3 IN (2, 3, 4)", True)
         self.assertResult("SELECT 'x' IN ('a', 'b', 'c')", False)
