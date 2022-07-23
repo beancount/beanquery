@@ -12,11 +12,13 @@ import copy
 import datetime
 import re
 import operator
+
 from decimal import Decimal
 
 from beancount.core import inventory
-from beanquery import query_parser
 from beanquery import types
+from beanquery import query_parser as parser
+from beanquery.parser import ast
 
 
 # A global constant which sets whether we support inferred/implicit group-by
@@ -192,106 +194,106 @@ def Operator(op, operands):
     raise KeyError
 
 
-unaryop(query_parser.Not, [types.Any], bool, nullsafe=True)(operator.not_)
+unaryop(ast.Not, [types.Any], bool, nullsafe=True)(operator.not_)
 
-@unaryop(query_parser.Neg, [int], int)
-@unaryop(query_parser.Neg, [Decimal], Decimal)
+@unaryop(ast.Neg, [int], int)
+@unaryop(ast.Neg, [Decimal], Decimal)
 def neg_(x):
     return -x
 
 
-@unaryop(query_parser.IsNull, [object], bool, nullsafe=True)
+@unaryop(ast.IsNull, [object], bool, nullsafe=True)
 def null(x):
     return x is None
 
 
-@unaryop(query_parser.IsNotNull, [object], bool, nullsafe=True)
+@unaryop(ast.IsNotNull, [object], bool, nullsafe=True)
 def not_null(x):
     return x is not None
 
 
-@binaryop(query_parser.Mul, [Decimal, Decimal], Decimal)
-@binaryop(query_parser.Mul, [Decimal, int], Decimal)
-@binaryop(query_parser.Mul, [int, Decimal], Decimal)
-@binaryop(query_parser.Mul, [int, int], int)
+@binaryop(ast.Mul, [Decimal, Decimal], Decimal)
+@binaryop(ast.Mul, [Decimal, int], Decimal)
+@binaryop(ast.Mul, [int, Decimal], Decimal)
+@binaryop(ast.Mul, [int, int], int)
 def mul_(x, y):
     return x * y
 
 
-@binaryop(query_parser.Div, [Decimal, Decimal], Decimal)
-@binaryop(query_parser.Div, [Decimal, int], Decimal)
-@binaryop(query_parser.Div, [int, Decimal], Decimal)
+@binaryop(ast.Div, [Decimal, Decimal], Decimal)
+@binaryop(ast.Div, [Decimal, int], Decimal)
+@binaryop(ast.Div, [int, Decimal], Decimal)
 def div_(x, y):
     return x / y
 
 
-@binaryop(query_parser.Div, [int, int], Decimal)
+@binaryop(ast.Div, [int, int], Decimal)
 def div_int(x, y):
     return Decimal(x) / y
 
 
-@binaryop(query_parser.Add, [Decimal, Decimal], Decimal)
-@binaryop(query_parser.Add, [Decimal, int], Decimal)
-@binaryop(query_parser.Add, [int, Decimal], Decimal)
-@binaryop(query_parser.Add, [int, int], int)
+@binaryop(ast.Add, [Decimal, Decimal], Decimal)
+@binaryop(ast.Add, [Decimal, int], Decimal)
+@binaryop(ast.Add, [int, Decimal], Decimal)
+@binaryop(ast.Add, [int, int], int)
 def add_(x, y):
     return x + y
 
 
-@binaryop(query_parser.Sub, [Decimal, Decimal], Decimal)
-@binaryop(query_parser.Sub, [Decimal, int], Decimal)
-@binaryop(query_parser.Sub, [int, Decimal], Decimal)
-@binaryop(query_parser.Sub, [int, int], int)
+@binaryop(ast.Sub, [Decimal, Decimal], Decimal)
+@binaryop(ast.Sub, [Decimal, int], Decimal)
+@binaryop(ast.Sub, [int, Decimal], Decimal)
+@binaryop(ast.Sub, [int, int], int)
 def sub_(x, y):
     return x - y
 
 
-@binaryop(query_parser.Add, [datetime.date, int], datetime.date)
+@binaryop(ast.Add, [datetime.date, int], datetime.date)
 def add_date_int(x, y):
     return x + datetime.timedelta(days=y)
 
 
-@binaryop(query_parser.Add, [int, datetime.date], datetime.date)
+@binaryop(ast.Add, [int, datetime.date], datetime.date)
 def add_int_date(x, y):
     return y + datetime.timedelta(days=x)
 
 
-@binaryop(query_parser.Sub, [datetime.date, int], datetime.date)
+@binaryop(ast.Sub, [datetime.date, int], datetime.date)
 def sub_date_int(x, y):
     return x - datetime.timedelta(days=y)
 
 
-@binaryop(query_parser.Sub, [datetime.date, datetime.date], int)
+@binaryop(ast.Sub, [datetime.date, datetime.date], int)
 def sub_date_date(x, y):
     return (x - y).days
 
 
-@binaryop(query_parser.Match, [str, str], bool)
+@binaryop(ast.Match, [str, str], bool)
 def match_(x, y):
     return bool(re.search(y, x, re.IGNORECASE))
 
 
-@binaryop(query_parser.In, [types.Any, set], bool)
-@binaryop(query_parser.In, [types.Any, list], bool)
-@binaryop(query_parser.In, [types.Any, dict], bool)
+@binaryop(ast.In, [types.Any, set], bool)
+@binaryop(ast.In, [types.Any, list], bool)
+@binaryop(ast.In, [types.Any, dict], bool)
 def in_(x, y):
     return operator.contains(y, x)
 
 
-@binaryop(query_parser.NotIn, [types.Any, set], bool)
-@binaryop(query_parser.NotIn, [types.Any, list], bool)
-@binaryop(query_parser.NotIn, [types.Any, dict], bool)
+@binaryop(ast.NotIn, [types.Any, set], bool)
+@binaryop(ast.NotIn, [types.Any, list], bool)
+@binaryop(ast.NotIn, [types.Any, dict], bool)
 def not_in_(x, y):
     return not operator.contains(y, x)
 
 
 _comparisons = [
-    (query_parser.Equal, operator.eq),
-    (query_parser.NotEqual, operator.ne),
-    (query_parser.Greater, operator.gt),
-    (query_parser.GreaterEq, operator.ge),
-    (query_parser.Less, operator.lt),
-    (query_parser.LessEq, operator.le),
+    (ast.Equal, operator.eq),
+    (ast.NotEqual, operator.ne),
+    (ast.Greater, operator.gt),
+    (ast.GreaterEq, operator.ge),
+    (ast.Less, operator.lt),
+    (ast.LessEq, operator.le),
 ]
 
 _intypes = [
@@ -462,19 +464,19 @@ def compile_expression(expr, environ):
     if expr is None:
         return None
 
-    if isinstance(expr, query_parser.Column):
+    if isinstance(expr, ast.Column):
         column = environ.columns.get(expr.name)
         if column is not None:
             return column
         raise CompilationError(f'column "{expr.name}" does not exist', expr)
 
-    if isinstance(expr, query_parser.Or):
+    if isinstance(expr, ast.Or):
         return EvalOr([compile_expression(arg, environ) for arg in expr.args])
 
-    if isinstance(expr, query_parser.And):
+    if isinstance(expr, ast.And):
         return EvalAnd([compile_expression(arg, environ) for arg in expr.args])
 
-    if isinstance(expr, query_parser.Function):
+    if isinstance(expr, ast.Function):
         operands = [compile_expression(operand, environ) for operand in expr.operands]
         if expr.fname == 'coalesce':
             # coalesce() is parsed like a function call but it does
@@ -491,7 +493,7 @@ def compile_expression(expr, environ):
             return EvalConstant(function(None), function.dtype)
         return function
 
-    if isinstance(expr, query_parser.UnaryOp):
+    if isinstance(expr, ast.UnaryOp):
         operand = compile_expression(expr.operand, environ)
         function = types.function_lookup(OPERATORS, type(expr), [operand])
         if function is None:
@@ -503,7 +505,7 @@ def compile_expression(expr, environ):
             return EvalConstant(function(None), function.dtype)
         return function
 
-    if isinstance(expr, query_parser.BinaryOp):
+    if isinstance(expr, ast.BinaryOp):
         left = compile_expression(expr.left, environ)
         right = compile_expression(expr.right, environ)
 
@@ -551,7 +553,7 @@ def compile_expression(expr, environ):
             f'Operator {type(expr).__name__.lower()}('
             f'{left.dtype.__name__}, {right.dtype.__name__}) not supported')
 
-    if isinstance(expr, query_parser.Constant):
+    if isinstance(expr, ast.Constant):
         return EvalConstant(expr.value)
 
     assert False, f"invalid expression: {expr}"
@@ -640,7 +642,7 @@ def get_target_name(target):
     """
     if target.name is not None:
         return target.name
-    if isinstance(target.expression, query_parser.Column):
+    if isinstance(target.expression, ast.Column):
         return target.expression.name
     return target.expression.text.strip()
 
@@ -655,9 +657,9 @@ def compile_targets(targets, environ):
       A list of compiled target expressions with resolved names.
     """
     # Bind the targets expressions to the execution context.
-    if isinstance(targets, query_parser.Wildcard):
+    if isinstance(targets, ast.Wildcard):
         # Insert the full list of available columns.
-        targets = [query_parser.Target(query_parser.Column(name), None)
+        targets = [ast.Target(ast.Column(name), None)
                    for name in environ.wildcard_columns]
 
     # Compile targets.
@@ -733,7 +735,7 @@ def compile_group_by(group_by, c_targets, environ):
                 # Process target references by name. These will be parsed as
                 # simple Column expressions. If they refer to a target name, we
                 # resolve them.
-                if isinstance(column, query_parser.Column):
+                if isinstance(column, ast.Column):
                     name = column.name
                     index = targets_name_map.get(name, None)
 
@@ -861,7 +863,7 @@ def compile_order_by(order_by, c_targets, environ):
             # Process target references by name. These will be parsed as
             # simple Column expressions. If they refer to a target name, we
             # resolve them.
-            if isinstance(column, query_parser.Column):
+            if isinstance(column, ast.Column):
                 name = column.name
                 index = targets_name_map.get(name, None)
 
@@ -913,7 +915,7 @@ def compile_pivot_by(pivot_by, targets, group_indexes):
             continue
 
         # Process target references by name.
-        if isinstance(column, query_parser.Column):
+        if isinstance(column, ast.Column):
             index = names.get(column.name, None)
             if index is None:
                 raise CompilationError(f'PIVOT BY column {column!r} is not in the targets list')
@@ -936,14 +938,14 @@ def compile_pivot_by(pivot_by, targets, group_indexes):
 #
 # Attributes:
 #   c_expr: A compiled expression tree (an EvalNode root node).
-#   close: (See query_parser.From.close).
+#   close: (See ast.From.close).
 EvalFrom = collections.namedtuple('EvalFrom', 'c_expr open close clear')
 
 def compile_from(from_clause, environ):
     """Compiled a FROM clause as provided by the parser, in the given environment.
 
     Args:
-      select: An instance of query_parser.Select.
+      select: An instance of ast.Select.
       environ: : A compilation context for evaluating entry filters.
     Returns:
       An instance of Query, ready to be executed.
@@ -1008,7 +1010,7 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
     basic optimizations.
 
     Args:
-      select: An instance of query_parser.Select.
+      select: An instance of ast.Select.
       targets_environ: A compilation environment for evaluating targets.
       postings_environ: A compilation environment for evaluating postings filters.
       entries_environ: A compilation environment for evaluating entry filters.
@@ -1016,7 +1018,7 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
       An instance of EvalQuery, ready to be executed.
     """
 
-    if isinstance(select.from_clause, query_parser.Select):
+    if isinstance(select.from_clause, ast.Select):
         raise CompilationError("Nested SELECT are not supported yet")
 
     # Bind the FROM clause expressions.
@@ -1086,7 +1088,7 @@ def transform_journal(journal):
     Returns:
       An instance of an uncompiled Select object.
     """
-    cooked_select = query_parser.Parser().parse("""
+    cooked_select = parser.Parser().parse("""
 
         SELECT
            date,
@@ -1103,10 +1105,10 @@ def transform_journal(journal):
                       else ''),
                summary_func=journal.summary_func or ''))
 
-    return query_parser.Select(cooked_select.targets,
-                               journal.from_clause,
-                               cooked_select.where_clause,
-                               None, None, None, None, None)
+    return ast.Select(cooked_select.targets,
+                      journal.from_clause,
+                      cooked_select.where_clause,
+                      None, None, None, None, None)
 
 
 def transform_balances(balances):
@@ -1123,7 +1125,7 @@ def transform_balances(balances):
     ## the first or last sort-order value gets used, because it would simplify
     ## the input statement.
 
-    cooked_select = query_parser.Parser().parse("""
+    cooked_select = parser.Parser().parse("""
 
       SELECT account, SUM({}(position))
       GROUP BY account, ACCOUNT_SORTKEY(account)
@@ -1131,12 +1133,12 @@ def transform_balances(balances):
 
     """.format(balances.summary_func or ""))
 
-    return query_parser.Select(cooked_select.targets,
-                               balances.from_clause,
-                               balances.where_clause,
-                               cooked_select.group_by,
-                               cooked_select.order_by,
-                               None, None, None)
+    return ast.Select(cooked_select.targets,
+                      balances.from_clause,
+                      balances.where_clause,
+                      cooked_select.group_by,
+                      cooked_select.order_by,
+                      None, None, None)
 
 
 # A compiled print statement, ready for execution.
@@ -1149,7 +1151,7 @@ def compile_print(print_stmt, env_entries):
     """Compile a Print statement.
 
     Args:
-      statement: An instance of query_parser.Print.
+      statement: An instance of ast.Print.
       entries_environ: : A compilation environment for evaluating entry filters.
     Returns:
       An instance of EvalPrint, ready to be executed.
@@ -1173,14 +1175,14 @@ def compile(statement, targets_environ, postings_environ, entries_environ):
       CompilationError: If the statement cannot be compiled, or is not one of the
         supported statements.
     """
-    if isinstance(statement, query_parser.Balances):
+    if isinstance(statement, ast.Balances):
         statement = transform_balances(statement)
-    elif isinstance(statement, query_parser.Journal):
+    elif isinstance(statement, ast.Journal):
         statement = transform_journal(statement)
 
-    if isinstance(statement, query_parser.Select):
+    if isinstance(statement, ast.Select):
         return compile_select(statement, targets_environ, postings_environ, entries_environ)
-    if isinstance(statement, query_parser.Print):
+    if isinstance(statement, ast.Print):
         return compile_print(statement, entries_environ)
 
     raise CompilationError("Cannot compile a statement of type '{}'".format(type(statement)))

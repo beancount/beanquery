@@ -6,66 +6,67 @@ import unittest
 from decimal import Decimal
 
 from beancount.core.number import D
-from beanquery import query_parser as qp
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
+from beanquery import query_parser as parser
+from beanquery.parser import ast
 
 
 class TestCompileExpression(unittest.TestCase):
 
     def test_expr_invalid(self):
         with self.assertRaises(qc.CompilationError):
-            qc.compile_expression(qp.Column('invalid'), qe.TargetsEnvironment())
+            qc.compile_expression(ast.Column('invalid'), qe.TargetsEnvironment())
 
     def test_expr_column(self):
         self.assertEqual(
             qe.Column('filename'),
             qc.compile_expression(
-                qp.Column('filename'),
+                ast.Column('filename'),
                 qe.TargetsEnvironment()))
 
     def test_expr_function(self):
         self.assertEqual(
             qe.SumPosition([qe.Column('position')]),
             qc.compile_expression(
-                qp.Function('sum', [qp.Column('position')]),
+                ast.Function('sum', [ast.Column('position')]),
                 qe.TargetsEnvironment()))
 
     def test_expr_unaryop(self):
         self.assertEqual(
-            qc.Operator(qp.Not, [qe.Column('account')]),
+            qc.Operator(ast.Not, [qe.Column('account')]),
             qc.compile_expression(
-                qp.Not(qp.Column('account')),
+                ast.Not(ast.Column('account')),
                 qe.TargetsEnvironment()))
 
     def test_expr_binaryop(self):
         self.assertEqual(
-            qc.Operator(qp.Equal, [
+            qc.Operator(ast.Equal, [
                 qe.Column('date'),
                 qc.EvalConstant(datetime.date(2014, 1, 1))
             ]),
             qc.compile_expression(
-                qp.Equal(qp.Column('date'), qp.Constant(datetime.date(2014, 1, 1))),
+                ast.Equal(ast.Column('date'), ast.Constant(datetime.date(2014, 1, 1))),
                 qe.TargetsEnvironment()))
 
     def test_expr_constant(self):
         self.assertEqual(
             qc.EvalConstant(D(17)),
             qc.compile_expression(
-                qp.Constant(D(17)), qe.TargetsEnvironment()))
+                ast.Constant(D(17)), qe.TargetsEnvironment()))
 
 
 class TestCompileExpressionDataTypes(unittest.TestCase):
 
     def test_expr_function_arity(self):
         # Compile with the correct number of arguments.
-        qc.compile_expression(qp.Function('sum', [qp.Column('number')]),
+        qc.compile_expression(ast.Function('sum', [ast.Column('number')]),
                               qe.TargetsEnvironment())
 
         # Compile with an incorrect number of arguments.
         with self.assertRaises(qc.CompilationError):
-            qc.compile_expression(qp.Function('sum', [qp.Column('date'),
-                                                      qp.Column('account')]),
+            qc.compile_expression(ast.Function('sum', [ast.Column('date'),
+                                                       ast.Column('account')]),
                                   qe.TargetsEnvironment())
 
 
@@ -74,13 +75,13 @@ class TestCompileAggregateChecks(unittest.TestCase):
     def test_is_aggregate_derived(self):
         columns, aggregates = qc.get_columns_and_aggregates(
             qc.EvalAnd([
-                qc.Operator(qp.Equal, [
+                qc.Operator(ast.Equal, [
                     qe.Column('lineno'),
                     qc.EvalConstant(42),
                 ]),
                 qc.EvalOr([
-                    qc.Operator(qp.Not, [
-                        qc.Operator(qp.Equal, [
+                    qc.Operator(ast.Not, [
+                        qc.Operator(ast.Equal, [
                             qe.Column('date'),
                             qc.EvalConstant(datetime.date(2014, 1, 1)),
                         ]),
@@ -92,14 +93,14 @@ class TestCompileAggregateChecks(unittest.TestCase):
 
         columns, aggregates = qc.get_columns_and_aggregates(
             qc.EvalAnd([
-                qc.Operator(qp.Equal, [
+                qc.Operator(ast.Equal, [
                     qe.Column('lineno'),
                     qc.EvalConstant(42),
                 ]),
                 qc.EvalOr([
-                    qc.Operator(qp.Not, [
-                        qc.Operator(qp.Not, [
-                            qc.Operator(qp.Equal, [
+                    qc.Operator(ast.Not, [
+                        qc.Operator(ast.Not, [
+                            qc.Operator(ast.Equal, [
                                 qe.Column('date'),
                                 qc.EvalConstant(datetime.date(2014, 1, 1)),
                             ]),
@@ -165,31 +166,31 @@ class TestCompileDataTypes(unittest.TestCase):
         self.assertEqual(str, c_str.dtype)
 
     def test_compile_Not(self):
-        c_not = qc.Operator(qp.Not, [qc.EvalConstant(17)])
+        c_not = qc.Operator(ast.Not, [qc.EvalConstant(17)])
         self.assertEqual(bool, c_not.dtype)
 
     def test_compile_Equal(self):
-        c_equal = qc.Operator(qp.Equal, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_equal = qc.Operator(ast.Equal, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_equal.dtype)
 
     def test_compile_Greater(self):
-        c_gt = qc.Operator(qp.Greater, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_gt = qc.Operator(ast.Greater, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_gt.dtype)
 
     def test_compile_GreaterEq(self):
-        c_ge = qc.Operator(qp.GreaterEq, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_ge = qc.Operator(ast.GreaterEq, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_ge.dtype)
 
     def test_compile_Less(self):
-        c_lt = qc.Operator(qp.Less, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_lt = qc.Operator(ast.Less, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_lt.dtype)
 
     def test_compile_LessEq(self):
-        c_le = qc.Operator(qp.LessEq, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_le = qc.Operator(ast.LessEq, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(bool, c_le.dtype)
 
     def test_compile_Match(self):
-        c_match = qc.Operator(qp.Match, [qc.EvalConstant('abc'), qc.EvalConstant('b')])
+        c_match = qc.Operator(ast.Match, [qc.EvalConstant('abc'), qc.EvalConstant('b')])
         self.assertEqual(bool, c_match.dtype)
 
     def test_compile_And(self):
@@ -201,19 +202,19 @@ class TestCompileDataTypes(unittest.TestCase):
         self.assertEqual(bool, c_or.dtype)
 
     def test_compile_Mul(self):
-        c_plus = qc.Operator(qp.Mul, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_plus = qc.Operator(ast.Mul, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(int, c_plus.dtype)
 
     def test_compile_Div(self):
-        c_plus = qc.Operator(qp.Div, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_plus = qc.Operator(ast.Div, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(Decimal, c_plus.dtype)
 
     def test_compile_Add(self):
-        c_plus = qc.Operator(qp.Add, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_plus = qc.Operator(ast.Add, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(int, c_plus.dtype)
 
     def test_compile_Sub(self):
-        c_plus = qc.Operator(qp.Sub, [qc.EvalConstant(17), qc.EvalConstant(18)])
+        c_plus = qc.Operator(ast.Sub, [qc.EvalConstant(17), qc.EvalConstant(18)])
         self.assertEqual(int, c_plus.dtype)
 
 
@@ -227,7 +228,7 @@ class CompileSelectBase(unittest.TestCase):
     xcontext_postings = qe.FilterPostingsEnvironment()
 
     def setUp(self):
-        self.parser = qp.Parser()
+        self.parser = parser.Parser()
 
     def parse(self, query):
         return self.parser.parse(query.strip())
@@ -245,7 +246,7 @@ class CompileSelectBase(unittest.TestCase):
                              self.xcontext_targets,
                              self.xcontext_postings,
                              self.xcontext_entries)
-        if isinstance(c_query, qp.Select):
+        if isinstance(c_query, ast.Select):
             self.assertSelectInvariants(c_query)
         return c_query
 
@@ -340,7 +341,7 @@ class TestCompileFundamentals(CompileSelectBase):
         expr = self.compile("SELECT 1 + meta('int') AS expr")
         self.assertEqual(expr, qc.EvalQuery([
             qc.EvalTarget(
-                qc.Operator(qp.Add, [
+                qc.Operator(ast.Add, [
                     qc.EvalConstant(1),
                     qe.Function('decimal', [
                         qe.Function('meta', [
@@ -674,95 +675,96 @@ class TestTranslationJournal(CompileSelectBase):
         journal = self.parse("JOURNAL;")
         select = qc.transform_journal(journal)
         self.assertEqual(select,
-            qp.Select([
-                qp.Target(qp.Column('date'), None),
-                qp.Target(qp.Column('flag'), None),
-                qp.Target(qp.Function('maxwidth', [qp.Column('payee'),
-                                                   qp.Constant(48)]), None),
-                qp.Target(qp.Function('maxwidth', [qp.Column('narration'),
-                                                   qp.Constant(80)]), None),
-                qp.Target(qp.Column('account'), None),
-                qp.Target(qp.Column('position'), None),
-                qp.Target(qp.Column('balance'), None),
+            ast.Select([
+                ast.Target(ast.Column('date'), None),
+                ast.Target(ast.Column('flag'), None),
+                ast.Target(ast.Function('maxwidth', [
+                    ast.Column('payee'), ast.Constant(48)]), None),
+                ast.Target(ast.Function('maxwidth', [
+                    ast.Column('narration'), ast.Constant(80)]), None),
+                ast.Target(ast.Column('account'), None),
+                ast.Target(ast.Column('position'), None),
+                ast.Target(ast.Column('balance'), None),
             ],
             None, None, None, None, None, None, None))
 
     def test_journal_with_account(self):
         journal = self.parse("JOURNAL 'liabilities';")
         select = qc.transform_journal(journal)
-        self.assertEqual(select, qp.Select([
-            qp.Target(qp.Column('date'), None),
-            qp.Target(qp.Column('flag'), None),
-            qp.Target(qp.Function('maxwidth', [
-                qp.Column('payee'),
-                qp.Constant(48)]), None),
-            qp.Target(qp.Function('maxwidth', [
-                qp.Column('narration'),
-                qp.Constant(80)]), None),
-            qp.Target(qp.Column('account'), None),
-            qp.Target(qp.Column('position'), None),
-            qp.Target(qp.Column('balance'), None),
+        self.assertEqual(select, ast.Select([
+            ast.Target(ast.Column('date'), None),
+            ast.Target(ast.Column('flag'), None),
+            ast.Target(ast.Function('maxwidth', [
+                ast.Column('payee'),
+                ast.Constant(48)]), None),
+            ast.Target(ast.Function('maxwidth', [
+                ast.Column('narration'),
+                ast.Constant(80)]), None),
+            ast.Target(ast.Column('account'), None),
+            ast.Target(ast.Column('position'), None),
+            ast.Target(ast.Column('balance'), None),
         ],
         None,
-        qp.Match(qp.Column('account'), qp.Constant('liabilities')),
+        ast.Match(ast.Column('account'), ast.Constant('liabilities')),
         None, None, None, None, None))
 
     def test_journal_with_account_and_from(self):
         journal = self.parse("JOURNAL 'liabilities' FROM year = 2014;")
         select = qc.transform_journal(journal)
-        self.assertEqual(select, qp.Select([
-            qp.Target(qp.Column('date'), None),
-            qp.Target(qp.Column('flag'), None),
-            qp.Target(qp.Function('maxwidth', [
-                qp.Column('payee'),
-                qp.Constant(48)]), None),
-            qp.Target(qp.Function('maxwidth', [
-                qp.Column('narration'),
-                qp.Constant(80)]), None),
-            qp.Target(qp.Column('account'), None),
-            qp.Target(qp.Column('position'), None),
-            qp.Target(qp.Column('balance'), None),
+        self.assertEqual(select, ast.Select([
+            ast.Target(ast.Column('date'), None),
+            ast.Target(ast.Column('flag'), None),
+            ast.Target(ast.Function('maxwidth', [
+                ast.Column('payee'),
+                ast.Constant(48)]), None),
+            ast.Target(ast.Function('maxwidth', [
+                ast.Column('narration'),
+                ast.Constant(80)]), None),
+            ast.Target(ast.Column('account'), None),
+            ast.Target(ast.Column('position'), None),
+            ast.Target(ast.Column('balance'), None),
         ],
-        qp.From(qp.Equal(qp.Column('year'), qp.Constant(2014)), None, None, None),
-        qp.Match(qp.Column('account'), qp.Constant('liabilities')),
+        ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
+        ast.Match(ast.Column('account'), ast.Constant('liabilities')),
         None, None, None, None, None))
 
     def test_journal_with_account_func_and_from(self):
         journal = self.parse("JOURNAL 'liabilities' AT cost FROM year = 2014;")
         select = qc.transform_journal(journal)
-        self.assertEqual(select, qp.Select([
-            qp.Target(qp.Column('date'), None),
-            qp.Target(qp.Column('flag'), None),
-            qp.Target(qp.Function('maxwidth', [
-                qp.Column('payee'),
-                qp.Constant(48)]), None),
-            qp.Target(qp.Function('maxwidth', [
-                qp.Column('narration'),
-                qp.Constant(80)]), None),
-            qp.Target(qp.Column('account'), None),
-            qp.Target(qp.Function('cost', [qp.Column('position')]), None),
-            qp.Target(qp.Function('cost', [qp.Column('balance')]), None),
+        self.assertEqual(select, ast.Select([
+            ast.Target(ast.Column('date'), None),
+            ast.Target(ast.Column('flag'), None),
+            ast.Target(ast.Function('maxwidth', [
+                ast.Column('payee'),
+                ast.Constant(48)]), None),
+            ast.Target(ast.Function('maxwidth', [
+                ast.Column('narration'),
+                ast.Constant(80)]), None),
+            ast.Target(ast.Column('account'), None),
+            ast.Target(ast.Function('cost', [ast.Column('position')]), None),
+            ast.Target(ast.Function('cost', [ast.Column('balance')]), None),
         ],
-        qp.From(qp.Equal(qp.Column('year'), qp.Constant(2014)), None, None, None),
-        qp.Match(qp.Column('account'), qp.Constant('liabilities')),
+        ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
+        ast.Match(ast.Column('account'), ast.Constant('liabilities')),
         None, None, None, None, None))
 
 
 class TestTranslationBalance(CompileSelectBase):
 
-    group_by = qp.GroupBy([qp.Column('account'),
-                           qp.Function('account_sortkey', [qp.Column(name='account')])],
-                          None)
+    group_by = ast.GroupBy([
+        ast.Column('account'),
+        ast.Function('account_sortkey', [
+            ast.Column(name='account')])], None)
 
-    order_by = [qp.OrderBy(qp.Function('account_sortkey', [qp.Column('account')]), qp.Ordering.ASC)]
+    order_by = [ast.OrderBy(ast.Function('account_sortkey', [ast.Column('account')]), ast.Ordering.ASC)]
 
     def test_balance(self):
         balance = self.parse("BALANCES;")
         select = qc.transform_balances(balance)
-        self.assertEqual(select, qp.Select([
-            qp.Target(qp.Column('account'), None),
-            qp.Target(qp.Function('sum', [
-                qp.Column('position')
+        self.assertEqual(select, ast.Select([
+            ast.Target(ast.Column('account'), None),
+            ast.Target(ast.Function('sum', [
+                ast.Column('position')
             ]), None),
         ],
         None, None, self.group_by, self.order_by, None, None, None))
@@ -770,11 +772,11 @@ class TestTranslationBalance(CompileSelectBase):
     def test_balance_with_units(self):
         balance = self.parse("BALANCES AT cost;")
         select = qc.transform_balances(balance)
-        self.assertEqual(select, qp.Select([
-            qp.Target(qp.Column('account'), None),
-            qp.Target(qp.Function('sum', [
-                qp.Function('cost', [
-                    qp.Column('position')
+        self.assertEqual(select, ast.Select([
+            ast.Target(ast.Column('account'), None),
+            ast.Target(ast.Function('sum', [
+                ast.Function('cost', [
+                    ast.Column('position')
                 ])
             ]), None)
         ],
@@ -783,15 +785,15 @@ class TestTranslationBalance(CompileSelectBase):
     def test_balance_with_units_and_from(self):
         balance = self.parse("BALANCES AT cost FROM year = 2014;")
         select = qc.transform_balances(balance)
-        self.assertEqual(select, qp.Select([
-            qp.Target(qp.Column('account'), None),
-            qp.Target(qp.Function('sum', [
-                qp.Function('cost', [
-                    qp.Column('position')
+        self.assertEqual(select, ast.Select([
+            ast.Target(ast.Column('account'), None),
+            ast.Target(ast.Function('sum', [
+                ast.Function('cost', [
+                    ast.Column('position')
                 ])
             ]), None),
         ],
-        qp.From(qp.Equal(qp.Column('year'), qp.Constant(2014)), None, None, None),
+        ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
         None, self.group_by, self.order_by, None, None, None))
 
     def test_print(self):
@@ -801,7 +803,7 @@ class TestTranslationBalance(CompileSelectBase):
         self.assertCompile(
             qc.EvalPrint(
                 qc.EvalFrom(
-                    qc.Operator(qp.Equal, [
+                    qc.Operator(ast.Equal, [
                         qe.Column('year'),
                         qc.EvalConstant(2014),
                     ]), None, None, None)),
@@ -816,13 +818,13 @@ class TestCompileConstantsFolding(unittest.TestCase):
     def test_constants_folding(self):
         # unary op
         self.assertEqual(
-            self.compile(qp.Neg(qp.Constant(2))),
+            self.compile(ast.Neg(ast.Constant(2))),
             qc.EvalConstant(-2))
         # binary op
         self.assertEqual(
-            self.compile(qp.Add(qp.Constant(2), qp.Constant(2))),
+            self.compile(ast.Add(ast.Constant(2), ast.Constant(2))),
             qc.EvalConstant(4))
         # funtion
         self.assertEqual(
-            self.compile(qp.Function('root', [qp.Constant('Assets:Cash'), qp.Constant(1)])),
+            self.compile(ast.Function('root', [ast.Constant('Assets:Cash'), ast.Constant(1)])),
             qc.EvalConstant('Assets'))
