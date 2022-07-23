@@ -11,7 +11,6 @@ import collections
 import copy
 import datetime
 import re
-import numbers
 import operator
 from decimal import Decimal
 
@@ -85,8 +84,8 @@ class EvalNode:
 class EvalConstant(EvalNode):
     __slots__ = ('value',)
 
-    def __init__(self, value):
-        super().__init__(type(value))
+    def __init__(self, value, dtype=None):
+        super().__init__(type(value) if dtype is None else dtype)
         self.value = value
 
     def __call__(self, _):
@@ -463,22 +462,23 @@ def compile_expression(expr, environ):
             # not really fit our model for function evaluation,
             # therefore it gets special threatment here.
             return EvalCoalesce(operands)
-        return environ.get_function(expr.fname, operands)
-
-    if isinstance(expr, query_parser.Neg):
-        # Optimization: when the argument is a numeric constant,
-        # rewrite the constant instead than emitting an unary
-        # operation.
-        if isinstance(expr.operand, query_parser.Constant) and isinstance(expr.operand.value, numbers.Number):
-            return EvalConstant(-expr.operand.value)
+        function = environ.get_function(expr.fname, operands)
+        # Constants folding.
+        if all(isinstance(operand, EvalConstant) for operand in operands) and function.pure:
+            return EvalConstant(function(None), function.dtype)
+        return function
 
     if isinstance(expr, query_parser.UnaryOp):
         operand = compile_expression(expr.operand, environ)
-        op = types.function_lookup(OPERATORS, type(expr), [operand])
-        if op is not None:
-            return op(operand)
-        raise CompilationError(
-            f'Operator {type(expr).__name__.lower()}({operand.dtype.__name__}) not supported')
+        function = types.function_lookup(OPERATORS, type(expr), [operand])
+        if function is None:
+            raise CompilationError(
+                f'Operator {type(expr).__name__.lower()}({operand.dtype.__name__}) not supported')
+        function = function(operand)
+        # Constants folding.
+        if isinstance(operand, EvalConstant):
+            return EvalConstant(function(None), function.dtype)
+        return function
 
     if isinstance(expr, query_parser.BinaryOp):
         left = compile_expression(expr.left, environ)
@@ -489,7 +489,11 @@ def compile_expression(expr, environ):
             intypes = [left.dtype, right.dtype]
             for op in candidates:
                 if op.__intypes__ == intypes:
-                    return op(left, right)
+                    function = op(left, right)
+                    # Constants folding.
+                    if isinstance(left, EvalConstant) and isinstance(right, EvalConstant):
+                        return EvalConstant(function(None), function.dtype)
+                    return function
 
             # Implement type inference when one of the operands is not strongly typed.
             if left.dtype is object and right.dtype is not object:

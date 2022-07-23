@@ -344,11 +344,7 @@ class TestCompileFundamentals(CompileSelectBase):
     def test_operaotors(self):
         expr = self.compile("SELECT 1 + 1 AS expr")
         self.assertEqual(expr, qc.EvalQuery([
-            qc.EvalTarget(
-                qc.Operator(qp.Add, [
-                    qc.EvalConstant(1),
-                    qc.EvalConstant(1)
-                ]), 'expr', False)
+            qc.EvalTarget(qc.EvalConstant(2), 'expr', False)
         ], None, None, None, None, None, None, None))
 
         expr = self.compile("SELECT 1 + meta('int') AS expr")
@@ -820,3 +816,23 @@ class TestTranslationBalance(CompileSelectBase):
                         qc.EvalConstant(2014),
                     ]), None, None, None)),
             """PRINT FROM year = 2014;""")
+
+
+class TestCompileConstantsFolding(unittest.TestCase):
+
+    def compile(self, expr):
+        return qc.compile_expression(expr, qe.TargetsEnvironment())
+
+    def test_constants_folding(self):
+        # unary op
+        self.assertEqual(
+            self.compile(qp.Neg(qp.Constant(2))),
+            qc.EvalConstant(-2))
+        # binary op
+        self.assertEqual(
+            self.compile(qp.Add(qp.Constant(2), qp.Constant(2))),
+            qc.EvalConstant(4))
+        # funtion
+        self.assertEqual(
+            self.compile(qp.Function('root', [qp.Constant('Assets:Cash'), qp.Constant(1)])),
+            qc.EvalConstant('Assets'))

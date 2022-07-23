@@ -43,6 +43,7 @@ def function(intypes, outtype, pass_context=False, name=None):
     def decorator(func):
         class Func(query_compile.EvalFunction):
             __intypes__ = intypes
+            pure = not pass_context
             def __init__(self, operands):
                 super().__init__(operands, outtype)
             def __call__(self, context):
