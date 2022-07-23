@@ -110,6 +110,7 @@ comparison
     | eq
     | neq
     | in
+    | notin
     | match
     | isnull
     | isnotnull
@@ -142,6 +143,10 @@ neq::NotEqual::BinaryOp
 
 in::In::BinaryOp
     = left:sum 'IN' right:sum
+    ;
+
+notin::NotIn::BinaryOp
+    = left:sum 'NOT' 'IN' right:sum
     ;
 
 match::Match::BinaryOp

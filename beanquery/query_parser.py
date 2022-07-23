@@ -276,6 +276,7 @@ class Match(BinaryOp): pass
 
 # Membership operators.
 class In(BinaryOp): pass
+class NotIn(BinaryOp): pass
 
 # Arithmetic operators.
 class Neg(UnaryOp): pass

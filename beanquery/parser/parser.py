@@ -534,7 +534,7 @@ class BQLParser(Parser):
                 'expecting one of: '
                 "'NOT' <comparison> <eq> <gt> <gte> <in>"
                 '<isnotnull> <isnull> <lt> <lte> <match>'
-                '<neq> <not> <sum>'
+                '<neq> <not> <notin> <sum>'
             )
 
     @tatsumasu('Not')
@@ -567,6 +567,8 @@ class BQLParser(Parser):
             with self._option():
                 self._in_()
             with self._option():
+                self._notin_()
+            with self._option():
                 self._match_()
             with self._option():
                 self._isnull_()
@@ -577,8 +579,8 @@ class BQLParser(Parser):
             self._error(
                 'expecting one of: '
                 '<add> <eq> <gt> <gte> <in> <isnotnull>'
-                '<isnull> <lt> <lte> <match> <neq> <sub>'
-                '<sum> <term>'
+                '<isnull> <lt> <lte> <match> <neq>'
+                '<notin> <sub> <sum> <term>'
             )
 
     @tatsumasu('Less')
@@ -660,10 +662,24 @@ class BQLParser(Parser):
             []
         )
 
-    @tatsumasu('Contains')
+    @tatsumasu('In')
     def _in_(self):  # noqa
         self._sum_()
         self.name_last_node('left')
+        self._token('IN')
+        self._sum_()
+        self.name_last_node('right')
+
+        self._define(
+            ['left', 'right'],
+            []
+        )
+
+    @tatsumasu('NotIn')
+    def _notin_(self):  # noqa
+        self._sum_()
+        self.name_last_node('left')
+        self._token('NOT')
         self._token('IN')
         self._sum_()
         self.name_last_node('right')
@@ -1167,6 +1183,9 @@ class BQLSemantics:
         return ast
 
     def in_(self, ast):  # noqa
+        return ast
+
+    def notin(self, ast):  # noqa
         return ast
 
     def match(self, ast):  # noqa

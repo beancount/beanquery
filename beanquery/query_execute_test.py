@@ -303,6 +303,8 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 'tag' IN tags", False)
         self.assertResult("SELECT 3 IN (2, 3, 4)", True)
         self.assertResult("SELECT 'x' IN ('a', 'b', 'c')", False)
+        self.assertResult("SELECT 3 NOT IN (2, 3, 4)", False)
+        self.assertResult("SELECT 1 NOT IN (2, 3, 4)", True)
 
     def test_operators_type_inference(self):
         self.assertResult("SELECT 1 + meta('int')", Decimal(2))

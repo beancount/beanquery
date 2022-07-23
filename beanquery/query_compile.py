@@ -278,6 +278,13 @@ def in_(x, y):
     return operator.contains(y, x)
 
 
+@binaryop(query_parser.NotIn, [types.Any, set], bool)
+@binaryop(query_parser.NotIn, [types.Any, list], bool)
+@binaryop(query_parser.NotIn, [types.Any, dict], bool)
+def not_in_(x, y):
+    return not operator.contains(y, x)
+
+
 _comparisons = [
     (query_parser.Equal, operator.eq),
     (query_parser.NotEqual, operator.ne),
