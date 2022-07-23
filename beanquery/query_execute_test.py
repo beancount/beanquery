@@ -16,10 +16,11 @@ from beancount.parser import cmptest
 from beancount.utils import misc_utils
 from beancount import loader
 
-from beanquery import query_parser as qp
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query_execute as qx
+from beanquery import query_parser as parser
+from beanquery.parser import ast
 
 # pylint: disable=unused-import
 from beanquery import compat
@@ -36,7 +37,7 @@ class QueryBase(cmptest.TestCase):
 
     def setUp(self):
         super().setUp()
-        self.parser = qp.Parser()
+        self.parser = parser.Parser()
 
     def parse(self, bql_string):
         """Parse a query.
@@ -475,7 +476,7 @@ class TestExecutePrint(CommonInputBase, QueryBase):
     def test_print_with_filter(self):
         statement = qc.EvalPrint(
             qc.EvalFrom(
-                qc.Operator(qp.Equal, [
+                qc.Operator(ast.Equal, [
                     qe.Column('year'),
                     qc.EvalConstant(2012),
                 ]),
