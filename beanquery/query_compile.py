@@ -134,23 +134,15 @@ class EvalBinaryOp(EvalNode):
 
     def __call__(self, context):
         left = self.left(context)
-        right = self.right(context)
-        return self.operator(left, right)
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
-
-
-class EvalBinaryOpSafe(EvalBinaryOp):
-
-    def __call__(self, context):
-        left = self.left(context)
         if left is None:
             return None
         right = self.right(context)
         if right is None:
             return None
         return self.operator(left, right)
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
 
 
 # Note: We ought to implement implicit type promotion here,
@@ -175,9 +167,9 @@ def unaryop(op, intypes, outtype, nullsafe=False):
     return decorator
 
 
-def binaryop(op, intypes, outtype, nullsafe=False):
+def binaryop(op, intypes, outtype):
     def decorator(func):
-        class Op(EvalBinaryOp if nullsafe else EvalBinaryOpSafe):
+        class Op(EvalBinaryOp):
             __intypes__ = intypes
             def __init__(self, left, right):
                 super().__init__(func, left, right, outtype)
