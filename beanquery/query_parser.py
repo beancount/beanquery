@@ -66,6 +66,5 @@ class BQLSemantics:
         return value
 
 
-class Parser:
-    def parse(self, text, default_close_date=None):
-        return parser.BQLParser().parse(text, semantics=BQLSemantics(default_close_date))
+def parse(text, default_close_date=None):
+    return parser.BQLParser().parse(text, semantics=BQLSemantics(default_close_date))

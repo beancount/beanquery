@@ -227,12 +227,6 @@ class CompileSelectBase(unittest.TestCase):
     xcontext_targets = qe.TargetsEnvironment()
     xcontext_postings = qe.FilterPostingsEnvironment()
 
-    def setUp(self):
-        self.parser = parser.Parser()
-
-    def parse(self, query):
-        return self.parser.parse(query.strip())
-
     def compile(self, query):
         """Parse one query and compile it.
 
@@ -241,7 +235,7 @@ class CompileSelectBase(unittest.TestCase):
         Returns:
           The AST.
         """
-        statement = self.parse(query)
+        statement = parser.parse(query)
         c_query = qc.compile(statement,
                              self.xcontext_targets,
                              self.xcontext_postings,
@@ -672,7 +666,7 @@ class TestTranslationJournal(CompileSelectBase):
     maxDiff = 4096
 
     def test_journal(self):
-        journal = self.parse("JOURNAL;")
+        journal = parser.parse("JOURNAL;")
         select = qc.transform_journal(journal)
         self.assertEqual(select,
             ast.Select([
@@ -689,7 +683,7 @@ class TestTranslationJournal(CompileSelectBase):
             None, None, None, None, None, None, None))
 
     def test_journal_with_account(self):
-        journal = self.parse("JOURNAL 'liabilities';")
+        journal = parser.parse("JOURNAL 'liabilities';")
         select = qc.transform_journal(journal)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('date'), None),
@@ -709,7 +703,7 @@ class TestTranslationJournal(CompileSelectBase):
         None, None, None, None, None))
 
     def test_journal_with_account_and_from(self):
-        journal = self.parse("JOURNAL 'liabilities' FROM year = 2014;")
+        journal = parser.parse("JOURNAL 'liabilities' FROM year = 2014;")
         select = qc.transform_journal(journal)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('date'), None),
@@ -729,7 +723,7 @@ class TestTranslationJournal(CompileSelectBase):
         None, None, None, None, None))
 
     def test_journal_with_account_func_and_from(self):
-        journal = self.parse("JOURNAL 'liabilities' AT cost FROM year = 2014;")
+        journal = parser.parse("JOURNAL 'liabilities' AT cost FROM year = 2014;")
         select = qc.transform_journal(journal)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('date'), None),
@@ -759,7 +753,7 @@ class TestTranslationBalance(CompileSelectBase):
     order_by = [ast.OrderBy(ast.Function('account_sortkey', [ast.Column('account')]), ast.Ordering.ASC)]
 
     def test_balance(self):
-        balance = self.parse("BALANCES;")
+        balance = parser.parse("BALANCES;")
         select = qc.transform_balances(balance)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('account'), None),
@@ -770,7 +764,7 @@ class TestTranslationBalance(CompileSelectBase):
         None, None, self.group_by, self.order_by, None, None, None))
 
     def test_balance_with_units(self):
-        balance = self.parse("BALANCES AT cost;")
+        balance = parser.parse("BALANCES AT cost;")
         select = qc.transform_balances(balance)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('account'), None),
@@ -783,7 +777,7 @@ class TestTranslationBalance(CompileSelectBase):
         None, None, self.group_by, self.order_by, None, None, None))
 
     def test_balance_with_units_and_from(self):
-        balance = self.parse("BALANCES AT cost FROM year = 2014;")
+        balance = parser.parse("BALANCES AT cost FROM year = 2014;")
         select = qc.transform_balances(balance)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('account'), None),

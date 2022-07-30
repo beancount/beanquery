@@ -24,23 +24,20 @@ def Select(targets, from_clause=None, where_clause=None, **kwargs):
 
 class QueryParserTestBase(unittest.TestCase):
 
-    def setUp(self):
-        self.parser = parser.Parser()
-
     def parse(self, query):
-        return self.parser.parse(query.strip())
+        return parser.parse(query.strip())
 
     def assertParse(self, query, expected):
-        self.assertEqual(self.parse(query), expected)
+        self.assertEqual(parser.parse(query), expected)
 
     def assertParseTarget(self, query, expected):
-        expr = self.parse(query)
+        expr = parser.parse(query)
         self.assertIsInstance(expr, ast.Select)
         self.assertEqual(len(expr.targets), 1)
         self.assertEqual(expr.targets[0].expression, expected)
 
     def assertParseFrom(self, query, expected):
-        expr = self.parse(query)
+        expr = parser.parse(query)
         self.assertIsInstance(expr, ast.Select)
         self.assertEqual(expr.from_clause, expected)
 
@@ -49,10 +46,10 @@ class TestParseSelect(QueryParserTestBase):
 
     def test_select(self):
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT")
+            parser.parse("SELECT")
 
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT ; ")
+            parser.parse("SELECT ; ")
 
         self.assertParse(
             "SELECT *;",
@@ -235,7 +232,7 @@ class TestSelectFrom(QueryParserTestBase):
         expr = ast.Equal(ast.Column('d'), ast.And([ast.Function('max', [ast.Column('e')]), ast.Constant(17)]))
 
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT a, b FROM;")
+            parser.parse("SELECT a, b FROM;")
 
         # simple
         self.assertParseFrom(
@@ -290,7 +287,7 @@ class TestSelectWhere(QueryParserTestBase):
             ], None, expr))
 
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT a, b WHERE;")
+            parser.parse("SELECT a, b WHERE;")
 
 
 class TestSelectFromAndWhere(QueryParserTestBase):
@@ -377,7 +374,7 @@ class TestSelectGroupBy(QueryParserTestBase):
 
     def test_groupby_empty(self):
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT * GROUP BY;")
+            parser.parse("SELECT * GROUP BY;")
 
 
 class TestSelectOrderBy(QueryParserTestBase):
@@ -423,20 +420,20 @@ class TestSelectOrderBy(QueryParserTestBase):
 
     def test_orderby_empty(self):
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT * ORDER BY;")
+            parser.parse("SELECT * ORDER BY;")
 
 
 class TestSelectPivotBy(QueryParserTestBase):
 
     def test_pivotby(self):
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT * PIVOT BY;")
+            parser.parse("SELECT * PIVOT BY;")
 
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT * PIVOT BY a;")
+            parser.parse("SELECT * PIVOT BY a;")
 
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT * PIVOT BY a, b, c")
+            parser.parse("SELECT * PIVOT BY a, b, c")
 
         self.assertParse(
             "SELECT * PIVOT BY a, b",
@@ -459,7 +456,7 @@ class TestSelectOptions(QueryParserTestBase):
 
     def test_limit_empty(self):
         with self.assertRaises(parser.ParseError):
-            self.parse("SELECT * LIMIT;")
+            parser.parse("SELECT * LIMIT;")
 
 
 class TestBalances(QueryParserTestBase):

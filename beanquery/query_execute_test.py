@@ -35,20 +35,6 @@ class QueryBase(cmptest.TestCase):
     xcontext_targets = qe.TargetsEnvironment()
     xcontext_postings = qe.FilterPostingsEnvironment()
 
-    def setUp(self):
-        super().setUp()
-        self.parser = parser.Parser()
-
-    def parse(self, bql_string):
-        """Parse a query.
-
-        Args:
-          bql_string: An SQL query to be parsed.
-        Returns:
-          A parsed statement (Select() node).
-        """
-        return self.parser.parse(bql_string.strip())
-
     def compile(self, bql_string):
         """Parse a query and compile it.
 
@@ -57,7 +43,7 @@ class QueryBase(cmptest.TestCase):
         Returns:
           A compiled EvalQuery node.
         """
-        return qc.compile_select(self.parse(bql_string),
+        return qc.compile_select(parser.parse(bql_string),
                                  self.xcontext_targets,
                                  self.xcontext_postings,
                                  self.xcontext_entries)

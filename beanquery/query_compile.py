@@ -1080,7 +1080,7 @@ def transform_journal(journal):
     Returns:
       An instance of an uncompiled Select object.
     """
-    cooked_select = parser.Parser().parse("""
+    cooked_select = parser.parse("""
 
         SELECT
            date,
@@ -1117,7 +1117,7 @@ def transform_balances(balances):
     ## the first or last sort-order value gets used, because it would simplify
     ## the input statement.
 
-    cooked_select = parser.Parser().parse("""
+    cooked_select = parser.parse("""
 
       SELECT account, SUM({}(position))
       GROUP BY account, ACCOUNT_SORTKEY(account)
