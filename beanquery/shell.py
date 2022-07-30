@@ -41,6 +41,43 @@ def nullcontext(result):
     yield result
 
 
+def render_location(text, pos, endpos, lineno, indent, strip, out):
+    length = endpos - pos
+    lines = text.splitlines(True)
+    for line in lines[:lineno]:
+        pos -= len(line)
+        if strip and not line.rstrip():
+            continue
+        strip = False
+        out.append(indent + line.rstrip().expandtabs())
+    out.append(indent + lines[lineno].rstrip().expandtabs())
+    out.append(indent + ' ' * pos + '^' * length)
+
+
+# FIXME: It makes sense to move this into the exception classes
+# themselves to make the error location reporting independent of the
+# execution in the shell. The best way to do that would be to make all
+# exceptions to have a common base class and to store location
+# information uniformly. This requires translating TatSu exceptions
+# into something else.
+def render_exception(exc, indent='  ', strip=True):
+    if isinstance(exc, query_compile.CompilationError) and exc.parseinfo:
+        out = [f'error: {exc}', '']
+        pos = exc.parseinfo.pos
+        endpos = exc.parseinfo.endpos
+        lineno = exc.parseinfo.line
+        render_location(exc.parseinfo.tokenizer.text, pos, endpos, lineno, indent, strip, out)
+        return '\n'.join(out)
+
+    if isinstance(exc, query_parser.ParseError):
+        out = ['error: syntax error', '']
+        info = exc.tokenizer.line_info(exc.pos)
+        render_location(exc.tokenizer.text, exc.pos, exc.pos + 1, info.line, indent, strip, out)
+        return '\n'.join(out)
+
+    return f'error: {exc}'
+
+
 def convert_bool(string):
     """Convert a string to a boolean.
 
@@ -208,14 +245,13 @@ class DispatchingShell(cmd.Cmd):
 
     def do_parse(self, line):
         "Just run the parser on the following command and print the output."
-        print(f"INPUT: {line!r}", file=self.outfile)
         try:
             statement = self.parser.parse(line, True)
             print(statement, file=self.outfile)
-        except (query_parser.ParseError, query_compile.CompilationError) as exc:
-            print(exc, file=self.outfile)
+        except query_parser.ParseError as exc:
+            print(render_exception(exc), file=sys.stderr)
         except Exception as exc:
-            traceback.print_exc(file=self.outfile)
+            traceback.print_exc(file=sys.stderr)
 
     def dispatch(self, statement):
         """Dispatch the given statement to a suitable method.
@@ -245,13 +281,10 @@ class DispatchingShell(cmd.Cmd):
           default_close_date: A datetimed.date instance, the default close date.
         """
         try:
-            statement = self.parser.parse(line,
-                                          default_close_date=default_close_date)
+            statement = self.parser.parse(line, default_close_date=default_close_date)
             self.dispatch(statement)
-        except query_parser.ParseError as exc:
-            print(exc, file=self.outfile)
         except Exception as exc:
-            traceback.print_exc(file=self.outfile)
+            print(render_exception(exc), file=sys.stderr)
 
     def emptyline(self):
         """Do nothing on an empty line."""
@@ -336,7 +369,7 @@ class BQLShell(DispatchingShell):
         if not query:
             print(f"ERROR: Query '{name}' not found.")
             return
-        self.dispatch(self.parser.parse(query.query_string))
+        self.run_parser(query.query_string, default_close_date=query.date)
 
     def complete_run(self, text, _line, _begidx, _endidx):
         return [name for name in self.named_queries if name.startswith(text)]
@@ -348,33 +381,28 @@ class BQLShell(DispatchingShell):
 
         try:
             statement = self.parser.parse(line)
-        except query_parser.ParseError as exc:
-            pr(str(exc).rstrip('.'))
-            return
+            pr("parsed statement:")
+            pr(f"  {statement}")
+            pr()
 
-        pr("Parsed statement:")
-        pr(f"  {statement}")
-        pr()
+            query = query_compile.compile(statement, self.env_targets, self.env_postings, self.env_entries)
+            pr("compiled query:")
+            pr(f"  {query}")
+            pr()
 
-        # Compile the statement and print it uot.
-        try:
-            query = query_compile.compile(statement, self.env_targets,
-                                          self.env_postings, self.env_entries)
-        except query_compile.CompilationError as exc:
-            pr(str(exc).rstrip('.'))
-            return
+            pr("Targets:")
+            for c_target in query.c_targets:
+                pr("  '{}'{}: {}".format(
+                    c_target.name or '(invisible)',
+                    ' (aggregate)' if query_compile.is_aggregate(c_target.c_expr) else '',
+                    c_target.c_expr.dtype.__name__))
+            pr()
 
-        pr("Compiled query:")
-        pr(f"  {query}")
-        pr()
+        except (query_parser.ParseError, query_compile.CompilationError) as exc:
+            print(render_exception(exc), file=sys.stderr)
+        except Exception as exc:
+            traceback.print_exc(file=sys.stderr)
 
-        pr("Targets:")
-        for c_target in query.c_targets:
-            pr("  '{}'{}: {}".format(
-                c_target.name or '(invisible)',
-                ' (aggregate)' if query_compile.is_aggregate(c_target.c_expr) else '',
-                c_target.c_expr.dtype.__name__))
-        pr()
 
     def on_Print(self, print_stmt):
         """
@@ -394,15 +422,7 @@ class BQLShell(DispatchingShell):
 
         """
         # Compile the print statement.
-        try:
-            c_print = query_compile.compile(print_stmt,
-                                            self.env_targets,
-                                            self.env_postings,
-                                            self.env_entries)
-        except query_compile.CompilationError as exc:
-            print(f'ERROR: {exc}.', file=self.outfile)
-            return
-
+        c_print = query_compile.compile(print_stmt, self.env_targets, self.env_postings, self.env_entries)
         with self.get_output() as out:
             query_execute.execute_print(c_print, self.entries, self.options, out)
 
@@ -451,19 +471,10 @@ class BQLShell(DispatchingShell):
 
         """
         # Compile the SELECT statement.
-        try:
-            c_query = query_compile.compile(statement,
-                                            self.env_targets,
-                                            self.env_postings,
-                                            self.env_entries)
-        except query_compile.CompilationError as exc:
-            print(f'ERROR: {exc}.', file=self.outfile)
-            return
+        c_query = query_compile.compile(statement, self.env_targets, self.env_postings, self.env_entries)
 
         # Execute it to obtain the result rows.
-        rtypes, rrows = query_execute.execute_query(c_query,
-                                                    self.entries,
-                                                    self.options)
+        rtypes, rrows = query_execute.execute_query(c_query, self.entries, self.options)
 
         # Output the resulting rows.
         if not rrows:
