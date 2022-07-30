@@ -307,7 +307,7 @@ class BQLShell(DispatchingShell):
 
     def __init__(self, is_interactive, loadfun, outfile,
                  default_format='text', do_numberify=False):
-        super().__init__(is_interactive, query_parser.Parser(), outfile,
+        super().__init__(is_interactive, query_parser, outfile,
                          default_format, do_numberify)
 
         self.loadfun = loadfun

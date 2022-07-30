@@ -35,8 +35,7 @@ def run_query(entries, options_map, query, *format_args, numberify=False):
     formatted_query = query.format(*format_args)
 
     # Parse the statement.
-    parser = query_parser.Parser()
-    statement = parser.parse(formatted_query)
+    statement = query_parser.parse(formatted_query)
 
     # Compile the SELECT statement.
     c_query = query_compile.compile(statement,
