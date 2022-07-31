@@ -8,7 +8,7 @@ from decimal import Decimal
 from beancount.core.number import D
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
-from beanquery import query_parser as parser
+from beanquery import parser
 from beanquery.parser import ast
 
 

@@ -3,7 +3,7 @@
 __copyright__ = "Copyright (C) 2015-2017  Martin Blais"
 __license__ = "GNU GPLv2"
 
-from beanquery import query_parser
+from beanquery import parser
 from beanquery import query_compile
 from beanquery import query_env
 from beanquery import query_execute
@@ -35,7 +35,7 @@ def run_query(entries, options_map, query, *format_args, numberify=False):
     formatted_query = query.format(*format_args)
 
     # Parse the statement.
-    statement = query_parser.parse(formatted_query)
+    statement = parser.parse(formatted_query)
 
     # Compile the SELECT statement.
     c_query = query_compile.compile(statement,

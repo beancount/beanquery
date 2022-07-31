@@ -5,7 +5,7 @@ import datetime
 import unittest
 
 from decimal import Decimal as D
-from beanquery import query_parser as parser
+from beanquery import parser
 from beanquery.parser import ast
 
 

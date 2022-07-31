@@ -19,7 +19,7 @@ from beancount import loader
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query_execute as qx
-from beanquery import query_parser as parser
+from beanquery import parser
 from beanquery.parser import ast
 
 # pylint: disable=unused-import
