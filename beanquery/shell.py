@@ -24,7 +24,7 @@ from beancount.utils import misc_utils
 from beancount.utils import pager
 from beancount import loader
 
-from beanquery import query_parser
+from beanquery import parser
 from beanquery import query_compile
 from beanquery import query_env
 from beanquery import query_execute
@@ -69,7 +69,7 @@ def render_exception(exc, indent='  ', strip=True):
         render_location(exc.parseinfo.tokenizer.text, pos, endpos, lineno, indent, strip, out)
         return '\n'.join(out)
 
-    if isinstance(exc, query_parser.ParseError):
+    if isinstance(exc, parser.ParseError):
         out = ['error: syntax error', '']
         info = exc.tokenizer.line_info(exc.pos)
         render_location(exc.tokenizer.text, exc.pos, exc.pos + 1, info.line, indent, strip, out)
@@ -248,7 +248,7 @@ class DispatchingShell(cmd.Cmd):
         try:
             statement = self.parser.parse(line, True)
             print(statement, file=self.outfile)
-        except query_parser.ParseError as exc:
+        except parser.ParseError as exc:
             print(render_exception(exc), file=sys.stderr)
         except Exception as exc:
             traceback.print_exc(file=sys.stderr)
@@ -307,7 +307,7 @@ class BQLShell(DispatchingShell):
 
     def __init__(self, is_interactive, loadfun, outfile,
                  default_format='text', do_numberify=False):
-        super().__init__(is_interactive, query_parser, outfile,
+        super().__init__(is_interactive, parser, outfile,
                          default_format, do_numberify)
 
         self.loadfun = loadfun
@@ -398,7 +398,7 @@ class BQLShell(DispatchingShell):
                     c_target.c_expr.dtype.__name__))
             pr()
 
-        except (query_parser.ParseError, query_compile.CompilationError) as exc:
+        except (parser.ParseError, query_compile.CompilationError) as exc:
             print(render_exception(exc), file=sys.stderr)
         except Exception as exc:
             traceback.print_exc(file=sys.stderr)

@@ -17,7 +17,7 @@ from decimal import Decimal
 
 from beancount.core import inventory
 from beanquery import types
-from beanquery import query_parser as parser
+from beanquery import parser
 from beanquery.parser import ast
 
 
