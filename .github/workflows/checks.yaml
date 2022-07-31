@@ -25,17 +25,17 @@ jobs:
         # all the tests we check that each module is exaustively tested
         # by the dedicated units tests.
         run: |
+          set -x
           echo '{
 
-            "beanquery/query_parser.py": "beanquery/query_parser_test.py",
+            "beanquery/parser/*": "beanquery/parser_test.py",
             "beanquery/query_render.py": "beanquery/query_render_test.py"
 
           }' | jq -rc 'to_entries | .[] | (.key + "=" + .value)' | while IFS='=' read src test
           do
-            echo python -m coverage run --branch --include "$src" -m unittest "$test"
-            python -m coverage run --branch --include "$src" -m unittest $test
-            echo python -m coverage report --precision=2 --fail-under=100 "$src"
-            python -m coverage report --precision=2 --fail-under=100 "$src"
+            python -m coverage run --branch --include "$src" --omit beanquery/parser/parser.py -m unittest "$test"
+            python -m coverage report --fail-under=100 -m
+            python -m coverage erase
           done
   build:
     runs-on: ubuntu-20.04
