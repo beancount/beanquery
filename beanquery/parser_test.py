@@ -590,7 +590,6 @@ class TestComments(QueryParserTestBase):
 
 
 class TestRepr(unittest.TestCase):
-    # 100% branch test coverage is hard...
 
     def test_ordering(self):
         self.assertEqual(repr(ast.Ordering.ASC), 'Ordering.ASC')
@@ -599,3 +598,17 @@ class TestRepr(unittest.TestCase):
     def test_ast_node(self):
         self.assertEqual(repr(ast.Constant(1)), 'Constant(value=1)')
         self.assertEqual(repr(ast.Not(ast.Constant(False))), 'Not(operand=Constant(value=False))')
+
+
+class TestNodeText(unittest.TestCase):
+
+    def test_text(self):
+        select = parser.parse('SELECT date + 1')
+        self.assertEqual(select.text, 'SELECT date + 1')
+        self.assertEqual(select.targets[0].expression.text, 'date + 1')
+        self.assertEqual(select.targets[0].expression.left.text, 'date')
+        self.assertEqual(select.targets[0].expression.right.text, '1')
+
+    def test_synthetic(self):
+        node = ast.And([ast.Constant(False), ast.Constant(True)])
+        self.assertIsNone(node.text)
