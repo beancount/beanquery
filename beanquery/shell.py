@@ -3,7 +3,6 @@ __license__ = "GNU GPLv2"
 
 import atexit
 import cmd
-import contextlib
 import io
 import logging
 import operator
@@ -14,6 +13,8 @@ import sys
 import shlex
 import textwrap
 import traceback
+
+from contextlib import nullcontext
 from os import path
 
 import click
@@ -33,12 +34,6 @@ from beanquery import numberify
 
 
 HISTORY_FILENAME = "~/.bean-shell-history"
-
-
-# The same as contextlib.nullcontext in Python >= 3.7.
-@contextlib.contextmanager
-def nullcontext(result):
-    yield result
 
 
 def render_location(text, pos, endpos, lineno, indent, strip, out):
