@@ -222,10 +222,6 @@ class CompileSelectBase(unittest.TestCase):
 
     maxDiff = 8192
 
-    # Default execution contexts.
-    entries_env = qe.EntriesEnvironment()
-    postings_env = qe.PostingsEnvironment()
-
     def compile(self, query):
         """Parse one query and compile it.
 
@@ -235,7 +231,7 @@ class CompileSelectBase(unittest.TestCase):
           The AST.
         """
         statement = parser.parse(query)
-        c_query = qc.compile(statement, self.postings_env, self.entries_env)
+        c_query = qc.compile(statement)
         if isinstance(c_query, ast.Select):
             self.assertSelectInvariants(c_query)
         return c_query

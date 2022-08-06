@@ -703,6 +703,7 @@ class Max(query_compile.EvalAggregator):
 
 
 class EntriesEnvironment(query_compile.CompilationEnvironment):
+    name = 'entries'
     columns = {}
     functions = FUNCTIONS.copy()
 
@@ -821,6 +822,7 @@ def links(context):
 
 class PostingsEnvironment(EntriesEnvironment):
     """Execution context providing access to attributes on Postings."""
+    name = 'postings'
     columns = EntriesEnvironment.columns.copy()
     functions = FUNCTIONS.copy()
     functions.update(AGGREGATORS)

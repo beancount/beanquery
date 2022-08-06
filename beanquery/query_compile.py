@@ -434,13 +434,19 @@ class EvalAggregator(EvalFunction):
         return context.store[self.handle]
 
 
+ENVS = {}
+
+
 class CompilationEnvironment:
     """Base class for all compilation contexts. A compilation context provides
     column accessors specific to the particular row objects that we will access.
     """
-    # Maps of names to evaluators for columns and functions.
+    name = None
     columns = {}
     functions = {}
+
+    def __init_subclass__(cls):
+        ENVS[cls.name] = cls
 
 
 def compile_expression(expr, environ):
@@ -548,7 +554,7 @@ def compile_expression(expr, environ):
     if isinstance(expr, ast.Constant):
         return EvalConstant(expr.value)
 
-    assert False, f"invalid expression: {expr}"
+    raise NotImplementedError
 
 
 def get_columns_and_aggregates(node):
@@ -995,7 +1001,7 @@ EvalQuery = collections.namedtuple('EvalQuery', ('c_targets c_from c_where '
 EvalPivot = collections.namedtuple('EvalPivot', 'query pivots')
 
 
-def compile_select(select, postings_environ, entries_environ):
+def compile_select(select):
     """Prepare an AST for a Select statement into a very rudimentary execution tree.
     The execution tree mostly looks much like an AST, but with some nodes
     replaced with knowledge specific to an execution context and eventually some
@@ -1003,11 +1009,12 @@ def compile_select(select, postings_environ, entries_environ):
 
     Args:
       select: An instance of ast.Select.
-      postings_environ: : A compilation environment for evaluating postings expressions.
-      entries_environ: : A compilation environment for evaluating entries expressions.
     Returns:
       An instance of EvalQuery, ready to be executed.
     """
+
+    entries_environ = ENVS['entries']
+    postings_environ = ENVS['postings']
 
     if isinstance(select.from_clause, ast.Select):
         raise CompilationError("Nested SELECT are not supported yet")
@@ -1138,27 +1145,24 @@ def transform_balances(balances):
 #   c_from: An instance of EvalNode, a compiled expression tree, for directives.
 EvalPrint = collections.namedtuple('EvalPrint', 'c_from')
 
-def compile_print(print_stmt, env_entries):
+def compile_print(print_stmt):
     """Compile a Print statement.
 
     Args:
       statement: An instance of ast.Print.
-      entries_environ: A compilation environment for evaluating entry filters.
     Returns:
       An instance of EvalPrint, ready to be executed.
     """
-    c_from = compile_from(print_stmt.from_clause, env_entries)
+    c_from = compile_from(print_stmt.from_clause, ENVS['entries'])
     return EvalPrint(c_from)
 
 
 # pylint: disable=redefined-builtin
-def compile(statement, postings_environ, entries_environ):
+def compile(statement):
     """Prepare an AST any of the statement into an executable statement.
 
     Args:
       statement: An instance of the parser's Select, Balances, Journal or Print.
-      postings_environ: : A compilation environment for evaluating postings expressions.
-      entries_environ: : A compilation environment for evaluating entries expressions.
     Returns:
       An instance of EvalQuery or EvalPrint, ready to be executed.
     Raises:
@@ -1171,8 +1175,8 @@ def compile(statement, postings_environ, entries_environ):
         statement = transform_journal(statement)
 
     if isinstance(statement, ast.Select):
-        return compile_select(statement, postings_environ, entries_environ)
+        return compile_select(statement)
     if isinstance(statement, ast.Print):
-        return compile_print(statement, entries_environ)
+        return compile_print(statement)
 
-    raise CompilationError("Cannot compile a statement of type '{}'".format(type(statement)))
+    raise NotImplementedError

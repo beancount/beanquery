@@ -5,7 +5,6 @@ __license__ = "GNU GPLv2"
 
 from beanquery import parser
 from beanquery import query_compile
-from beanquery import query_env
 from beanquery import query_execute
 from beanquery import numberify as numberify_lib
 
@@ -27,8 +26,6 @@ def run_query(entries, options_map, query, *format_args, numberify=False):
       ParseError: If the statement cannot be parsed.
       CompilationError: If the statement cannot be compiled.
     """
-    entries_env = query_env.EntriesEnvironment()
-    postings_env = query_env.PostingsEnvironment()
 
     # Apply formatting to the query.
     formatted_query = query.format(*format_args)
@@ -37,7 +34,7 @@ def run_query(entries, options_map, query, *format_args, numberify=False):
     statement = parser.parse(formatted_query)
 
     # Compile the SELECT statement.
-    c_query = query_compile.compile(statement, postings_env, entries_env)
+    c_query = query_compile.compile(statement)
 
     # Execute it to obtain the result rows.
     rtypes, rrows = query_execute.execute_query(c_query, entries, options_map)
