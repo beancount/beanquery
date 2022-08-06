@@ -27,9 +27,8 @@ def run_query(entries, options_map, query, *format_args, numberify=False):
       ParseError: If the statement cannot be parsed.
       CompilationError: If the statement cannot be compiled.
     """
-    env_targets = query_env.TargetsEnvironment()
-    env_entries = query_env.FilterEntriesEnvironment()
-    env_postings = query_env.FilterPostingsEnvironment()
+    entries_env = query_env.EntriesEnvironment()
+    postings_env = query_env.PostingsEnvironment()
 
     # Apply formatting to the query.
     formatted_query = query.format(*format_args)
@@ -38,10 +37,7 @@ def run_query(entries, options_map, query, *format_args, numberify=False):
     statement = parser.parse(formatted_query)
 
     # Compile the SELECT statement.
-    c_query = query_compile.compile(statement,
-                                    env_targets,
-                                    env_postings,
-                                    env_entries)
+    c_query = query_compile.compile(statement, postings_env, entries_env)
 
     # Execute it to obtain the result rows.
     rtypes, rrows = query_execute.execute_query(c_query, entries, options_map)

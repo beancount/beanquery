@@ -702,7 +702,7 @@ class Max(query_compile.EvalAggregator):
                 store[self.handle] = value
 
 
-class FilterEntriesEnvironment(query_compile.CompilationEnvironment):
+class EntriesEnvironment(query_compile.CompilationEnvironment):
     columns = {}
     functions = FUNCTIONS.copy()
 
@@ -720,7 +720,7 @@ class FilterEntriesEnvironment(query_compile.CompilationEnvironment):
         return decorator
 
 
-column = FilterEntriesEnvironment.column
+column = EntriesEnvironment.column
 
 
 @column(str, 'id')
@@ -819,12 +819,17 @@ def links(context):
     return context.entry.links
 
 
-class FilterPostingsEnvironment(FilterEntriesEnvironment):
-    columns = FilterEntriesEnvironment.columns.copy()
+class PostingsEnvironment(EntriesEnvironment):
+    """Execution context providing access to attributes on Postings."""
+    columns = EntriesEnvironment.columns.copy()
     functions = FUNCTIONS.copy()
+    functions.update(AGGREGATORS)
+
+    # The list of columns that a wildcard will expand into.
+    wildcard_columns = 'date flag payee narration position'.split()
 
 
-column = FilterPostingsEnvironment.column
+column = PostingsEnvironment.column
 
 
 @column(str)
@@ -839,42 +844,42 @@ def location(context):
     return '{:s}:{:d}:'.format(meta['filename'], meta['lineno'])
 
 
-# redefine FilterEntriesEnvironment's column dropping the entry type check.
+# redefine EntriesEnvironment's column dropping the entry type check.
 @column(str)
 def flag(context):
     """The flag of the parent transaction for this posting."""
     return context.entry.flag
 
 
-# redefine FilterEntriesEnvironment's column dropping the entry type check.
+# redefine EntriesEnvironment's column dropping the entry type check.
 @column(str)
 def payee(context):
     """The payee of the parent transaction for this posting."""
     return context.entry.payee
 
 
-# redefine FilterEntriesEnvironment's column dropping the entry type check.
+# redefine EntriesEnvironment's column dropping the entry type check.
 @column(str)
 def narration(context):
     """The narration of the parent transaction for this posting."""
     return context.entry.narration
 
 
-# redefine FilterEntriesEnvironment's column dropping the entry type check.
+# redefine EntriesEnvironment's column dropping the entry type check.
 @column(str)
 def description(context):
     "A combination of the payee + narration for the transaction of this posting."
     return ' | '.join(filter(None, [context.entry.payee, context.entry.narration]))
 
 
-# redefine FilterEntriesEnvironment's column dropping the entry type check.
+# redefine EntriesEnvironment's column dropping the entry type check.
 @column(set)
 def tags(context):
     "The set of tags of the parent transaction for this posting."
     return context.entry.tags
 
 
-# redefine FilterEntriesEnvironment's column dropping the entry type check.
+# redefine EntriesEnvironment's column dropping the entry type check.
 @column(set)
 def links(context):
     """The set of links of the parent transaction for this posting."""
@@ -971,18 +976,8 @@ def balance(context):
     return copy.copy(context.balance)
 
 
-class TargetsEnvironment(FilterPostingsEnvironment):
-    """An execution context that provides access to attributes on Postings.
-    """
-    functions = FilterPostingsEnvironment.functions.copy()
-    functions.update(AGGREGATORS)
-
-    # The list of columns that a wildcard will expand into.
-    wildcard_columns = 'date flag payee narration position'.split()
-
-
 def Column(name):
-    column = TargetsEnvironment.columns.get(name)
+    column = PostingsEnvironment.columns.get(name)
     if column is not None:
         return column
     raise KeyError(name)

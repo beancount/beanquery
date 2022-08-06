@@ -16,28 +16,28 @@ class TestCompileExpression(unittest.TestCase):
 
     def test_expr_invalid(self):
         with self.assertRaises(qc.CompilationError):
-            qc.compile_expression(ast.Column('invalid'), qe.TargetsEnvironment())
+            qc.compile_expression(ast.Column('invalid'), qe.PostingsEnvironment())
 
     def test_expr_column(self):
         self.assertEqual(
             qe.Column('filename'),
             qc.compile_expression(
                 ast.Column('filename'),
-                qe.TargetsEnvironment()))
+                qe.PostingsEnvironment()))
 
     def test_expr_function(self):
         self.assertEqual(
             qe.SumPosition([qe.Column('position')]),
             qc.compile_expression(
                 ast.Function('sum', [ast.Column('position')]),
-                qe.TargetsEnvironment()))
+                qe.PostingsEnvironment()))
 
     def test_expr_unaryop(self):
         self.assertEqual(
             qc.Operator(ast.Not, [qe.Column('account')]),
             qc.compile_expression(
                 ast.Not(ast.Column('account')),
-                qe.TargetsEnvironment()))
+                qe.PostingsEnvironment()))
 
     def test_expr_binaryop(self):
         self.assertEqual(
@@ -47,13 +47,13 @@ class TestCompileExpression(unittest.TestCase):
             ]),
             qc.compile_expression(
                 ast.Equal(ast.Column('date'), ast.Constant(datetime.date(2014, 1, 1))),
-                qe.TargetsEnvironment()))
+                qe.PostingsEnvironment()))
 
     def test_expr_constant(self):
         self.assertEqual(
             qc.EvalConstant(D(17)),
             qc.compile_expression(
-                ast.Constant(D(17)), qe.TargetsEnvironment()))
+                ast.Constant(D(17)), qe.PostingsEnvironment()))
 
 
 class TestCompileExpressionDataTypes(unittest.TestCase):
@@ -61,13 +61,13 @@ class TestCompileExpressionDataTypes(unittest.TestCase):
     def test_expr_function_arity(self):
         # Compile with the correct number of arguments.
         qc.compile_expression(ast.Function('sum', [ast.Column('number')]),
-                              qe.TargetsEnvironment())
+                              qe.PostingsEnvironment())
 
         # Compile with an incorrect number of arguments.
         with self.assertRaises(qc.CompilationError):
             qc.compile_expression(ast.Function('sum', [ast.Column('date'),
                                                        ast.Column('account')]),
-                                  qe.TargetsEnvironment())
+                                  qe.PostingsEnvironment())
 
 
 class TestCompileAggregateChecks(unittest.TestCase):
@@ -223,9 +223,8 @@ class CompileSelectBase(unittest.TestCase):
     maxDiff = 8192
 
     # Default execution contexts.
-    xcontext_entries = qe.FilterEntriesEnvironment()
-    xcontext_targets = qe.TargetsEnvironment()
-    xcontext_postings = qe.FilterPostingsEnvironment()
+    entries_env = qe.EntriesEnvironment()
+    postings_env = qe.PostingsEnvironment()
 
     def compile(self, query):
         """Parse one query and compile it.
@@ -236,10 +235,7 @@ class CompileSelectBase(unittest.TestCase):
           The AST.
         """
         statement = parser.parse(query)
-        c_query = qc.compile(statement,
-                             self.xcontext_targets,
-                             self.xcontext_postings,
-                             self.xcontext_entries)
+        c_query = qc.compile(statement, self.postings_env, self.entries_env)
         if isinstance(c_query, ast.Select):
             self.assertSelectInvariants(c_query)
         return c_query
@@ -807,7 +803,7 @@ class TestTranslationBalance(CompileSelectBase):
 class TestCompileConstantsFolding(unittest.TestCase):
 
     def compile(self, expr):
-        return qc.compile_expression(expr, qe.TargetsEnvironment())
+        return qc.compile_expression(expr, qe.PostingsEnvironment())
 
     def test_constants_folding(self):
         # unary op
