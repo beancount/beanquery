@@ -30,10 +30,6 @@ class QueryBase(cmptest.TestCase):
 
     maxDiff = 8192
 
-    # Default execution contexts.
-    entries_env = qe.EntriesEnvironment()
-    postings_env = qe.PostingsEnvironment()
-
     def compile(self, bql_string):
         """Parse a query and compile it.
 
@@ -42,7 +38,7 @@ class QueryBase(cmptest.TestCase):
         Returns:
           A compiled EvalQuery node.
         """
-        return qc.compile_select(parser.parse(bql_string), self.postings_env, self.entries_env)
+        return qc.compile_select(parser.parse(bql_string))
 
     def check_query(self,
                     input_string, bql_string,
