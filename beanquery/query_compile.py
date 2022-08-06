@@ -995,7 +995,7 @@ EvalQuery = collections.namedtuple('EvalQuery', ('c_targets c_from c_where '
 EvalPivot = collections.namedtuple('EvalPivot', 'query pivots')
 
 
-def compile_select(select, targets_environ, postings_environ, entries_environ):
+def compile_select(select, postings_environ, entries_environ):
     """Prepare an AST for a Select statement into a very rudimentary execution tree.
     The execution tree mostly looks much like an AST, but with some nodes
     replaced with knowledge specific to an execution context and eventually some
@@ -1003,9 +1003,8 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
 
     Args:
       select: An instance of ast.Select.
-      targets_environ: A compilation environment for evaluating targets.
-      postings_environ: A compilation environment for evaluating postings filters.
-      entries_environ: A compilation environment for evaluating entry filters.
+      postings_environ: : A compilation environment for evaluating postings expressions.
+      entries_environ: : A compilation environment for evaluating entries expressions.
     Returns:
       An instance of EvalQuery, ready to be executed.
     """
@@ -1017,7 +1016,7 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
     c_from = compile_from(select.from_clause, entries_environ)
 
     # Compile the targets.
-    c_targets = compile_targets(select.targets, targets_environ)
+    c_targets = compile_targets(select.targets, postings_environ)
 
     # Bind the WHERE expression to the execution environment.
     c_where = compile_expression(select.where_clause, postings_environ)
@@ -1031,13 +1030,13 @@ def compile_select(select, targets_environ, postings_environ, entries_environ):
     # Process the GROUP-BY clause.
     new_targets, group_indexes, having_index = compile_group_by(select.group_by,
                                                                 c_targets,
-                                                                targets_environ)
+                                                                postings_environ)
     c_targets.extend(new_targets)
 
     # Process the ORDER-BY clause.
     new_targets, order_spec = compile_order_by(select.order_by,
                                                c_targets,
-                                               targets_environ)
+                                               postings_environ)
     c_targets.extend(new_targets)
 
     # If this is an aggregate query (it groups, see list of indexes), check that
@@ -1144,7 +1143,7 @@ def compile_print(print_stmt, env_entries):
 
     Args:
       statement: An instance of ast.Print.
-      entries_environ: : A compilation environment for evaluating entry filters.
+      entries_environ: A compilation environment for evaluating entry filters.
     Returns:
       An instance of EvalPrint, ready to be executed.
     """
@@ -1153,14 +1152,13 @@ def compile_print(print_stmt, env_entries):
 
 
 # pylint: disable=redefined-builtin
-def compile(statement, targets_environ, postings_environ, entries_environ):
+def compile(statement, postings_environ, entries_environ):
     """Prepare an AST any of the statement into an executable statement.
 
     Args:
       statement: An instance of the parser's Select, Balances, Journal or Print.
-      targets_environ: A compilation environment for evaluating targets.
-      postings_environ: : A compilation environment for evaluating postings filters.
-      entries_environ: : A compilation environment for evaluating entry filters.
+      postings_environ: : A compilation environment for evaluating postings expressions.
+      entries_environ: : A compilation environment for evaluating entries expressions.
     Returns:
       An instance of EvalQuery or EvalPrint, ready to be executed.
     Raises:
@@ -1173,7 +1171,7 @@ def compile(statement, targets_environ, postings_environ, entries_environ):
         statement = transform_journal(statement)
 
     if isinstance(statement, ast.Select):
-        return compile_select(statement, targets_environ, postings_environ, entries_environ)
+        return compile_select(statement, postings_environ, entries_environ)
     if isinstance(statement, ast.Print):
         return compile_print(statement, entries_environ)
 

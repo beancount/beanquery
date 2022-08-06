@@ -315,9 +315,8 @@ class BQLShell(DispatchingShell):
         self.errors = None
         self.options = None
 
-        self.env_targets = query_env.TargetsEnvironment()
-        self.env_entries = query_env.FilterEntriesEnvironment()
-        self.env_postings = query_env.FilterPostingsEnvironment()
+        self.entries_env = query_env.EntriesEnvironment()
+        self.postings_env = query_env.PostingsEnvironment()
 
     def do_reload(self, _line=None):
         "Reload the Beancount input file."
@@ -385,7 +384,7 @@ class BQLShell(DispatchingShell):
             pr(f"  {statement}")
             pr()
 
-            query = query_compile.compile(statement, self.env_targets, self.env_postings, self.env_entries)
+            query = query_compile.compile(statement, self.postings_env, self.entries_env)
             pr("compiled query:")
             pr(f"  {query}")
             pr()
@@ -422,7 +421,7 @@ class BQLShell(DispatchingShell):
 
         """
         # Compile the print statement.
-        c_print = query_compile.compile(print_stmt, self.env_targets, self.env_postings, self.env_entries)
+        c_print = query_compile.compile(print_stmt, self.postings_env, self.entries_env)
         with self.get_output() as out:
             query_execute.execute_print(c_print, self.entries, self.options, out)
 
@@ -471,7 +470,7 @@ class BQLShell(DispatchingShell):
 
         """
         # Compile the SELECT statement.
-        c_query = query_compile.compile(statement, self.env_targets, self.env_postings, self.env_entries)
+        c_query = query_compile.compile(statement, self.postings_env, self.entries_env)
 
         # Execute it to obtain the result rows.
         rtypes, rrows = query_execute.execute_query(c_query, self.entries, self.options)
@@ -560,7 +559,7 @@ class BQLShell(DispatchingShell):
           {aggregates}
 
         """)
-        print(template.format(**generate_env_attribute_list(self.env_targets)), file=self.outfile)
+        print(template.format(**generate_env_attribute_list(self.postings_env)), file=self.outfile)
 
     def help_from(self):
         template = textwrap.dedent("""
@@ -579,7 +578,7 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**generate_env_attribute_list(self.env_entries)), file=self.outfile)
+        print(template.format(**generate_env_attribute_list(self.entries_env)), file=self.outfile)
 
     def help_where(self):
         template = textwrap.dedent("""
@@ -598,7 +597,7 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**generate_env_attribute_list(self.env_postings)), file=self.outfile)
+        print(template.format(**generate_env_attribute_list(self.postings_env)), file=self.outfile)
 
     def help_attributes(self):
         template = textwrap.dedent("""
@@ -620,11 +619,11 @@ class BQLShell(DispatchingShell):
 
         entry_pairs = sorted(
             (getattr(column_cls, '__equivalent__', '-'), name)
-            for name, column_cls in sorted(self.env_entries.columns.items()))
+            for name, column_cls in sorted(self.entries_env.columns.items()))
 
         posting_pairs = sorted(
             (getattr(column_cls, '__equivalent__', '-'), name)
-            for name, column_cls in sorted(self.env_postings.columns.items()))
+            for name, column_cls in sorted(self.postings_env.columns.items()))
 
         # pylint: disable=possibly-unused-variable
         entry_attributes = ''.join(
