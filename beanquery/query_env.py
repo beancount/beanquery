@@ -7,7 +7,6 @@ Define new columns and functions here.
 __copyright__ = "Copyright (C) 2014-2017  Martin Blais"
 __license__ = "GNU GPLv2"
 
-import collections
 import copy
 import datetime
 import decimal
@@ -36,9 +35,6 @@ from beanquery import types
 # pylint: disable=function-redefined
 
 
-FUNCTIONS = collections.defaultdict(list)
-
-
 def function(intypes, outtype, pass_context=False, name=None):
     def decorator(func):
         class Func(query_compile.EvalFunction):
@@ -56,16 +52,13 @@ def function(intypes, outtype, pass_context=False, name=None):
                 return func(*args)
         Func.__name__ = name if name is not None else func.__name__
         Func.__doc__ = func.__doc__
-        FUNCTIONS[Func.__name__].append(Func)
+        query_compile.FUNCTIONS[Func.__name__].append(Func)
         return func
     return decorator
 
 
 def Function(name, args):
-    func = types.function_lookup(FUNCTIONS, name, args)
-    if func is not None:
-        return func(args)
-    func = types.function_lookup(AGGREGATORS, name, args)
+    func = types.function_lookup(query_compile.FUNCTIONS, name, args)
     if func is not None:
         return func(args)
     raise KeyError
@@ -571,15 +564,12 @@ def date_add(x, y):
     return x + datetime.timedelta(days=y)
 
 
-AGGREGATORS = collections.defaultdict(list)
-
-
 def aggregator(intypes, name=None):
     def decorator(cls):
         cls.__intypes__ = intypes
         if name is not None:
             cls.__name__ = name
-        AGGREGATORS[cls.__name__].append(cls)
+        query_compile.FUNCTIONS[cls.__name__].append(cls)
         return cls
     return decorator
 
@@ -705,7 +695,6 @@ class Max(query_compile.EvalAggregator):
 class EntriesEnvironment(query_compile.CompilationEnvironment):
     name = 'entries'
     columns = {}
-    functions = FUNCTIONS.copy()
 
     @classmethod
     def column(cls, dtype, name=None, help=None):
@@ -824,8 +813,6 @@ class PostingsEnvironment(EntriesEnvironment):
     """Execution context providing access to attributes on Postings."""
     name = 'postings'
     columns = EntriesEnvironment.columns.copy()
-    functions = FUNCTIONS.copy()
-    functions.update(AGGREGATORS)
 
     # The list of columns that a wildcard will expand into.
     wildcard_columns = 'date flag payee narration position'.split()
