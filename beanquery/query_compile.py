@@ -26,6 +26,11 @@ from beanquery.parser import ast
 SUPPORT_IMPLICIT_GROUPBY = True
 
 
+ENVS = {}
+FUNCTIONS = collections.defaultdict(list)
+OPERATORS = collections.defaultdict(list)
+
+
 class CompilationError(Exception):
     """A compiler/interpreter error."""
 
@@ -151,8 +156,6 @@ class EvalBinaryOp(EvalNode):
 # Note(2): This does not support multiplication on Amount, Position, Inventory.
 # We need to rewrite the evaluator to support types in order to do this
 # properly.
-
-OPERATORS = collections.defaultdict(list)
 
 
 def unaryop(op, intypes, outtype, nullsafe=False):
@@ -434,16 +437,12 @@ class EvalAggregator(EvalFunction):
         return context.store[self.handle]
 
 
-ENVS = {}
-
-
 class CompilationEnvironment:
     """Base class for all compilation contexts. A compilation context provides
     column accessors specific to the particular row objects that we will access.
     """
     name = None
     columns = {}
-    functions = {}
 
     def __init_subclass__(cls):
         ENVS[cls.name] = cls
@@ -481,7 +480,7 @@ def compile_expression(expr, environ):
             # not really fit our model for function evaluation,
             # therefore it gets special threatment here.
             return EvalCoalesce(operands)
-        function = types.function_lookup(environ.functions, expr.fname, operands)
+        function = types.function_lookup(FUNCTIONS, expr.fname, operands)
         if function is None:
             sig = '{}({})'.format(expr.fname, ', '.join(f'{operand.dtype.__name__.lower()}' for operand in operands))
             raise CompilationError(f'no function matches "{sig}" name and argument types', expr)
@@ -529,7 +528,7 @@ def compile_expression(expr, environ):
                 name = types.MAP.get(target)
                 if name is None:
                     break
-                left = types.function_lookup(environ.functions, name, [left])([left])
+                left = types.function_lookup(FUNCTIONS, name, [left])([left])
                 continue
             if right.dtype is object and left.dtype is not object:
                 target = left.dtype
@@ -541,7 +540,7 @@ def compile_expression(expr, environ):
                 name = types.MAP.get(target)
                 if name is None:
                     break
-                right = types.function_lookup(environ.functions, name, [right])([right])
+                right = types.function_lookup(FUNCTIONS, name, [right])([right])
                 continue
 
             # Failure.
