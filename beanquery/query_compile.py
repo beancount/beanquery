@@ -26,7 +26,7 @@ from beanquery.parser import ast
 SUPPORT_IMPLICIT_GROUPBY = True
 
 
-ENVS = {}
+TABLES = {}
 FUNCTIONS = collections.defaultdict(list)
 OPERATORS = collections.defaultdict(list)
 
@@ -435,17 +435,6 @@ class EvalAggregator(EvalFunction):
           The final aggregated value.
         """
         return context.store[self.handle]
-
-
-class CompilationEnvironment:
-    """Base class for all compilation contexts. A compilation context provides
-    column accessors specific to the particular row objects that we will access.
-    """
-    name = None
-    columns = {}
-
-    def __init_subclass__(cls):
-        ENVS[cls.name] = cls
 
 
 def compile_expression(expr, environ):
@@ -971,7 +960,6 @@ def compile_from(from_clause, environ):
 #
 # Attributes:
 #   c_targets: A list of compiled targets (instancef of EvalTarget).
-#   c_from: An instance of EvalNode, a compiled expression tree, for directives.
 #   c_where: An instance of EvalNode, a compiled expression tree, for postings.
 #   group_indexes: A list of integers that describe which target indexes to
 #     group by. All the targets referenced here should be non-aggregates. In fact,
@@ -982,7 +970,7 @@ def compile_from(from_clause, environ):
 #     This list may refer to either aggregates or non-aggregates.
 #   limit: An optional integer used to cut off the number of result rows returned.
 #   distinct: An optional boolean that requests we should uniquify the result rows.
-EvalQuery = collections.namedtuple('EvalQuery', ('c_targets c_from c_where '
+EvalQuery = collections.namedtuple('EvalQuery', ('table c_targets c_where '
                                                  'group_indexes having_index '
                                                  'order_spec '
                                                  'limit distinct'))
@@ -1012,20 +1000,22 @@ def compile_select(select):
       An instance of EvalQuery, ready to be executed.
     """
 
-    entries_environ = ENVS['entries']
-    postings_environ = ENVS['postings']
-
     if isinstance(select.from_clause, ast.Select):
         raise CompilationError("Nested SELECT are not supported yet")
 
-    # Compile the FROM clause.
-    c_from, c_from_expr = compile_from(select.from_clause, entries_environ)
+    table = TABLES.get('postings')
+
+    # Compile the FROM clause. FROM expressions filter transactions,
+    # thus use the columns definitions for the ``entries`` table.
+    c_from, c_from_expr = compile_from(select.from_clause, TABLES.get('entries'))
+    if c_from is not None:
+        table = table.update(**c_from._asdict())
 
     # Compile the targets.
-    c_targets = compile_targets(select.targets, postings_environ)
+    c_targets = compile_targets(select.targets, table)
 
     # Bind the WHERE expression to the execution environment.
-    c_where = compile_expression(select.where_clause, postings_environ)
+    c_where = compile_expression(select.where_clause, table)
 
     # Check that the FROM clause does not contain aggregates. This
     # should never trigger if the compilation environment does not
@@ -1040,13 +1030,13 @@ def compile_select(select):
     # Process the GROUP-BY clause.
     new_targets, group_indexes, having_index = compile_group_by(select.group_by,
                                                                 c_targets,
-                                                                postings_environ)
+                                                                table)
     c_targets.extend(new_targets)
 
     # Process the ORDER-BY clause.
     new_targets, order_spec = compile_order_by(select.order_by,
                                                c_targets,
-                                               postings_environ)
+                                               table)
     c_targets.extend(new_targets)
 
     # If this is an aggregate query (it groups, see list of indexes), check that
@@ -1065,8 +1055,8 @@ def compile_select(select):
                 "All non-aggregates must be covered by GROUP-BY clause in aggregate query; "
                 "the following targets are missing: {}".format(",".join(missing_names)))
 
-    query = EvalQuery(c_targets,
-                      c_from,
+    query = EvalQuery(table,
+                      c_targets,
                       c_where,
                       group_indexes,
                       having_index,
@@ -1145,9 +1135,9 @@ def transform_balances(balances):
 # A compiled print statement, ready for execution.
 #
 # Attributes:
-#   c_where: An instance of EvalNode, a compiled expression tree, for directives.
-#   c_from: An instance of EvalFrom.
-EvalPrint = collections.namedtuple('EvalPrint', 'c_where c_from')
+#   table: Table to print
+#   where: Filtering expression, EvalNode instance.
+EvalPrint = collections.namedtuple('EvalPrint', 'table where')
 
 def compile_print(print_stmt):
     """Compile a Print statement.
@@ -1158,9 +1148,11 @@ def compile_print(print_stmt):
       An instance of EvalPrint, ready to be executed.
     """
     # Compile FROM clause.
-    c_from, c_where = compile_from(print_stmt.from_clause, ENVS['entries'])
-
-    return EvalPrint(c_where, c_from)
+    table = TABLES.get('entries')
+    c_from, expr = compile_from(print_stmt.from_clause, table)
+    if c_from is not None:
+        table = table.update(**c_from._asdict())
+    return EvalPrint(table, expr)
 
 
 # pylint: disable=redefined-builtin

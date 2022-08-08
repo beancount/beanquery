@@ -9,7 +9,17 @@ from beancount.core.number import D
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import parser
+from beanquery import tables
 from beanquery.parser import ast
+
+class Table:
+    def __init__(self, name):
+        self.name = name
+
+    def __eq__(self, other):
+        if not isinstance(other, tables.Table):
+            return NotImplemented
+        return other.name == self.name
 
 
 class TestCompileExpression(unittest.TestCase):
@@ -222,6 +232,11 @@ class CompileSelectBase(unittest.TestCase):
 
     maxDiff = 8192
 
+    @classmethod
+    def setUpClass(cls):
+        qc.TABLES['entries'] = qe.EntriesTable(None, None)
+        qc.TABLES['postings'] = qe.PostingsTable(None, None)
+
     def compile(self, query):
         """Parse one query and compile it.
 
@@ -320,12 +335,12 @@ class TestCompileFundamentals(CompileSelectBase):
 
     def test_operaotors(self):
         expr = self.compile("SELECT 1 + 1 AS expr")
-        self.assertEqual(expr, qc.EvalQuery([
+        self.assertEqual(expr, qc.EvalQuery(Table('postings'), [
             qc.EvalTarget(qc.EvalConstant(2), 'expr', False)
-        ], None, None, None, None, None, None, None))
+        ], None, None, None, None, None, None))
 
         expr = self.compile("SELECT 1 + meta('int') AS expr")
-        self.assertEqual(expr, qc.EvalQuery([
+        self.assertEqual(expr, qc.EvalQuery(Table('postings'), [
             qc.EvalTarget(
                 qc.Operator(ast.Add, [
                     qc.EvalConstant(1),
@@ -335,18 +350,18 @@ class TestCompileFundamentals(CompileSelectBase):
                         ]),
                     ]),
                 ]), 'expr', False)
-        ], None, None, None, None, None, None, None))
+        ], None, None, None, None, None, None))
 
     def test_coalesce(self):
         expr = self.compile("SELECT coalesce(narration, str(date), '~') AS expr")
-        self.assertEqual(expr, qc.EvalQuery([
+        self.assertEqual(expr, qc.EvalQuery(Table('postings'), [
             qc.EvalTarget(
                 qc.EvalCoalesce([
                     qe.Column('narration'),
                     qe.Function('str', [qe.Column('date')]),
                     qc.EvalConstant('~'),
                 ]), 'expr', False)
-        ], None, None, None, None, None, None, None))
+        ], None, None, None, None, None, None))
 
         with self.assertRaises(qc.CompilationError):
             self.compile("SELECT coalesce(narration, date, 1)")
@@ -356,14 +371,11 @@ class TestCompileSelect(CompileSelectBase):
 
     def test_compile_from(self):
         # Test the compilation of from.
-        query = self.compile("SELECT account;")
-        self.assertEqual(None, query.c_from)
 
         query = self.compile("SELECT account FROM CLOSE;")
-        self.assertEqual(qc.EvalFrom(None, True, None), query.c_from)
+        self.assertEqual(query.table.close, True)
 
         query = self.compile("SELECT account FROM length(payee) != 0;")
-        self.assertTrue(isinstance(query.c_from, qc.EvalFrom))
         self.assertTrue(isinstance(query.c_where, qc.EvalNode))
 
         with self.assertRaises(qc.CompilationError):
@@ -783,14 +795,17 @@ class TestTranslationBalance(CompileSelectBase):
         None, self.group_by, self.order_by, None, None, None))
 
     def test_print(self):
-        self.assertCompile(qc.EvalPrint(None, None), "PRINT;")
+        self.assertCompile(qc.EvalPrint(Table('entries'), None), "PRINT;")
 
     def test_print_from(self):
         self.assertCompile(
             qc.EvalPrint(
-                qc.Operator(ast.Equal, [qe.Column('year'), qc.EvalConstant(2014)]),
-                qc.EvalFrom(None, None, None)),
-            """PRINT FROM year = 2014;""")
+                Table('entries'),
+                qc.Operator(ast.Equal, [
+                    qe.Column('year'),
+                    qc.EvalConstant(2014),
+                ])),
+            "PRINT FROM year = 2014;")
 
 
 class TestCompileConstantsFolding(unittest.TestCase):

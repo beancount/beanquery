@@ -4,100 +4,35 @@ __copyright__ = "Copyright (C) 2014-2016  Martin Blais"
 __license__ = "GNU GPLv2"
 
 import collections
-import datetime
 import itertools
 import operator
 
-from beancount.core import data
-from beancount.core import inventory
-from beancount.core import getters
 from beancount.core import display_context
 from beancount.parser import printer
-from beancount.parser import options
-from beancount.ops import summarize
-from beancount.core import prices
 from beancount.utils import misc_utils
 
 from beanquery import query_compile
 
 
-def apply_from_qualifiers(c_from, entries, options_map):
-    """Filter the entries by the given compiled FROM clause qualifiers.
-
-    Args:
-      c_from: A compiled From clause instance.
-      entries: A list of directives.
-      options_map: A parser's option_map.
-    Returns:
-      A list of filtered entries.
-    """
-    if c_from is None:
-        return entries
-
-    # Process the OPEN clause.
-    if c_from.open is not None:
-        assert isinstance(c_from.open, datetime.date)
-        open_date = c_from.open
-        entries, index = summarize.open_opt(entries, open_date, options_map)
-
-    # Process the CLOSE clause.
-    if c_from.close is not None:
-        if isinstance(c_from.close, datetime.date):
-            close_date = c_from.close
-            entries, index = summarize.close_opt(entries, close_date, options_map)
-        elif c_from.close is True:
-            entries, index = summarize.close_opt(entries, None, options_map)
-
-    # Process the CLEAR clause.
-    if c_from.clear is not None:
-        entries, index = summarize.clear_opt(entries, None, options_map)
-
-    return entries
-
-
-def filter_entries(expr, entries, options):
-    """Filter entries by the given expression.
-
-    This is kept mostly for backward compatibility and use in tests.
-
-    Args:
-      expr: Expression used to filter the entries, EvalNode instance.
-      entries: List of directives.
-      options: Options as returned by the Beancount parser.
-    Returns:
-      List of filtered entries.
-    """
-    if expr is not None:
-        r = []
-        context = create_row_context(entries, options)
-        for entry in entries:
-            context.entry = entry
-            if expr(context):
-                r.append(entry)
-        entries = r
-    return entries
-
-
-def execute_print(c_print, entries, options_map, file):
+def execute_print(c_print, file):
     """Print entries from a print statement specification.
 
     Args:
       c_print: An instance of a compiled EvalPrint statement.
-      entries: A list of directives.
-      options_map: A parser's option_map.
       file: The output file to print to.
     """
-    # Apply OPEN, CLOSE, CLEAR qualifiers.
-    entries = apply_from_qualifiers(c_print.c_from, entries, options_map)
-
     # Filter the entries with the FROM clause expression.
-    entries = filter_entries(c_print.c_where, entries, options_map)
+    entries = []
+    expr = c_print.where
+    for row in c_print.table:
+        if expr is None or expr(row):
+            entries.append(row.entry)
 
     # Create a context that renders all numbers with their natural
     # precision, but honors the commas option. This is kept in sync with
     # {2c694afe3140} to avoid a dependency.
     dcontext = display_context.DisplayContext()
-    dcontext.set_commas(options_map['dcontext'].commas)
+    dcontext.set_commas(c_print.table.options['dcontext'].commas)
     printer.print_entries(entries, dcontext, file=file)
 
 
@@ -124,45 +59,6 @@ class Allocator:
           A store that can accommodate and be indexed by all the allocated slot handles.
         """
         return [None] * self.size
-
-
-class RowContext:
-    """A dumb container for information used by a row expression."""
-
-    rowid = None
-
-    # The current posting being evaluated.
-    posting = None
-
-    # The current transaction of the posting being evaluated.
-    entry = None
-
-    # The current running balance *after* applying the posting.
-    balance = None
-
-    # The parser's options_map.
-    options_map = None
-
-    # An AccountTypes tuple of the account types.
-    account_types = None
-
-    # A dict of account name strings to (open, close) entries for those accounts.
-    open_close_map = None
-
-    # A dict of currency name strings to the corresponding Commodity entry.
-    commodity_map = None
-
-    # A price dict as computed by build_price_map()
-    price_map = None
-
-    # A storage area for computing aggregate expression.
-    store = None
-
-    # The context hash is used in caching column accessor functions.
-    # Instead than hashing the row context content, use the rowid as
-    # hash.
-    def __hash__(self):
-        return self.rowid
 
 
 class NullType:
@@ -214,24 +110,7 @@ def nullitemgetter(item, *items):
     return func
 
 
-def create_row_context(entries, options_map):
-    """Create the context container which we will use to evaluate rows."""
-    context = RowContext()
-    context.rowid = 0
-    context.balance = inventory.Inventory()
-    context.balance_update_rowid = -1
-
-    # Initialize some global properties for use by some of the accessors.
-    context.options_map = options_map
-    context.account_types = options.get_account_types(options_map)
-    context.open_close_map = getters.get_account_open_close(entries)
-    context.commodity_map = getters.get_commodity_directives(entries)
-    context.price_map = prices.build_price_map(entries)
-
-    return context
-
-
-def execute_query(query, entries, options):
+def execute_query(query):
     """Given a compiled select statement, execute the query.
 
     Args:
@@ -246,10 +125,10 @@ def execute_query(query, entries, options):
     """
 
     if isinstance(query, query_compile.EvalQuery):
-        return execute_select(query, entries, options)
+        return execute_select(query)
 
     if isinstance(query, query_compile.EvalPivot):
-        columns, rows = execute_select(query.query, entries, options)
+        columns, rows = execute_select(query.query)
 
         col1, col2 = query.pivots
         othercols = [i for i in range(len(columns)) if i not in query.pivots]
@@ -285,7 +164,7 @@ def execute_query(query, entries, options):
 Column = collections.namedtuple('Column', 'name dtype')
 
 
-def execute_select(query, entries, options_map):
+def execute_select(query):
     """Given a compiled select statement, execute the query.
 
     Args:
@@ -314,11 +193,6 @@ def execute_select(query, entries, options_map):
                       if c_target.name]
     order_spec = query.order_spec
 
-    context = create_row_context(entries, options_map)
-
-    # Apply OPEN, CLOSE, CLEAR clauses.
-    entries = apply_from_qualifiers(query.c_from, entries, options_map)
-
     # Dispatch between the non-aggregated queries and aggregated queries.
     c_where = query.c_where
     rows = []
@@ -330,14 +204,11 @@ def execute_select(query, entries, options_map):
         # This is a non-aggregated query.
 
         # Iterate over all the postings once.
-        for entry in misc_utils.filter_type(entries, data.Transaction):
-            context.entry = entry
-            for posting in entry.postings:
-                context.rowid += 1
-                context.posting = posting
+        for context in query.table:
                 if c_where is None or c_where(context):
                     values = [c_expr(context) for c_expr in c_target_exprs]
                     rows.append(values)
+
     else:
         # This is an aggregated query.
 
@@ -361,12 +232,9 @@ def execute_select(query, entries, options_map):
             c_expr.allocate(allocator)
 
         # Iterate over all the postings to evaluate the aggregates.
+        context = None
         agg_store = {}
-        for entry in misc_utils.filter_type(entries, data.Transaction):
-            context.entry = entry
-            for posting in entry.postings:
-                context.rowid += 1
-                context.posting = posting
+        for context in query.table:
                 if c_where is None or c_where(context):
 
                     # Compute the non-aggregate expressions.
