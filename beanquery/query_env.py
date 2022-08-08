@@ -27,9 +27,12 @@ from beancount.core import data
 from beancount.core import getters
 from beancount.core import convert
 from beancount.core import prices
+from beancount.ops import summarize
+from beancount.parser import options as opts
 from beancount.utils.date_utils import parse_date_liberally
 
 from beanquery import query_compile
+from beanquery import tables
 from beanquery import types
 
 # pylint: disable=function-redefined
@@ -692,9 +695,67 @@ class Max(query_compile.EvalAggregator):
                 store[self.handle] = value
 
 
-class EntriesEnvironment(query_compile.CompilationEnvironment):
-    name = 'entries'
+class Row:
+    """A dumb container for information used by a row expression."""
+
+    rowid = None
+
+    # The current posting being evaluated.
+    posting = None
+
+    # The current transaction of the posting being evaluated.
+    entry = None
+
+    # The current running balance *after* applying the posting.
+    balance = None
+
+    # The parser's options_map.
+    options_map = None
+
+    # An AccountTypes tuple of the account types.
+    account_types = None
+
+    # A dict of account name strings to (open, close) entries for those accounts.
+    open_close_map = None
+
+    # A dict of currency name strings to the corresponding Commodity entry.
+    commodity_map = None
+
+    # A price dict as computed by build_price_map()
+    price_map = None
+
+    # A storage area for computing aggregate expression.
+    store = None
+
+    # The context hash is used in caching column accessor functions.
+    # Instead than hashing the row context content, use the rowid as
+    # hash.
+    def __hash__(self):
+        return self.rowid
+
+    def __init__(self, entries, options):
+        self.rowid = 0
+        self.balance = inventory.Inventory()
+        self.balance_update_rowid = -1
+        # Global properties used by some of the accessors.
+        self.options = options
+        self.account_types = opts.get_account_types(options)
+        self.open_close_map = getters.get_account_open_close(entries)
+        self.commodity_map = getters.get_commodity_directives(entries)
+        self.price_map = prices.build_price_map(entries)
+
+
+class BeanTable(tables.Table):
+    name = None
     columns = {}
+
+    def __init__(self, entries, options, open=None, close=None, clear=None):
+        super().__init__()
+        self.entries = entries
+        self.options = options
+        self.open = open
+        self.close = close
+        self.clear = clear
 
     @classmethod
     def column(cls, dtype, name=None, help=None):
@@ -709,8 +770,49 @@ class EntriesEnvironment(query_compile.CompilationEnvironment):
             return func
         return decorator
 
+    def update(self, **kwargs):
+        table = copy.copy(self)
+        for name, value in kwargs.items():
+            setattr(table, name, value)
+        return table
 
-column = EntriesEnvironment.column
+    def prepare(self):
+        """Filter the entries applying the FROM clause qualifiers OPEN, CLOSE, CLEAR."""
+        entries = self.entries
+        options = self.options
+
+        # Process the OPEN clause.
+        if self.open is not None:
+            entries, index = summarize.open_opt(entries, self.open, options)
+
+        # Process the CLOSE clause.
+        if self.close is not None:
+            if isinstance(self.close, datetime.date):
+                entries, index = summarize.close_opt(entries, self.close, options)
+            elif self.close is True:
+                entries, index = summarize.close_opt(entries, None, options)
+
+        # Process the CLEAR clause.
+        if self.clear is not None:
+            entries, index = summarize.clear_opt(entries, None, options)
+
+        return entries
+
+
+class EntriesTable(BeanTable):
+    name = 'entries'
+    columns = {}
+
+    def __iter__(self):
+        entries = self.prepare()
+        context = Row(entries, self.options)
+        for entry in entries:
+            context.entry = entry
+            context.rowid += 1
+            yield context
+
+
+column = EntriesTable.column
 
 
 @column(str, 'id')
@@ -809,16 +911,24 @@ def links(context):
     return context.entry.links
 
 
-class PostingsEnvironment(EntriesEnvironment):
-    """Execution context providing access to attributes on Postings."""
+class PostingsTable(EntriesTable):
     name = 'postings'
-    columns = EntriesEnvironment.columns.copy()
-
-    # The list of columns that a wildcard will expand into.
+    columns = EntriesTable.columns.copy()
     wildcard_columns = 'date flag payee narration position'.split()
 
+    def __iter__(self):
+        entries = self.prepare()
+        context = Row(entries, self.options)
+        for entry in entries:
+            if isinstance(entry, data.Transaction):
+                context.entry = entry
+                for posting in entry.postings:
+                    context.rowid += 1
+                    context.posting = posting
+                    yield context
 
-column = PostingsEnvironment.column
+
+column = PostingsTable.column
 
 
 @column(str)
@@ -965,8 +1075,16 @@ def balance(context):
     return copy.copy(context.balance)
 
 
+
+# Backward compatibility definitions for use in tests. These work
+# because the tests only access the columns definitions and these are
+# attached to the classes and not to the instances.
+
 def Column(name):
-    column = PostingsEnvironment.columns.get(name)
-    if column is not None:
-        return column
-    raise KeyError(name)
+    return PostingsTable.columns.get(name)
+
+def EntriesEnvironment():
+    return EntriesTable
+
+def PostingsEnvironment():
+    return PostingsTable

@@ -11,7 +11,6 @@ import click.testing
 
 from beancount import loader
 from beancount.utils import test_utils
-from beancount.parser import printer
 
 from beanquery import shell
 
@@ -116,8 +115,6 @@ def load():
         GROUP BY account"
 
     """))
-    if errors:
-        printer.print_errors(errors)
     return entries, errors, options
 
 

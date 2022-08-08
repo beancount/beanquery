@@ -26,12 +26,10 @@ from beancount import loader
 
 from beanquery import parser
 from beanquery import query_compile
+from beanquery import query_env
 from beanquery import query_execute
 from beanquery import query_render
 from beanquery import numberify
-
-# Load environment definitions.
-from beanquery import query_env  # pylint: disable=unused-import
 
 
 HISTORY_FILENAME = "~/.bean-shell-history"
@@ -321,6 +319,9 @@ class BQLShell(DispatchingShell):
         "Reload the Beancount input file."
         self.entries, self.errors, self.options = self.loadfun()
 
+        query_compile.TABLES['entries'] = query_env.EntriesTable(self.entries, self.options)
+        query_compile.TABLES['postings'] = query_env.PostingsTable(self.entries, self.options)
+
         # Extract a mapping of the custom queries from the list of entries.
         self.named_queries = {}
         for entry in self.entries:
@@ -422,7 +423,7 @@ class BQLShell(DispatchingShell):
         # Compile the print statement.
         c_print = query_compile.compile(print_stmt)
         with self.get_output() as out:
-            query_execute.execute_print(c_print, self.entries, self.options, out)
+            query_execute.execute_print(c_print, out)
 
     def on_Select(self, statement):
         """
@@ -472,7 +473,7 @@ class BQLShell(DispatchingShell):
         c_query = query_compile.compile(statement)
 
         # Execute it to obtain the result rows.
-        rtypes, rrows = query_execute.execute_query(c_query, self.entries, self.options)
+        rtypes, rrows = query_execute.execute_query(c_query)
 
         # Output the resulting rows.
         if not rrows:
@@ -558,7 +559,7 @@ class BQLShell(DispatchingShell):
           {aggregates}
 
         """)
-        print(template.format(**generate_env_attribute_list(query_compile.ENVS['postings'])), file=self.outfile)
+        print(template.format(**generate_env_attribute_list(query_compile.TABLES['postings'])), file=self.outfile)
 
     def help_from(self):
         template = textwrap.dedent("""
@@ -577,7 +578,7 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**generate_env_attribute_list(query_compile.ENVS['entries'])), file=self.outfile)
+        print(template.format(**generate_env_attribute_list(query_compile.TABLES['entries'])), file=self.outfile)
 
     def help_where(self):
         template = textwrap.dedent("""
@@ -596,7 +597,7 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**generate_env_attribute_list(query_compile.ENVS['postings'])), file=self.outfile)
+        print(template.format(**generate_env_attribute_list(query_compile.TABLES['postings'])), file=self.outfile)
 
     def help_attributes(self):
         template = textwrap.dedent("""
@@ -618,11 +619,11 @@ class BQLShell(DispatchingShell):
 
         entry_pairs = sorted(
             (getattr(column_cls, '__equivalent__', '-'), name)
-            for name, column_cls in sorted(query_compile.ENVS['entries'].columns.items()))
+            for name, column_cls in sorted(query_compile.TABLES['entries'].columns.items()))
 
         posting_pairs = sorted(
             (getattr(column_cls, '__equivalent__', '-'), name)
-            for name, column_cls in sorted(query_compile.ENVS['postings'].columns.items()))
+            for name, column_cls in sorted(query_compile.TABLES['postings'].columns.items()))
 
         # pylint: disable=possibly-unused-variable
         entry_attributes = ''.join(
