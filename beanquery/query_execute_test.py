@@ -20,6 +20,7 @@ from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query_execute as qx
 from beanquery import parser
+from beanquery import tables
 
 from beanquery import compat  # pylint: disable=unused-import
 
@@ -1368,3 +1369,59 @@ class TestExecutePivot(QueryBase):
                 ('Expenses:Aaa', I('6.00 USD'), datetime.date(2014, 3, 3), I('8.00 USD'), datetime.date(2015, 4, 4)),
                 ('Expenses:Bbb', I('5.00 USD'), datetime.date(2014, 2, 2), None, None),
             ]))
+
+
+class SimpleRow(int):
+    # The current implementation requires the ability to attach
+    # attributes to the row object at runtime.
+    pass
+
+
+class SimpleColumn(qc.EvalColumn):
+    def __init__(self, name, func, dtype):
+        super().__init__(dtype)
+        self.name = name
+        self.func = func
+
+    def __call__(self, row):
+        return self.func(row)
+
+
+class SimpleTable(tables.Table):
+    columns = {
+        'column': SimpleColumn('column', lambda row: row, int)
+    }
+
+    def __init__(self, name, nrows):
+        self.name = name
+        self.nrows = nrows
+
+    def __iter__(self):
+        for i in range(self.nrows):
+            yield SimpleRow(i)
+
+
+class TestExecuteTables(QueryBase):
+
+    def setUp(self):
+        super().setUp()
+        qc.TABLES['test'] = SimpleTable('test', 16)
+
+    def execute(self, query):
+        query = self.compile(query)
+        return qx.execute_query(query)
+
+    def test_null_table(self):
+        self.assertEqual(
+            self.execute("""SELECT 1 + 1 AS test FROM #"""),
+            ([('test', int)], [(2, )]))
+
+    def test_simple_table(self):
+        self.assertEqual(
+            self.execute("""SELECT column FROM #test WHERE column < 2"""),
+            ([('column', int)], [(0, ), (1, )]))
+
+    def test_simple_table_aggregation(self):
+        self.assertEqual(
+            self.execute("""SELECT sum(column) FROM #test GROUP BY column % 2"""),
+            ([('sum(column)', int)], [(56, ), (64, )]))

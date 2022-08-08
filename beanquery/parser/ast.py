@@ -123,6 +123,12 @@ class Ordering(enum.IntEnum):
 #   columns: A list of group-by expressions, simple Column() or otherwise.
 PivotBy = node('PivotBy', 'columns')
 
+# A reference to a table.
+#
+# Attributes:
+#   name: The table name.
+Table = node('Table', 'name')
+
 # A reference to a column.
 #
 # Attributes:
