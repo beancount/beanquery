@@ -146,12 +146,14 @@ class BQLParser(Parser):
             with self._group():
                 with self._choice():
                     with self._option():
+                        self._table_()
+                    with self._option():
                         self._subselect_()
                     with self._option():
                         self._from_()
                     self._error(
                         'expecting one of: '
-                        '<from> <subselect>'
+                        '<from> <subselect> <table>'
                     )
             self.name_last_node('from_clause')
 
@@ -312,8 +314,9 @@ class BQLParser(Parser):
     @tatsumasu('Table')
     def _table_(self):  # noqa
         self._token('#')
-        self._identifier_()
-        self.name_last_node('name')
+        with self._optional():
+            self._identifier_()
+            self.name_last_node('name')
 
         self._define(
             ['name'],

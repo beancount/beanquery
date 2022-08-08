@@ -22,7 +22,7 @@ statement
 
 select::Select
     = 'SELECT' ['DISTINCT' distinct:`True`] targets:(','.{ target }+ | wildcard)
-      ['FROM' from_clause:(subselect | from)]
+      ['FROM' from_clause:(table | subselect | from)]
       ['WHERE' where_clause:expression]
       ['GROUP' 'BY' group_by:groupby]
       ['ORDER' 'BY' order_by:','.{order}+]
@@ -42,7 +42,7 @@ from::From
     ;
 
 table::Table
-    = '#' name:identifier
+    = '#' [name:identifier]
     ;
 
 groupby::GroupBy

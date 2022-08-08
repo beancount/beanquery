@@ -16,8 +16,9 @@ import operator
 from decimal import Decimal
 
 from beancount.core import inventory
-from beanquery import types
 from beanquery import parser
+from beanquery import types
+from beanquery import tables
 from beanquery.parser import ast
 
 
@@ -26,7 +27,7 @@ from beanquery.parser import ast
 SUPPORT_IMPLICIT_GROUPBY = True
 
 
-TABLES = {}
+TABLES = {None: tables.NullTable()}
 FUNCTIONS = collections.defaultdict(list)
 OPERATORS = collections.defaultdict(list)
 
@@ -1008,16 +1009,30 @@ def compile_select(select):
       An instance of EvalQuery, ready to be executed.
     """
 
-    if isinstance(select.from_clause, ast.Select):
+    # Compile the FROM clause.
+    if select.from_clause is None:
+        # Implicit table reference.
+        table = TABLES.get('postings')
+        c_from_expr = None
+
+    elif isinstance(select.from_clause, ast.Select):
+        # Subquery.
         raise CompilationError("Nested SELECT are not supported yet")
 
-    table = TABLES.get('postings')
+    elif isinstance(select.from_clause, ast.Table):
+        # Table reference.
+        table = TABLES.get(select.from_clause.name)
+        if table is None:
+            raise CompilationError(f'table "{select.from_clause.name}" does not exist', select.from_clause)
+        c_from_expr = None
 
-    # Compile the FROM clause. FROM expressions filter transactions,
-    # thus use the columns definitions for the ``entries`` table.
-    c_from, c_from_expr = compile_from(select.from_clause, TABLES.get('entries'))
-    if c_from is not None:
-        table = table.update(**c_from._asdict())
+    else:
+        # FROM expression. FROM expressions filter transactions thus
+        # use the columns definitions for the ``entries`` table.
+        table = TABLES.get('postings')
+        c_from, c_from_expr = compile_from(select.from_clause, TABLES.get('entries'))
+        if c_from is not None:
+            table = table.update(**c_from._asdict())
 
     # Compile the targets.
     c_targets = compile_targets(select.targets, table)
