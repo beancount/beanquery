@@ -16,6 +16,9 @@ class BQLSemantics:
     def __init__(self, default_close_date=None):
         self.default_close_date = default_close_date
 
+    def set_context(self, ctx):
+        self._ctx = ctx
+
     def null(self, value):
         return None
 
@@ -50,7 +53,7 @@ class BQLSemantics:
 
     def from_(self, value, typename):
         if value['expression'] is None and value['open'] is None and value['close'] is None and value['clear_'] is None:
-            raise ParseError('Empty FROM expression is not allowed')
+            self._ctx._error('Empty FROM expression is not allowed')  # pylint: disable=protected-access
         if value['close'] is None:
             value['close'] = self.default_close_date
         return self._default(value, typename)
