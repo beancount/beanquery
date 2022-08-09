@@ -238,31 +238,32 @@ def execute_select(query):
         for c_expr in c_aggregate_exprs:
             c_expr.allocate(allocator)
 
-        # Iterate over all the postings to evaluate the aggregates.
+        def create():
+            # Create a new row in the aggregates store.
+            store = allocator.create_store()
+            for c_expr in c_aggregate_exprs:
+                c_expr.initialize(store)
+            return store
+
         context = None
-        agg_store = {}
+        aggregates = collections.defaultdict(create)
+
+        # Iterate over all the postings to evaluate the aggregates.
         for context in query.table:
             if c_where is None or c_where(context):
 
                 # Compute the non-aggregate expressions.
-                row_key = tuple(c_expr(context) for c_expr in c_nonaggregate_exprs)
+                key = tuple(c_expr(context) for c_expr in c_nonaggregate_exprs)
 
                 # Get an appropriate store for the unique key of this row.
-                try:
-                    store = agg_store[row_key]
-                except KeyError:
-                    # This is a row; create a new store.
-                    store = allocator.create_store()
-                    for c_expr in c_aggregate_exprs:
-                        c_expr.initialize(store)
-                    agg_store[row_key] = store
+                store = aggregates[key]
 
                 # Update the aggregate expressions.
                 for c_expr in c_aggregate_exprs:
                     c_expr.update(store, context)
 
         # Iterate over all the aggregations.
-        for key, store in agg_store.items():
+        for key, store in aggregates.items():
             key_iter = iter(key)
             values = []
 
