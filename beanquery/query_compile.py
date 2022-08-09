@@ -17,6 +17,7 @@ from decimal import Decimal
 
 from beancount.core import inventory
 from beanquery import parser
+from beanquery import query_execute  # pylint: disable=cyclic-import
 from beanquery import types
 from beanquery import tables
 from beanquery.parser import ast
@@ -444,6 +445,27 @@ class EvalAggregator(EvalFunction):
           The final aggregated value.
         """
         return context.store[self.handle]
+
+
+class SubqueryTable(tables.Table):
+    def __init__(self, subquery):
+        self.columns = {}
+        self.subquery = subquery
+        for i, target in enumerate(target for target in subquery.c_targets if target.name is not None):
+            column = self.column(i, target.name, target.c_expr.dtype)
+            self.columns[target.name] = column()
+
+    @staticmethod
+    def column(i, name, dtype):
+        class Column(EvalColumn):
+            def __init__(self):
+                super().__init__(dtype)
+            __call__ = staticmethod(operator.itemgetter(i))
+        return Column
+
+    def __iter__(self):
+        columns, rows = query_execute.execute_query(self.subquery)
+        return iter(rows)
 
 
 def compile_expression(expr, environ):
@@ -1017,7 +1039,8 @@ def compile_select(select):
 
     elif isinstance(select.from_clause, ast.Select):
         # Subquery.
-        raise CompilationError("Nested SELECT are not supported yet")
+        table = SubqueryTable(compile_select(select.from_clause))
+        c_from_expr = None
 
     elif isinstance(select.from_clause, ast.Table):
         # Table reference.

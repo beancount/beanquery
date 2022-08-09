@@ -1371,6 +1371,18 @@ class TestExecutePivot(QueryBase):
             ]))
 
 
+class TestExecuteSubquery(QueryBase):
+
+    def execute(self, query):
+        query = self.compile(query)
+        return qx.execute_query(query)
+
+    def test_subquery(self):
+        self.assertEqual(
+            self.execute("""SELECT a + 2 AS b FROM (SELECT 3 AS a FROM #)"""),
+            ([('b', int)], [(5, )]))
+
+
 class SimpleRow(int):
     # The current implementation requires the ability to attach
     # attributes to the row object at runtime.
