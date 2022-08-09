@@ -9,9 +9,16 @@ import operator
 
 from beancount.core import display_context
 from beancount.parser import printer
-from beancount.utils import misc_utils
 
 from beanquery import query_compile
+
+
+def uniquify(iterable):
+    seen = set()
+    for obj in iterable:
+        if obj not in seen:
+            seen.add(obj)
+            yield obj
 
 
 def execute_print(c_print, file):
@@ -278,7 +285,7 @@ def execute_select(query):
 
             rows.append(values)
 
-    # Order results if requested.
+    # Apply ORDER BY.
     if order_spec is not None:
         # Process the order-by clauses grouped by their ordering direction.
         for reverse, spec in itertools.groupby(reversed(order_spec), key=operator.itemgetter(1)):
@@ -288,15 +295,15 @@ def execute_select(query):
             # smaller than anything else.
             rows.sort(key=nullitemgetter(*indexes), reverse=reverse)
 
-    # Convert results into list of tuples.
-    rows = [tuple(row[i] for i in result_indexes) for row in rows]
+    # Extract results set and convert into tuples.
+    rows = (tuple(row[i] for i in result_indexes) for row in rows)
 
-    # Apply distinct.
+    # Apply DISTINCT.
     if query.distinct:
-        rows = list(misc_utils.uniquify(rows))
+        rows = uniquify(rows)
 
-    # Apply limit.
+    # Apply LIMIT.
     if query.limit is not None:
-        rows = rows[:query.limit]
+        rows = itertools.islice(rows, query.limit)
 
-    return result_types, rows
+    return result_types, list(rows)
