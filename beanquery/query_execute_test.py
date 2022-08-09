@@ -104,7 +104,6 @@ class CommonInputBase(unittest.TestCase):
     def setUp(self):
         super().setUp()
         self.entries, _, self.options_map = loader.load_string(textwrap.dedent(self.INPUT))
-        self.context = qx.create_row_context(self.entries, self.options_map)
 
 
 class TestFundamentals(QueryBase):
@@ -311,17 +310,23 @@ class TestFundamentals(QueryBase):
 
 class TestFilterEntries(CommonInputBase, QueryBase):
 
+    @staticmethod
+    def filter_entries(query, entries, options):
+        entries = qx.apply_from_qualifiers(query.c_from, entries, options)
+        entries = qx.filter_entries(query.c_where, entries, options)
+        return entries
+
     def test_filter_empty_from(self):
         # Check that no filter outputs the very same thing.
-        filtered_entries = qx.filter_entries(self.compile("""
+        filtered_entries = self.filter_entries(self.compile("""
           SELECT * ;
-        """).c_from, self.entries, self.options_map, self.context)
+        """), self.entries, self.options_map)
         self.assertEqualEntries(self.entries, filtered_entries)
 
     def test_filter_by_year(self):
-        filtered_entries = qx.filter_entries(self.compile("""
+        filtered_entries = self.filter_entries(self.compile("""
           SELECT date, type FROM year(date) = 2012;
-        """).c_from, self.entries, self.options_map, self.context)
+        """), self.entries, self.options_map)
         self.assertEqualEntries("""
 
           2012-02-02 * "Dinner with Dos"
@@ -331,11 +336,11 @@ class TestFilterEntries(CommonInputBase, QueryBase):
         """, filtered_entries)
 
     def test_filter_by_expr1(self):
-        filtered_entries = qx.filter_entries(self.compile("""
+        filtered_entries = self.filter_entries(self.compile("""
           SELECT date, type
           FROM NOT (type = 'transaction' AND
                     (year(date) = 2012 OR year(date) = 2013));
-        """).c_from, self.entries, self.options_map, self.context)
+        """), self.entries, self.options_map)
         self.assertEqualEntries("""
 
           2010-01-01 open Assets:Bank:Checking
@@ -358,9 +363,9 @@ class TestFilterEntries(CommonInputBase, QueryBase):
         """, filtered_entries)
 
     def test_filter_by_expr2(self):
-        filtered_entries = qx.filter_entries(self.compile("""
+        filtered_entries = self.filter_entries(self.compile("""
           SELECT date, type FROM date < 2012-06-01;
-        """).c_from, self.entries, self.options_map, self.context)
+        """), self.entries, self.options_map)
         self.assertEqualEntries("""
 
           2010-01-01 open Assets:Bank:Checking
@@ -383,9 +388,9 @@ class TestFilterEntries(CommonInputBase, QueryBase):
         """, filtered_entries)
 
     def test_filter_close_undated(self):
-        filtered_entries = qx.filter_entries(self.compile("""
+        filtered_entries = self.filter_entries(self.compile("""
           SELECT date, type FROM CLOSE;
-        """).c_from, self.entries, self.options_map, self.context)
+        """), self.entries, self.options_map)
 
         self.assertEqualEntries(self.INPUT + textwrap.dedent("""
 
@@ -396,15 +401,15 @@ class TestFilterEntries(CommonInputBase, QueryBase):
         """), filtered_entries)
 
     def test_filter_close_dated(self):
-        filtered_entries = qx.filter_entries(self.compile("""
+        filtered_entries = self.filter_entries(self.compile("""
           SELECT date, type FROM CLOSE ON 2013-06-01;
-        """).c_from, self.entries, self.options_map, self.context)
+        """), self.entries, self.options_map)
         self.assertEqualEntries(self.entries[:-2], filtered_entries)
 
     def test_filter_open_dated(self):
-        filtered_entries = qx.filter_entries(self.compile("""
+        filtered_entries = self.filter_entries(self.compile("""
           SELECT date, type FROM OPEN ON 2013-01-01;
-        """).c_from, self.entries, self.options_map, self.context)
+        """), self.entries, self.options_map)
 
         self.assertEqualEntries("""
 
@@ -436,9 +441,9 @@ class TestFilterEntries(CommonInputBase, QueryBase):
         """, filtered_entries)
 
     def test_filter_clear(self):
-        filtered_entries = qx.filter_entries(self.compile("""
+        filtered_entries = self.filter_entries(self.compile("""
           SELECT date, type FROM CLEAR;
-        """).c_from, self.entries, self.options_map, self.context)
+        """), self.entries, self.options_map)
 
         self.assertEqualEntries(self.INPUT + textwrap.dedent("""
 
@@ -453,12 +458,11 @@ class TestExecutePrint(CommonInputBase, QueryBase):
 
     def test_print_with_filter(self):
         statement = qc.EvalPrint(
-            qc.EvalFrom(
-                qc.Operator(ast.Equal, [
-                    qe.Column('year'),
-                    qc.EvalConstant(2012),
-                ]),
-                None, None, None))
+            qc.Operator(ast.Equal, [
+                qe.Column('year'),
+                qc.EvalConstant(2012),
+            ]),
+            qc.EvalFrom(None, None, None))
         oss = io.StringIO()
         qx.execute_print(statement, self.entries, self.options_map, oss)
 
@@ -471,12 +475,12 @@ class TestExecutePrint(CommonInputBase, QueryBase):
         """, oss.getvalue())
 
     def test_print_with_no_filter(self):
-        statement = qc.EvalPrint(qc.EvalFrom(None, None, None, None))
+        statement = qc.EvalPrint(None, qc.EvalFrom(None, None, None))
         oss = io.StringIO()
         qx.execute_print(statement, self.entries, self.options_map, oss)
         self.assertEqualEntries(self.INPUT, oss.getvalue())
 
-        statement = qc.EvalPrint(None)
+        statement = qc.EvalPrint(None, None)
         oss = io.StringIO()
         qx.execute_print(statement, self.entries, self.options_map, oss)
         self.assertEqualEntries(self.INPUT, oss.getvalue())

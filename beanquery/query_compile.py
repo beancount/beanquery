@@ -934,21 +934,22 @@ def compile_pivot_by(pivot_by, targets, group_indexes):
 # A compile FROM clause.
 #
 # Attributes:
-#   c_expr: A compiled expression tree (an EvalNode root node).
-#   close: (See ast.From.close).
-EvalFrom = collections.namedtuple('EvalFrom', 'c_expr open close clear')
+#   open:
+#   close:
+#   clear: See ast.From attributes description.
+EvalFrom = collections.namedtuple('EvalFrom', 'open close clear')
 
 def compile_from(from_clause, environ):
     """Compiled a FROM clause as provided by the parser, in the given environment.
 
     Args:
-      select: An instance of ast.Select.
-      environ: : A compilation context for evaluating entry filters.
+      from_clause: An instance of ast.From.
+      environ: Environment.
     Returns:
-      An instance of Query, ready to be executed.
+      An tuple of EvalFrom and EvalNode instances.
     """
     if from_clause is None:
-        return None
+        return None, None
 
     c_expression = compile_expression(from_clause.expression, environ)
 
@@ -961,10 +962,9 @@ def compile_from(from_clause, environ):
         from_clause.open > from_clause.close):
         raise CompilationError("Invalid dates: CLOSE date must follow OPEN date")
 
-    return EvalFrom(c_expression,
-                    from_clause.open,
-                    from_clause.close,
-                    from_clause.clear)
+    c_from = EvalFrom(from_clause.open, from_clause.close, from_clause.clear)
+
+    return c_from, c_expression
 
 
 # A compiled query, ready for execution.
@@ -1018,8 +1018,8 @@ def compile_select(select):
     if isinstance(select.from_clause, ast.Select):
         raise CompilationError("Nested SELECT are not supported yet")
 
-    # Bind the FROM clause expressions.
-    c_from = compile_from(select.from_clause, entries_environ)
+    # Compile the FROM clause.
+    c_from, c_from_expr = compile_from(select.from_clause, entries_environ)
 
     # Compile the targets.
     c_targets = compile_targets(select.targets, postings_environ)
@@ -1032,6 +1032,10 @@ def compile_select(select):
     # contain any aggregate.
     if c_where is not None and is_aggregate(c_where):
         raise CompilationError("Aggregates are not allowed in WHERE clause")
+
+    # Combine FROM and WHERE clauses
+    if c_from_expr is not None:
+        c_where = c_from_expr if c_where is None else EvalAnd([c_from_expr, c_where])
 
     # Process the GROUP-BY clause.
     new_targets, group_indexes, having_index = compile_group_by(select.group_by,
@@ -1141,8 +1145,9 @@ def transform_balances(balances):
 # A compiled print statement, ready for execution.
 #
 # Attributes:
-#   c_from: An instance of EvalNode, a compiled expression tree, for directives.
-EvalPrint = collections.namedtuple('EvalPrint', 'c_from')
+#   c_where: An instance of EvalNode, a compiled expression tree, for directives.
+#   c_from: An instance of EvalFrom.
+EvalPrint = collections.namedtuple('EvalPrint', 'c_where c_from')
 
 def compile_print(print_stmt):
     """Compile a Print statement.
@@ -1152,8 +1157,10 @@ def compile_print(print_stmt):
     Returns:
       An instance of EvalPrint, ready to be executed.
     """
-    c_from = compile_from(print_stmt.from_clause, ENVS['entries'])
-    return EvalPrint(c_from)
+    # Compile FROM clause.
+    c_from, c_where = compile_from(print_stmt.from_clause, ENVS['entries'])
+
+    return EvalPrint(c_where, c_from)
 
 
 # pylint: disable=redefined-builtin

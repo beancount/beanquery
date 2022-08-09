@@ -3,7 +3,6 @@
 __copyright__ = "Copyright (C) 2014-2016  Martin Blais"
 __license__ = "GNU GPLv2"
 
-import copy
 import collections
 import datetime
 import itertools
@@ -22,22 +21,16 @@ from beancount.utils import misc_utils
 from beanquery import query_compile
 
 
-def filter_entries(c_from, entries, options_map, context):
-    """Filter the entries by the given compiled FROM clause.
+def apply_from_qualifiers(c_from, entries, options_map):
+    """Filter the entries by the given compiled FROM clause qualifiers.
 
     Args:
       c_from: A compiled From clause instance.
       entries: A list of directives.
       options_map: A parser's option_map.
-      context: A prototype of RowContext to use for evaluation.
     Returns:
       A list of filtered entries.
     """
-    assert c_from is None or isinstance(c_from, query_compile.EvalFrom)
-    assert isinstance(entries, list)
-
-    context = copy.copy(context)
-
     if c_from is None:
         return entries
 
@@ -59,18 +52,29 @@ def filter_entries(c_from, entries, options_map, context):
     if c_from.clear is not None:
         entries, index = summarize.clear_opt(entries, None, options_map)
 
-    # Filter the entries with the FROM clause's expression.
-    c_expr = c_from.c_expr
-    if c_expr is not None:
-        # A simple function receives a context; how come close_date() is
-        # accepted in the context of a FROM clause? It shouldn't be.
-        new_entries = []
+    return entries
+
+
+def filter_entries(expr, entries, options):
+    """Filter entries by the given expression.
+
+    This is kept mostly for backward compatibility and use in tests.
+
+    Args:
+      expr: Expression used to filter the entries, EvalNode instance.
+      entries: List of directives.
+      options: Options as returned by the Beancount parser.
+    Returns:
+      List of filtered entries.
+    """
+    if expr is not None:
+        r = []
+        context = create_row_context(entries, options)
         for entry in entries:
             context.entry = entry
-            if c_expr(context):
-                new_entries.append(entry)
-        entries = new_entries
-
+            if expr(context):
+                r.append(entry)
+        entries = r
     return entries
 
 
@@ -83,9 +87,11 @@ def execute_print(c_print, entries, options_map, file):
       options_map: A parser's option_map.
       file: The output file to print to.
     """
-    if c_print and c_print.c_from is not None:
-        context = create_row_context(entries, options_map)
-        entries = filter_entries(c_print.c_from, entries, options_map, context)
+    # Apply OPEN, CLOSE, CLEAR qualifiers.
+    entries = apply_from_qualifiers(c_print.c_from, entries, options_map)
+
+    # Filter the entries with the FROM clause expression.
+    entries = filter_entries(c_print.c_where, entries, options_map)
 
     # Create a context that renders all numbers with their natural
     # precision, but honors the commas option. This is kept in sync with
@@ -310,10 +316,8 @@ def execute_select(query, entries, options_map):
 
     context = create_row_context(entries, options_map)
 
-    # Filter the entries using the FROM clause.
-    filt_entries = (filter_entries(query.c_from, entries, options_map, context)
-                    if query.c_from is not None else
-                    entries)
+    # Apply OPEN, CLOSE, CLEAR clauses.
+    entries = apply_from_qualifiers(query.c_from, entries, options_map)
 
     # Dispatch between the non-aggregated queries and aggregated queries.
     c_where = query.c_where
@@ -326,7 +330,7 @@ def execute_select(query, entries, options_map):
         # This is a non-aggregated query.
 
         # Iterate over all the postings once.
-        for entry in misc_utils.filter_type(filt_entries, data.Transaction):
+        for entry in misc_utils.filter_type(entries, data.Transaction):
             context.entry = entry
             for posting in entry.postings:
                 context.rowid += 1
@@ -358,7 +362,7 @@ def execute_select(query, entries, options_map):
 
         # Iterate over all the postings to evaluate the aggregates.
         agg_store = {}
-        for entry in misc_utils.filter_type(filt_entries, data.Transaction):
+        for entry in misc_utils.filter_type(entries, data.Transaction):
             context.entry = entry
             for posting in entry.postings:
                 context.rowid += 1
