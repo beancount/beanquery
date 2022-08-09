@@ -360,11 +360,11 @@ class TestCompileSelect(CompileSelectBase):
         self.assertEqual(None, query.c_from)
 
         query = self.compile("SELECT account FROM CLOSE;")
-        self.assertEqual(qc.EvalFrom(None, None, True, None), query.c_from)
+        self.assertEqual(qc.EvalFrom(None, True, None), query.c_from)
 
         query = self.compile("SELECT account FROM length(payee) != 0;")
         self.assertTrue(isinstance(query.c_from, qc.EvalFrom))
-        self.assertTrue(isinstance(query.c_from.c_expr, qc.EvalNode))
+        self.assertTrue(isinstance(query.c_where, qc.EvalNode))
 
         with self.assertRaises(qc.CompilationError):
             query = self.compile("SELECT account FROM sum(payee) != 0;")
@@ -783,16 +783,13 @@ class TestTranslationBalance(CompileSelectBase):
         None, self.group_by, self.order_by, None, None, None))
 
     def test_print(self):
-        self.assertCompile(qc.EvalPrint(None), "PRINT;")
+        self.assertCompile(qc.EvalPrint(None, None), "PRINT;")
 
     def test_print_from(self):
         self.assertCompile(
             qc.EvalPrint(
-                qc.EvalFrom(
-                    qc.Operator(ast.Equal, [
-                        qe.Column('year'),
-                        qc.EvalConstant(2014),
-                    ]), None, None, None)),
+                qc.Operator(ast.Equal, [qe.Column('year'), qc.EvalConstant(2014)]),
+                qc.EvalFrom(None, None, None)),
             """PRINT FROM year = 2014;""")
 
 
