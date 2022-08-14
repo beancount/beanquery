@@ -227,6 +227,14 @@ def div_int(x, y):
     return Decimal(x) / y
 
 
+@binaryop(ast.Mod, [int, int], int)
+@binaryop(ast.Mod, [Decimal, int], Decimal)
+@binaryop(ast.Mod, [int, Decimal], Decimal)
+@binaryop(ast.Mod, [Decimal, Decimal], Decimal)
+def mod_(x, y):
+    return x % y
+
+
 @binaryop(ast.Add, [Decimal, Decimal], Decimal)
 @binaryop(ast.Add, [Decimal, int], Decimal)
 @binaryop(ast.Add, [int, Decimal], Decimal)

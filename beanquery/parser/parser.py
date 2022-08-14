@@ -739,8 +739,8 @@ class BQLParser(Parser):
                 self._term_()
             self._error(
                 'expecting one of: '
-                '<add> <div> <factor> <mul> <sub> <sum>'
-                '<term>'
+                '<add> <div> <factor> <mod> <mul> <sub>'
+                '<sum> <term>'
             )
 
     @tatsumasu('Add')
@@ -782,10 +782,13 @@ class BQLParser(Parser):
             with self._option():
                 self._div_()
             with self._option():
+                self._mod_()
+            with self._option():
                 self._factor_()
             self._error(
                 'expecting one of: '
-                "'(' <div> <factor> <mul> <term> <unary>"
+                "'(' <div> <factor> <mod> <mul> <term>"
+                '<unary>'
             )
 
     @tatsumasu('Mul')
@@ -809,6 +812,21 @@ class BQLParser(Parser):
         self._term_()
         self.name_last_node('left')
         self._token('/')
+        self._cut()
+        self._factor_()
+        self.name_last_node('right')
+
+        self._define(
+            ['left', 'right'],
+            []
+        )
+
+    @tatsumasu('Mod')
+    @nomemo
+    def _mod_(self):  # noqa
+        self._term_()
+        self.name_last_node('left')
+        self._token('%')
         self._cut()
         self._factor_()
         self.name_last_node('right')
@@ -1213,6 +1231,9 @@ class BQLSemantics:
         return ast
 
     def div(self, ast):  # noqa
+        return ast
+
+    def mod(self, ast):  # noqa
         return ast
 
     def factor(self, ast):  # noqa
