@@ -15,7 +15,6 @@ import operator
 
 from decimal import Decimal
 
-from beancount.core import inventory
 from beanquery import parser
 from beanquery import query_execute  # pylint: disable=cyclic-import
 from beanquery import types
@@ -627,17 +626,6 @@ def is_aggregate(node):
     return bool(aggregates)
 
 
-def is_hashable_type(node):
-    """Return true if the node is of a hashable type.
-
-    Args:
-      node: An instance of EvalNode.
-    Returns:
-      A boolean.
-    """
-    return not issubclass(node.dtype, inventory.Inventory)
-
-
 # A compiled target.
 #
 # Attributes:
@@ -790,7 +778,7 @@ def compile_group_by(group_by, c_targets, environ):
                         column))
 
             # Check that the group-by column has a supported hashable type.
-            if not is_hashable_type(c_expr):
+            if not issubclass(c_expr.dtype, collections.abc.Hashable):
                 raise CompilationError(
                     "GROUP-BY a non-hashable type is not supported: '{}'".format(
                         column))
