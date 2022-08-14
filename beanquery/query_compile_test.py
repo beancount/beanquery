@@ -5,7 +5,6 @@ import datetime
 import unittest
 from decimal import Decimal
 
-from beancount.core.number import D
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import parser
@@ -61,9 +60,9 @@ class TestCompileExpression(unittest.TestCase):
 
     def test_expr_constant(self):
         self.assertEqual(
-            qc.EvalConstant(D(17)),
+            qc.EvalConstant(Decimal(17)),
             qc.compile_expression(
-                ast.Constant(D(17)), qe.PostingsEnvironment()))
+                ast.Constant(Decimal(17)), qe.PostingsEnvironment()))
 
 
 class TestCompileExpressionDataTypes(unittest.TestCase):
@@ -169,7 +168,7 @@ class TestCompileDataTypes(unittest.TestCase):
         c_int = qc.EvalConstant(17)
         self.assertEqual(int, c_int.dtype)
 
-        c_decimal = qc.EvalConstant(D('7364.35'))
+        c_decimal = qc.EvalConstant(Decimal('7364.35'))
         self.assertEqual(Decimal, c_decimal.dtype)
 
         c_str = qc.EvalConstant("Assets:Checking")
