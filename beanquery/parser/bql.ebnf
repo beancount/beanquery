@@ -180,6 +180,7 @@ term
     =
     | mul
     | div
+    | mod
     | factor
     ;
 
@@ -189,6 +190,10 @@ mul::Mul::BinaryOp
 
 div::Div::BinaryOp
     = left:term '/' ~ right:factor
+    ;
+
+mod::Mod::BinaryOp
+    = left:term '%' ~ right:factor
     ;
 
 factor

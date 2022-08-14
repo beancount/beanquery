@@ -257,6 +257,12 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 4 / 2.0", Decimal(2))
         self.assertResult("SELECT 4.0 / 2.0", Decimal(2))
 
+        # mod
+        self.assertResult("SELECT 3 % 2", 1)
+        self.assertResult("SELECT 3.0 % 2", Decimal(1))
+        self.assertResult("SELECT 3 % 2.0", Decimal(1))
+        self.assertResult("SELECT 3.0 % 2.0", Decimal(1))
+
         # match
         self.assertResult("SELECT 'foobarbaz' ~ 'bar'", True)
         self.assertResult("SELECT 'foobarbaz' ~ 'quz'", False)

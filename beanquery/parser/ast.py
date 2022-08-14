@@ -227,6 +227,9 @@ class Mul(BinaryOp):
 class Div(BinaryOp):
     __slots__ = ()
 
+class Mod(BinaryOp):
+    __slots__ = ()
+
 class Add(BinaryOp):
     __slots__ = ()
 
