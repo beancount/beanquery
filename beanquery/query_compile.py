@@ -390,6 +390,7 @@ class EvalAggregator(EvalFunction):
 
     def __init__(self, operands, dtype=None):
         super().__init__(operands, dtype or operands[0].dtype)
+        self.value = None
 
     def allocate(self, allocator):
         """Allocate handles to store data for a node's aggregate storage.
@@ -405,14 +406,13 @@ class EvalAggregator(EvalFunction):
         self.handle = allocator.allocate()
 
     def initialize(self, store):
-        """Initialize this node's aggregate data. If the node is not an aggregate,
-        simply initialize the subnodes. Override this method in the aggregator
-        if you need data for storage.
+        """Initialize this node's aggregate data.
 
         Args:
           store: An object indexable by handles appropriated during allocate().
         """
         store[self.handle] = self.dtype()
+        self.value = None
 
     def update(self, store, context):
         """Evaluate this node. This is designed to recurse on its children.
@@ -424,28 +424,22 @@ class EvalAggregator(EvalFunction):
         # Do nothing by default.
 
     def finalize(self, store):
-        """Finalize this node's aggregate data and return it.
-
-        For aggregate methods, this finalizes the node and returns the final
-        value. The context node will be the alloc instead of the context object.
+        """Finalize this node's aggregate data.
 
         Args:
           store: An object indexable by handles appropriated during allocate().
         """
-        # Do nothing by default.
+        self.value = store[self.handle]
 
     def __call__(self, context):
         """Return the value on evaluation.
 
         Args:
           context: The evaluation object to which the evaluation need to apply.
-            This is either an entry, a Posting instance, or a particular result
-            set row from a sub-select. This is the provider for the underlying
-            data.
         Returns:
           The final aggregated value.
         """
-        return context.store[self.handle]
+        return self.value
 
 
 class SubqueryTable(tables.Table):

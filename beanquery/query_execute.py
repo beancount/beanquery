@@ -270,7 +270,6 @@ def execute_select(query):
             # Finalize the store.
             for c_expr in c_aggregate_exprs:
                 c_expr.finalize(store)
-            context.store = store
 
             for index, c_expr in enumerate(c_target_exprs):
                 if index in group_indexes:
