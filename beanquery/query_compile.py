@@ -386,6 +386,8 @@ class EvalColumn(EvalNode):
 
 
 class EvalAggregator(EvalFunction):
+    pure = False
+
     def __init__(self, operands, dtype=None):
         super().__init__(operands, dtype or operands[0].dtype)
 
