@@ -247,5 +247,5 @@ def convert_col_Inventory(name, drows, index):
 CONVERTING_TYPES = {
     amount.Amount       : convert_col_Amount,
     position.Position   : convert_col_Position,
-    inventory.Inventory : convert_col_Inventory,
+    inventory.Inventory : convert_col_Inventory, # pylint: disable=unhashable-member
 }
