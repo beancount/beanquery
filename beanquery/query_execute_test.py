@@ -1388,12 +1388,6 @@ class TestExecuteSubquery(QueryBase):
             ([('b', int)], [(5, )]))
 
 
-class SimpleRow(int):
-    # The current implementation requires the ability to attach
-    # attributes to the row object at runtime.
-    pass
-
-
 class SimpleColumn(qc.EvalColumn):
     def __init__(self, name, func, dtype):
         super().__init__(dtype)
@@ -1415,7 +1409,7 @@ class SimpleTable(tables.Table):
 
     def __iter__(self):
         for i in range(self.nrows):
-            yield SimpleRow(i)
+            yield i
 
 
 class TestExecuteTables(QueryBase):
