@@ -322,6 +322,11 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT COALESCE(str(meta('missing')), '!')", "!")
         self.assertError ("SELECT COALESCE(meta('missing'), '!')")
 
+    def test_count(self):
+        # count number of postings
+        self.assertResult("SELECT COUNT(1)", 1)
+        self.assertResult("SELECT COUNT(NULL)", 0)
+        self.assertResult("SELECT COUNT(meta('missing'))", 0)
 
 class TestFilterEntries(CommonInputBase, QueryBase):
 

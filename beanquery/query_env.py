@@ -579,12 +579,14 @@ def aggregator(intypes, name=None):
 
 @aggregator([types.Any], name='count')
 class Count(query_compile.EvalAggregator):
-    """Count the number of occurrences of the argument."""
+    """Count the number of non-NULL occurrences of the argument."""
     def __init__(self, operands):
         super().__init__(operands, int)
 
-    def update(self, store, _):
-        store[self.handle] += 1
+    def update(self, store, context):
+        value = self.operands[0](context)
+        if value is not None:
+            store[self.handle] += 1
 
 
 @aggregator([int], name='sum')
