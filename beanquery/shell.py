@@ -8,7 +8,6 @@ import logging
 import operator
 import os
 import re
-import readline
 import sys
 import shlex
 import textwrap
@@ -31,6 +30,11 @@ from beanquery import query_env
 from beanquery import query_execute
 from beanquery import query_render
 from beanquery import numberify
+
+try:
+    import readline
+except ImportError:
+    readline = None
 
 
 HISTORY_FILENAME = "~/.bean-shell-history"
@@ -102,21 +106,22 @@ class DispatchingShell(cmd.Cmd):
         """
         super().__init__()
         if is_interactive:
-            readline.parse_and_bind("tab: complete")
-            # Readline is used to complete command names, which are
-            # strictly alphanumeric strings, and named query
-            # identifiers, which may contain any ascii characters. To
-            # enable completion of the latter, reduce the set of
-            # completion word delimiters to the shell default. Notably
-            # remove "-" from the delimiters list setup by Python.
-            readline.set_completer_delims(" \t\n\"\\'`@$><=;|&{(")
-            history_filepath = path.expanduser(HISTORY_FILENAME)
-            try:
-                readline.read_history_file(history_filepath)
-                readline.set_history_length(2048)
-            except FileNotFoundError:
-                pass
-            atexit.register(readline.write_history_file, history_filepath)
+            if readline is not None:
+                readline.parse_and_bind("tab: complete")
+                # Readline is used to complete command names, which are
+                # strictly alphanumeric strings, and named query
+                # identifiers, which may contain any ascii characters. To
+                # enable completion of the latter, reduce the set of
+                # completion word delimiters to the shell default. Notably
+                # remove "-" from the delimiters list setup by Python.
+                readline.set_completer_delims(" \t\n\"\\'`@$><=;|&{(")
+                history_filepath = path.expanduser(HISTORY_FILENAME)
+                try:
+                    readline.read_history_file(history_filepath)
+                    readline.set_history_length(2048)
+                except FileNotFoundError:
+                    pass
+                atexit.register(readline.write_history_file, history_filepath)
         self.is_interactive = is_interactive
         self.parser = parser
         self.initialize_vars(default_format, do_numberify)
@@ -199,19 +204,21 @@ class DispatchingShell(cmd.Cmd):
 
     def do_history(self, line):
         "Print the command-line history statement."
-        num_entries = readline.get_current_history_length()
-        try:
-            max_entries = int(line)
-            start = max(0, num_entries - max_entries)
-        except ValueError:
-            start = 0
-        for index in range(start, num_entries):
-            line = readline.get_history_item(index + 1)
-            print(line, file=self.outfile)
+        if readline is not None:
+            num_entries = readline.get_current_history_length()
+            try:
+                max_entries = int(line)
+                start = max(0, num_entries - max_entries)
+            except ValueError:
+                start = 0
+            for index in range(start, num_entries):
+                line = readline.get_history_item(index + 1)
+                print(line, file=self.outfile)
 
     def do_clear(self, _):
         "Clear the history."
-        readline.clear_history()
+        if readline is not None:
+            readline.clear_history()
 
     def do_set(self, line):
         "Get/set shell settings variables."
