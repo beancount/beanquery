@@ -29,8 +29,6 @@ class BQLSemantics:
         return decimal.Decimal(value)
 
     def date(self, value):
-        if value.startswith('#'):
-            return dateutil.parser.parse(value[2:-1]).date()
         return datetime.datetime.strptime(value, '%Y-%m-%d').date()
 
     def string(self, value):

@@ -103,7 +103,6 @@ class TestParseSelect(QueryParserTestBase):
 
         # date
         self.assertParseTarget("SELECT 1972-05-28;", ast.Constant(datetime.date(1972, 5, 28)))
-        self.assertParseTarget("SELECT #'May 28, 1972';", ast.Constant(datetime.date(1972, 5, 28)))
 
         # not a list
         self.assertParseTarget("SELECT (1);", ast.Constant(1))
