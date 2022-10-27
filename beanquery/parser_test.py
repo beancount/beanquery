@@ -165,6 +165,7 @@ class TestParseSelect(QueryParserTestBase):
         self.assertParseTarget("SELECT random();", ast.Function('random', []))
         self.assertParseTarget("SELECT min(a);", ast.Function('min', [ast.Column('a')]))
         self.assertParseTarget("SELECT min(a, b);", ast.Function('min', [ast.Column('a'), ast.Column('b')]))
+        self.assertParseTarget("SELECT count(*);", ast.Function('count', [ast.Wildcard()]))
 
     def test_non_associative(self):
         # non associative operators

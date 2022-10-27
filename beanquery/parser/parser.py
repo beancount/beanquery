@@ -908,23 +908,41 @@ class BQLParser(Parser):
 
     @tatsumasu('Function')
     def _function_(self):  # noqa
-        self._identifier_()
-        self.name_last_node('fname')
-        self._token('(')
+        with self._choice():
+            with self._option():
+                self._identifier_()
+                self.name_last_node('fname')
+                self._token('(')
 
-        def sep2():
-            self._token(',')
+                def sep3():
+                    self._token(',')
 
-        def block2():
-            self._expression_()
-        self._gather(block2, sep2)
-        self.name_last_node('operands')
-        self._token(')')
+                def block3():
+                    self._expression_()
+                self._gather(block3, sep3)
+                self.name_last_node('operands')
+                self._token(')')
 
-        self._define(
-            ['fname', 'operands'],
-            []
-        )
+                self._define(
+                    ['fname', 'operands'],
+                    []
+                )
+            with self._option():
+                self._identifier_()
+                self.name_last_node('fname')
+                self._token('(')
+                self._wildcard_()
+                self.add_last_node_to_name('operands')
+                self._token(')')
+
+                self._define(
+                    ['fname'],
+                    ['operands']
+                )
+            self._error(
+                'expecting one of: '
+                '<identifier> [a-zA-Z_][a-zA-Z0-9_]*'
+            )
 
     @tatsumasu('Column')
     def _column_(self):  # noqa
