@@ -568,6 +568,9 @@ def compile_expression(expr, environ):
     if isinstance(expr, ast.Constant):
         return EvalConstant(expr.value)
 
+    if isinstance(expr, ast.Wildcard):
+        return EvalConstant(None, dtype=types.Star)
+
     raise NotImplementedError
 
 

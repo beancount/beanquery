@@ -17,6 +17,9 @@ class AnyType:
 # Used in BQL functions signatures for arguments that can have any type.
 Any = AnyType()
 
+# Used for COUNT(*)
+Star = '*'
+
 
 def function_lookup(functions, name, operands):
     """Lookup a BQL function implementation.

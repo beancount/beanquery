@@ -226,7 +226,9 @@ literal
     ;
 
 function::Function
-    = fname:identifier '(' operands:','.{ expression } ')'
+    =
+    | fname:identifier '(' operands:','.{ expression } ')'
+    | fname:identifier '(' operands+:wildcard ')'
     ;
 
 column::Column

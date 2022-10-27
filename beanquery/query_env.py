@@ -577,8 +577,18 @@ def aggregator(intypes, name=None):
     return decorator
 
 
-@aggregator([types.Any], name='count')
+@aggregator([types.Star], name='count')
 class Count(query_compile.EvalAggregator):
+    """Count the number of input rows."""
+    def __init__(self, operands):
+        super().__init__(operands, int)
+
+    def update(self, store, context):
+        store[self.handle] += 1
+
+
+@aggregator([types.Any], name='count')
+class CountArg(query_compile.EvalAggregator):
     """Count the number of non-NULL occurrences of the argument."""
     def __init__(self, operands):
         super().__init__(operands, int)

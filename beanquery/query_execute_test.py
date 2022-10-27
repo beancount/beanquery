@@ -324,6 +324,7 @@ class TestFundamentals(QueryBase):
 
     def test_count(self):
         # count number of postings
+        self.assertResult("SELECT COUNT(*)", 1)
         self.assertResult("SELECT COUNT(1)", 1)
         self.assertResult("SELECT COUNT(NULL)", 0)
         self.assertResult("SELECT COUNT(meta('missing'))", 0)
