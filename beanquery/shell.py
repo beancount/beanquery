@@ -198,7 +198,7 @@ class DispatchingShell(cmd.Cmd):
     def parseline(self, line):
         """Override command line parsing for case insensitive commands lookup."""
         cmd, arg, line = super().parseline(line)
-        if cmd != 'EOF':
+        if cmd and cmd != 'EOF':
             cmd = cmd.lower()
         return cmd, arg, line
 
