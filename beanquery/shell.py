@@ -561,7 +561,8 @@ class BQLShell(DispatchingShell):
           {aggregates}
 
         """)
-        print(template.format(**generate_env_attribute_list(query_compile.TABLES['postings'])), file=self.outfile)
+        print(template.format(**generate_env_attribute_list(query_compile.TABLES['postings'].columns,
+                                                            query_compile.FUNCTIONS)), file=self.outfile)
 
     def help_from(self):
         template = textwrap.dedent("""
@@ -580,7 +581,8 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**generate_env_attribute_list(query_compile.TABLES['entries'])), file=self.outfile)
+        print(template.format(**generate_env_attribute_list(query_compile.TABLES['entries'].columns,
+                                                            query_compile.FUNCTIONS)), file=self.outfile)
 
     def help_where(self):
         template = textwrap.dedent("""
@@ -599,43 +601,11 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**generate_env_attribute_list(query_compile.TABLES['postings'])), file=self.outfile)
-
-    def help_attributes(self):
-        template = textwrap.dedent("""
-
-          The attribute names on postings and directives equivalent to the names
-          of columns that we make available for query.
-
-          Entries
-          -------
-
-          {entry_attributes}
-
-          Postings
-          --------
-
-          {posting_attributes}
-
-        """)
-
-        entry_pairs = sorted(
-            (getattr(column_cls, '__equivalent__', '-'), name)
-            for name, column_cls in sorted(query_compile.TABLES['entries'].columns.items()))
-
-        posting_pairs = sorted(
-            (getattr(column_cls, '__equivalent__', '-'), name)
-            for name, column_cls in sorted(query_compile.TABLES['postings'].columns.items()))
-
-        # pylint: disable=possibly-unused-variable
-        entry_attributes = ''.join(
-            "  {:40}: {}\n".format(*pair) for pair in entry_pairs)
-        posting_attributes = ''.join(
-            "  {:40}: {}\n".format(*pair) for pair in posting_pairs)
-        print(template.format(**locals()), file=self.outfile)
+        print(template.format(**generate_env_attribute_list(query_compile.TABLES['postings'].columns,
+                                                            query_compile.FUNCTIONS)), file=self.outfile)
 
 
-def generate_env_attribute_list(env):
+def generate_env_attribute_list(columns, functions):
     """Generate a dictionary of rendered attribute lists for help.
 
     Args:
@@ -645,11 +615,10 @@ def generate_env_attribute_list(env):
       and formatted strings.
     """
     wrapper = textwrap.TextWrapper(initial_indent='  ', subsequent_indent='  ', width=80)
-
-    columns = generate_env_attributes(wrapper, env.columns)
-    functions = generate_env_attributes(wrapper, env.functions, aggregates=False)
-    aggregates = generate_env_attributes(wrapper, env.functions, aggregates=True)
-    return dict(columns=columns, functions=functions, aggregates=aggregates)
+    return dict(
+        columns=generate_env_attributes(wrapper, columns),
+        functions=generate_env_attributes(wrapper, functions, aggregates=False),
+        aggregates=generate_env_attributes(wrapper, functions, aggregates=True))
 
 
 def generate_env_attributes(wrapper, fields, aggregates=False):
