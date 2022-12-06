@@ -6,14 +6,18 @@ from beancount import loader
 from beancount.core import data
 from beancount.core import position
 
+from beanquery import tables
 from beanquery import types
 from beanquery import query_compile
 from beanquery import query_env
 from beanquery import query_render
 
 
+TABLES = [query_env.EntriesTable, query_env.PostingsTable]
+
+
 def add_beancount_tables(context, entries, errors, options):
-    for table in query_env.EntriesTable, query_env.PostingsTable:
+    for table in TABLES:
         context.tables[table.name] = table(entries, options)
     context.options.update(options)
     context.errors.extend(errors)
@@ -83,3 +87,30 @@ class Amount(types.Structure):
 types.ALIASES[position.Position] = Position
 types.ALIASES[data.Cost] = Cost
 types.ALIASES[data.Amount] = Amount
+
+
+class Table(tables.Table):
+    datatype = None
+
+    def __init__(self, entries, options):
+        self.entries = entries
+        self.options = options
+
+    def __init_subclass__(cls):
+        TABLES.append(cls)
+
+    def __iter__(self):
+        datatype = self.datatype
+        for entry in self.entries:
+            if isinstance(entry, datatype):
+                yield entry
+
+    @property
+    def wildcard_columns(self):
+        return tuple(col for col in self.columns.keys() if col != 'meta')
+
+
+class PricesTable(Table):
+    name = 'prices'
+    datatype = data.Price
+    columns = _typed_namedtuple_to_columns(datatype)
