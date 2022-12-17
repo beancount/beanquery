@@ -13,6 +13,7 @@ from beancount import loader
 from beancount.utils import test_utils
 
 from beanquery import shell
+from beanquery.sources.beancount import add_beancount_tables
 
 
 @functools.lru_cache(None)
@@ -122,8 +123,10 @@ def runshell(function):
     """Decorate a function to run the shell and return the output."""
     def wrapper(self):
         with test_utils.capture('stdout') as stdout:
-            shell_obj = shell.BQLShell(False, load, sys.stdout)
-            shell_obj.do_reload()
+            shell_obj = shell.BQLShell(False, None, sys.stdout)
+            entries, errors, options = load()
+            add_beancount_tables(shell_obj.context, entries, errors, options)
+            shell_obj._extract_queries(entries)
             shell_obj.onecmd(function.__doc__)
         return function(self, stdout.getvalue())
     return wrapper

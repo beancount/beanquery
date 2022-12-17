@@ -19,39 +19,31 @@ from beancount import loader
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query_execute as qx
-from beanquery import parser
 from beanquery import tables
 
 from beanquery import compat  # noqa: F401
 
+from beanquery import Connection
+from beanquery.sources.beancount import add_beancount_tables
 
 class QueryBase(cmptest.TestCase):
-
+    INPUT = ""
     maxDiff = 8192
 
-    def compile(self, bql_string):
-        """Parse a query and compile it.
+    def setUp(self):
+        entries, errors, options = loader.load_string(textwrap.dedent(self.INPUT))
+        self.ctx = Connection()
+        add_beancount_tables(self.ctx, entries, errors, options)
 
-        Args:
-          bql_string: An SQL query to be parsed.
-        Returns:
-          A compiled EvalQuery node.
-        """
-        return qc.compile(parser.parse(bql_string))
+    def compile(self, query):
+        return self.ctx.compile(self.ctx.parse(query))
 
-    def check_query(self,
-                    input_string, bql_string,
-                    expected_types, expected_rows,
-                    sort_rows=False,
-                    debug=False):
+    def check_query(self, input_string, query, expected_types, expected_rows, sort_rows=False, debug=False):
+        entries, errors, options = loader.load_string(input_string)
+        ctx = Connection()
+        add_beancount_tables(ctx, entries, errors, options)
 
-        entries, _, options = loader.load_string(input_string)
-        qc.TABLES['entries'] = qe.EntriesTable(entries, options)
-        qc.TABLES['postings'] = qe.PostingsTable(entries, options)
-
-        query = self.compile(bql_string)
-        result_types, result_rows = qx.execute_query(query)
-
+        result_types, result_rows = ctx.execute(query)
         if debug:
             with misc_utils.box('result_types'):
                 print(result_types)
@@ -62,11 +54,8 @@ class QueryBase(cmptest.TestCase):
             result_rows.sort()
         self.assertEqual(expected_rows, result_rows)
 
-    def check_sorted_query(self,
-                           input_string, bql_string,
-                           expected_types, expected_rows):
-        return self.check_query(input_string, bql_string,
-                                expected_types, expected_rows, True)
+    def check_sorted_query(self, input_string, bql_string, expected_types, expected_rows):
+        return self.check_query(input_string, bql_string, expected_types, expected_rows, True)
 
 
 class CommonInputBase(unittest.TestCase):
@@ -104,18 +93,9 @@ class CommonInputBase(unittest.TestCase):
 
     """)
 
-    def setUp(self):
-        entries, errors, options = loader.load_string(textwrap.dedent(self.INPUT))
-        qc.TABLES['entries'] = qe.EntriesTable(entries, options)
-        qc.TABLES['postings'] = qe.PostingsTable(entries, options)
-        super().setUp()
-
 
 class TestFundamentals(QueryBase):
-
-    def setUp(self):
-        super().setUp()
-        entries, errors, options = loader.load_string("""
+    INPUT = textwrap.dedent("""
           2022-04-05 commodity TEST
             rate: 42
           2022-04-05 open Assets:Tests
@@ -129,20 +109,16 @@ class TestFundamentals(QueryBase):
               str4: "4.0"
               date: 2022-04-05
               null: NULL
-        """, dedent=True)
-
-        # Register tables.
-        qc.TABLES['entries'] = qe.EntriesTable(entries, options)
-        qc.TABLES['postings'] = qe.PostingsTable(entries, options)
+        """)
 
     def assertResult(self, query, result, dtype=None):
-        dtypes, rows = qx.execute_query(self.compile(query))
+        dtypes, rows = self.ctx.execute(query)
         self.assertEqual([dtype for name, dtype in dtypes], [dtype or type(result)])
         self.assertEqual(rows, [(result, )])
 
     def assertError(self, query):
         with self.assertRaises(qc.CompilationError):
-            dtypes, rows = qx.execute_query(self.compile(query))
+            dtypes, rows = self.ctx.execute(query)
 
     def test_type_casting(self):
         # bool
@@ -1261,14 +1237,12 @@ class TestExecutePivot(QueryBase):
     def setUp(self):
         super().setUp()
         entries, errors, options = loader.load_string(self.data, dedent=True)
-        # Register tables.
-        qc.TABLES['entries'] = qe.EntriesTable(entries, options)
-        qc.TABLES['postings'] = qe.PostingsTable(entries, options)
         self.assertFalse(errors)
+        self.ctx = Connection()
+        add_beancount_tables(self.ctx, entries, errors, options)
 
     def execute(self, query):
-        query = self.compile(query)
-        return qx.execute_query(query)
+        return self.ctx.execute(query)
 
     data = """
       2012-01-01 open Assets:Cash
@@ -1379,13 +1353,9 @@ class TestExecutePivot(QueryBase):
 
 class TestExecuteSubquery(QueryBase):
 
-    def execute(self, query):
-        query = self.compile(query)
-        return qx.execute_query(query)
-
     def test_subquery(self):
         self.assertEqual(
-            self.execute("""SELECT a + 2 AS b FROM (SELECT 3 AS a FROM #)"""),
+            self.ctx.execute("""SELECT a + 2 AS b FROM (SELECT 3 AS a FROM #)"""),
             ([('b', int)], [(5, )]))
 
 
@@ -1416,7 +1386,7 @@ class TestExecuteTables(QueryBase):
 
     def setUp(self):
         super().setUp()
-        qc.TABLES['test'] = SimpleTable('test', 16)
+        self.ctx.tables['test'] = SimpleTable('test', 16)
 
     def execute(self, query):
         query = self.compile(query)

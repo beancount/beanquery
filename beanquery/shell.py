@@ -22,14 +22,14 @@ from beancount.parser import printer
 from beancount.core import data
 from beancount.utils import misc_utils
 from beancount.utils import pager
-from beancount import loader
 
+import beanquery
+
+from beanquery import numberify
 from beanquery import parser
 from beanquery import query_compile
-from beanquery import query_env
-from beanquery import query_execute
 from beanquery import query_render
-from beanquery import numberify
+from beanquery.query_execute import execute_print
 
 try:
     import readline
@@ -60,7 +60,7 @@ def render_location(text, pos, endpos, lineno, indent, strip, out):
 # information uniformly. This requires translating TatSu exceptions
 # into something else.
 def render_exception(exc, indent='  ', strip=True):
-    if isinstance(exc, query_compile.CompilationError) and exc.parseinfo:
+    if isinstance(exc, beanquery.CompilationError) and exc.parseinfo:
         out = [f'error: {exc}', '']
         pos = exc.parseinfo.pos
         endpos = exc.parseinfo.endpos
@@ -68,7 +68,7 @@ def render_exception(exc, indent='  ', strip=True):
         render_location(exc.parseinfo.tokenizer.text, pos, endpos, lineno, indent, strip, out)
         return '\n'.join(out)
 
-    if isinstance(exc, parser.ParseError):
+    if isinstance(exc, beanquery.ParseError):
         out = ['error: syntax error', '']
         info = exc.tokenizer.line_info(exc.pos)
         render_location(exc.tokenizer.text, exc.pos, exc.pos + 1, info.line, indent, strip, out)
@@ -312,18 +312,16 @@ class BQLShell(DispatchingShell):
     """
     prompt = 'beanquery> '
 
-    def __init__(self, is_interactive, loadfun, outfile,
-                 default_format='text', do_numberify=False):
-        super().__init__(is_interactive, outfile,
-                         default_format, do_numberify)
+    def __init__(self, is_interactive, filename, outfile, default_format='text', do_numberify=False):
+        super().__init__(is_interactive, outfile, default_format, do_numberify)
 
-        self.loadfun = loadfun
-        self.entries = None
-        self.errors = None
-        self.options = None
+        self.context = beanquery.connect(None)
+        self.filename = filename
+        self.queries = {}
+        self.do_reload()
 
-    def parse(self, line, default_close_date=None):
-        statement = parser.parse(line)
+    def parse(self, line, default_close_date=None, **kwargs):
+        statement = self.context.parse(line)
         if (isinstance(statement, parser.ast.Select) and
             isinstance(statement.from_clause, parser.ast.From) and
             not statement.from_clause.close):
@@ -332,27 +330,26 @@ class BQLShell(DispatchingShell):
 
     def do_reload(self, _line=None):
         "Reload the Beancount input file."
-        self.entries, self.errors, self.options = self.loadfun()
-
-        query_compile.TABLES['entries'] = query_env.EntriesTable(self.entries, self.options)
-        query_compile.TABLES['postings'] = query_env.PostingsTable(self.entries, self.options)
-
-        # Extract a mapping of the custom queries from the list of entries.
-        self.named_queries = {}
-        for entry in self.entries:
-            if not isinstance(entry, data.Query):
-                continue
-            x = self.named_queries.setdefault(entry.name, entry)
-            if x is not entry:
-                logging.warning("Duplicate query name '%s'", entry.name)
-
+        if not self.filename:
+            return
+        self.context.attach('beancount:' + self.filename)
+        table = self.context.tables['entries']
+        self._extract_queries(table.entries)
         if self.is_interactive:
-            print_statistics(self.entries, self.options, self.outfile)
+            print_statistics(table.entries, table.options, self.outfile)
+
+    def _extract_queries(self, entries):
+        self.queries = {}
+        for entry in entries:
+            if isinstance(entry, data.Query):
+                x = self.queries.setdefault(entry.name, entry)
+                if x is not entry:
+                    logging.warning("Duplicate query name '%s'", entry.name)
 
     def do_errors(self, _line):
         "Print the errors that occurred during Beancount input file parsing."
-        if self.errors:
-            printer.print_errors(self.errors)
+        if self.context.errors:
+            printer.print_errors(self.context.errors)
         else:
             print('(no errors)', file=self.outfile)
 
@@ -362,12 +359,12 @@ class BQLShell(DispatchingShell):
         line = line.rstrip('; \t')
         if not line:
             # List the available queries.
-            print('\n'.join(name for name in sorted(self.named_queries)))
+            print('\n'.join(name for name in sorted(self.queries)))
             return
 
         if line == "*":
             # Execute all.
-            for name, query in sorted(self.named_queries.items()):
+            for name, query in sorted(self.queries.items()):
                 print(f'{name}:')
                 self.execute(query.query_string, default_close_date=query.date)
                 print()
@@ -379,14 +376,14 @@ class BQLShell(DispatchingShell):
             print("ERROR: Too many arguments for 'run' command.")
             return
 
-        query = self.named_queries.get(name)
+        query = self.queries.get(name)
         if not query:
             print(f"ERROR: Query '{name}' not found.")
             return
         self.execute(query.query_string, default_close_date=query.date)
 
     def complete_run(self, text, _line, _begidx, _endidx):
-        return [name for name in self.named_queries if name.startswith(text)]
+        return [name for name in self.queries if name.startswith(text)]
 
     def do_explain(self, line):
         """Compile and print a compiled statement for debugging."""
@@ -396,15 +393,14 @@ class BQLShell(DispatchingShell):
         try:
             statement = self.parse(line)
             pr("parsed statement:")
-            pr(f"  {statement}")
-            pr()
+            pr(textwrap.indent(statement.tosexp(), '  '))
 
-            query = query_compile.compile(statement)
+            query = self.context.compile(statement)
             pr("compiled query:")
             pr(f"  {query}")
             pr()
 
-            pr("Targets:")
+            pr("targets:")
             for c_target in query.c_targets:
                 pr("  '{}'{}: {}".format(
                     c_target.name or '(invisible)',
@@ -417,8 +413,7 @@ class BQLShell(DispatchingShell):
         except Exception:
             traceback.print_exc(file=sys.stderr)
 
-
-    def on_Print(self, print_stmt):
+    def on_Print(self, statement):
         """
         Print entries in Beancount format.
 
@@ -436,9 +431,9 @@ class BQLShell(DispatchingShell):
 
         """
         # Compile the print statement.
-        c_print = query_compile.compile(print_stmt)
+        query = self.context.compile(statement)
         with self.get_output() as out:
-            query_execute.execute_print(c_print, out)
+            execute_print(query, out)
 
     def on_Select(self, statement):
         """
@@ -484,11 +479,7 @@ class BQLShell(DispatchingShell):
           CLEAR: Transfer final Income and Expenses balances to Equity.
 
         """
-        # Compile the SELECT statement.
-        c_query = query_compile.compile(statement)
-
-        # Execute it to obtain the result rows.
-        rtypes, rrows = query_execute.execute_query(c_query)
+        rtypes, rrows = self.context.execute(statement)
 
         # Output the resulting rows.
         if not rrows:
@@ -503,17 +494,17 @@ class BQLShell(DispatchingShell):
                             null=self.vars['nullvalue'])
                 with self.get_output() as out:
                     query_render.render_text(rtypes, rrows,
-                                             self.options['dcontext'],
+                                             self.context.options['dcontext'],
                                              out, **kwds)
 
             elif output_format == 'csv':
                 # Numberify CSV output if requested.
                 if self.vars['numberify']:
-                    dformat = self.options['dcontext'].build()
+                    dformat = self.context.options['dcontext'].build()
                     rtypes, rrows = numberify.numberify_results(rtypes, rrows, dformat)
 
                 query_render.render_csv(rtypes, rrows,
-                                        self.options['dcontext'],
+                                        self.context.options['dcontext'],
                                         self.outfile,
                                         expand=self.vars['expand'],
                                         null=self.vars['nullvalue'])
@@ -577,7 +568,7 @@ class BQLShell(DispatchingShell):
           {aggregates}
 
         """)
-        print(template.format(**_describe(query_compile.TABLES['postings'],
+        print(template.format(**_describe(self.context.tables['postings'],
                                           query_compile.FUNCTIONS)), file=self.outfile)
 
     def help_from(self):
@@ -597,7 +588,7 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**_describe(query_compile.TABLES['entries'],
+        print(template.format(**_describe(self.context.tables['entries'],
                                           query_compile.FUNCTIONS)),
               file=self.outfile)
 
@@ -618,7 +609,7 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**_describe(query_compile.TABLES['postings'],
+        print(template.format(**_describe(self.context.tables['postings'],
                                           query_compile.FUNCTIONS)), file=self.outfile)
 
 
@@ -720,18 +711,9 @@ def main(filename, query, numberify, output_format, output, no_errors):
     inferred from the output file name, if specified.
 
     """
-    # Parse the input file.
-    def load():
-        errors_file = None if no_errors else sys.stderr
-        with misc_utils.log_time('beancount.loader (total)', logging.info):
-            return loader.load_file(filename,
-                                    log_timings=logging.info,
-                                    log_errors=errors_file)
-
     # Create the shell.
     is_interactive = sys.stdin.isatty() and not query
-    shell_obj = BQLShell(is_interactive, load, output, output_format, numberify)
-    shell_obj.do_reload()
+    shell_obj = BQLShell(is_interactive, filename, output, output_format, numberify)
 
     # Run interactively if we're a TTY and no query is supplied.
     if is_interactive:

@@ -27,7 +27,6 @@ from beanquery.parser import ast
 SUPPORT_IMPLICIT_GROUPBY = True
 
 
-TABLES = {None: tables.NullTable()}
 FUNCTIONS = collections.defaultdict(list)
 OPERATORS = collections.defaultdict(list)
 
@@ -1003,7 +1002,7 @@ EvalQuery = collections.namedtuple('EvalQuery', ('table c_targets c_where '
 EvalPivot = collections.namedtuple('EvalPivot', 'query pivots')
 
 
-def compile_select(select):
+def compile_select(context, select):
     """Prepare an AST for a Select statement into a very rudimentary execution tree.
     The execution tree mostly looks much like an AST, but with some nodes
     replaced with knowledge specific to an execution context and eventually some
@@ -1018,17 +1017,17 @@ def compile_select(select):
     # Compile the FROM clause.
     if select.from_clause is None:
         # Implicit table reference.
-        table = TABLES.get('postings')
+        table = context.tables.get('postings')
         c_from_expr = None
 
     elif isinstance(select.from_clause, ast.Select):
         # Subquery.
-        table = SubqueryTable(compile_select(select.from_clause))
+        table = SubqueryTable(compile_select(context, select.from_clause))
         c_from_expr = None
 
     elif isinstance(select.from_clause, ast.Table):
         # Table reference.
-        table = TABLES.get(select.from_clause.name)
+        table = context.tables.get(select.from_clause.name)
         if table is None:
             raise CompilationError(f'table "{select.from_clause.name}" does not exist', select.from_clause)
         c_from_expr = None
@@ -1036,8 +1035,8 @@ def compile_select(select):
     else:
         # FROM expression. FROM expressions filter transactions thus
         # use the columns definitions for the ``entries`` table.
-        table = TABLES.get('postings')
-        c_from, c_from_expr = compile_from(select.from_clause, TABLES.get('entries'))
+        table = context.tables.get('postings')
+        c_from, c_from_expr = compile_from(select.from_clause, context.tables.get('entries'))
         if c_from is not None:
             table = table.update(**c_from._asdict())
 
@@ -1168,7 +1167,7 @@ def transform_balances(balances):
 #   where: Filtering expression, EvalNode instance.
 EvalPrint = collections.namedtuple('EvalPrint', 'table where')
 
-def compile_print(print_stmt):
+def compile_print(context, print_stmt):
     """Compile a Print statement.
 
     Args:
@@ -1177,14 +1176,14 @@ def compile_print(print_stmt):
       An instance of EvalPrint, ready to be executed.
     """
     # Compile FROM clause.
-    table = TABLES.get('entries')
+    table = context.tables.get('entries')
     c_from, expr = compile_from(print_stmt.from_clause, table)
     if c_from is not None:
         table = table.update(**c_from._asdict())
     return EvalPrint(table, expr)
 
 
-def compile(statement):
+def compile(context, statement):
     """Prepare an AST any of the statement into an executable statement.
 
     Args:
@@ -1201,8 +1200,8 @@ def compile(statement):
         statement = transform_journal(statement)
 
     if isinstance(statement, ast.Select):
-        return compile_select(statement)
+        return compile_select(context, statement)
     if isinstance(statement, ast.Print):
-        return compile_print(statement)
+        return compile_print(context, statement)
 
     raise NotImplementedError

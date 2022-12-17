@@ -5,6 +5,7 @@ import datetime
 import unittest
 from decimal import Decimal
 
+from beanquery import Connection
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import parser
@@ -166,10 +167,10 @@ class CompileSelectBase(unittest.TestCase):
 
     maxDiff = 8192
 
-    @classmethod
-    def setUpClass(cls):
-        qc.TABLES['entries'] = qe.EntriesTable(None, None)
-        qc.TABLES['postings'] = qe.PostingsTable(None, None)
+    def setUp(self):
+        self.ctx = Connection()
+        self.ctx.tables['entries'] = qe.EntriesTable(None, None)
+        self.ctx.tables['postings'] = qe.PostingsTable(None, None)
 
     def compile(self, query):
         """Parse one query and compile it.
@@ -179,8 +180,7 @@ class CompileSelectBase(unittest.TestCase):
         Returns:
           The AST.
         """
-        statement = parser.parse(query)
-        c_query = qc.compile(statement)
+        c_query = self.ctx.compile(self.ctx.parse(query))
         if isinstance(c_query, ast.Select):
             self.assertSelectInvariants(c_query)
         return c_query
