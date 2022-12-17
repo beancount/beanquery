@@ -3,12 +3,9 @@
 __copyright__ = "Copyright (C) 2015-2017  Martin Blais"
 __license__ = "GNU GPLv2"
 
-from beanquery import parser
-from beanquery import query_compile
-from beanquery import query_env
-from beanquery import query_execute
+from beanquery import Connection
 from beanquery import numberify as numberify_lib
-
+from beanquery.sources.beancount import add_beancount_tables
 
 def run_query(entries, options_map, query, *format_args, numberify=False):
     """Compile and execute a query, return the result types and rows.
@@ -29,20 +26,14 @@ def run_query(entries, options_map, query, *format_args, numberify=False):
     """
 
     # Register tables.
-    query_compile.TABLES['entries'] = query_env.EntriesTable(entries, options_map)
-    query_compile.TABLES['postings'] = query_env.PostingsTable(entries, options_map)
+    ctx = Connection()
+    add_beancount_tables(ctx, entries, [], options_map)
 
     # Apply formatting to the query.
     formatted_query = query.format(*format_args)
 
-    # Parse the statement.
-    statement = parser.parse(formatted_query)
-
-    # Compile the SELECT statement.
-    c_query = query_compile.compile(statement)
-
     # Execute it to obtain the result rows.
-    rtypes, rrows = query_execute.execute_query(c_query)
+    rtypes, rrows = ctx.execute(formatted_query)
 
     # Numberify the results, if requested.
     if numberify:
