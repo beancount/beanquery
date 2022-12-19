@@ -5,9 +5,7 @@ import decimal
 class AnyType:
     """As written on the tin."""
     __slots__ = ()
-
-    # Used in the repr() of function and operators.
-    __name__ = '*'
+    __name__ = 'any'
 
     def __eq__(self, other):
         """Compares equal to any other type."""
