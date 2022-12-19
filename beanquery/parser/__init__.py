@@ -40,8 +40,8 @@ class BQLSemantics:
     def identifier(self, value):
         return value.lower()
 
-    def wildcard(self, value):
-        return ast.Wildcard()
+    def asterisk(self, value):
+        return ast.Asterisk()
 
     def list(self, value):
         return list(value)

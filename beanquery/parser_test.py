@@ -53,7 +53,7 @@ class TestParseSelect(QueryParserTestBase):
 
         self.assertParse(
             "SELECT *;",
-            Select(ast.Wildcard()))
+            Select(ast.Asterisk()))
 
         self.assertParse(
             "SELECT date;",
@@ -165,7 +165,7 @@ class TestParseSelect(QueryParserTestBase):
         self.assertParseTarget("SELECT random();", ast.Function('random', []))
         self.assertParseTarget("SELECT min(a);", ast.Function('min', [ast.Column('a')]))
         self.assertParseTarget("SELECT min(a, b);", ast.Function('min', [ast.Column('a'), ast.Column('b')]))
-        self.assertParseTarget("SELECT count(*);", ast.Function('count', [ast.Wildcard()]))
+        self.assertParseTarget("SELECT count(*);", ast.Function('count', [ast.Asterisk()]))
 
     def test_non_associative(self):
         # non associative operators
@@ -313,7 +313,7 @@ class TestSelectFromSelect(QueryParserTestBase):
                 ast.Target(ast.Column('a'), None),
                 ast.Target(ast.Column('b'), None)],
             Select(
-                ast.Wildcard(),
+                ast.Asterisk(),
                 ast.From(
                     ast.Equal(
                         ast.Column('date'),
@@ -328,13 +328,13 @@ class TestSelectGroupBy(QueryParserTestBase):
     def test_groupby_one(self):
         self.assertParse(
             "SELECT * GROUP BY a;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    group_by=ast.GroupBy([ast.Column('a')], None)))
 
     def test_groupby_many(self):
         self.assertParse(
             "SELECT * GROUP BY a, b, c;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    group_by=ast.GroupBy([
                        ast.Column('a'),
                        ast.Column('b'),
@@ -343,7 +343,7 @@ class TestSelectGroupBy(QueryParserTestBase):
     def test_groupby_expr(self):
         self.assertParse(
             "SELECT * GROUP BY length(a) > 0, b;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    group_by=ast.GroupBy([
                        ast.Greater(
                            ast.Function('length', [
@@ -354,7 +354,7 @@ class TestSelectGroupBy(QueryParserTestBase):
     def test_groupby_having(self):
         self.assertParse(
             "SELECT * GROUP BY a HAVING sum(x) = 0;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    group_by=ast.GroupBy([ast.Column('a')],
                         ast.Equal(
                             ast.Function('sum', [
@@ -364,12 +364,12 @@ class TestSelectGroupBy(QueryParserTestBase):
     def test_groupby_numbers(self):
         self.assertParse(
             "SELECT * GROUP BY 1;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    group_by=ast.GroupBy([1], None)))
 
         self.assertParse(
             "SELECT * GROUP BY 2, 4, 5;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    group_by=ast.GroupBy([2, 4, 5], None)))
 
     def test_groupby_empty(self):
@@ -382,14 +382,14 @@ class TestSelectOrderBy(QueryParserTestBase):
     def test_orderby_one(self):
         self.assertParse(
             "SELECT * ORDER BY a;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    order_by=[
                        ast.OrderBy(ast.Column('a'), ast.Ordering.ASC)]))
 
     def test_orderby_many(self):
         self.assertParse(
             "SELECT * ORDER BY a, b, c;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    order_by=[
                        ast.OrderBy(ast.Column('a'), ast.Ordering.ASC),
                        ast.OrderBy(ast.Column('b'), ast.Ordering.ASC),
@@ -398,21 +398,21 @@ class TestSelectOrderBy(QueryParserTestBase):
     def test_orderby_asc(self):
         self.assertParse(
             "SELECT * ORDER BY a ASC;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    order_by=[
                        ast.OrderBy(ast.Column('a'), ast.Ordering.ASC)]))
 
     def test_orderby_desc(self):
         self.assertParse(
             "SELECT * ORDER BY a DESC;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    order_by=[
                        ast.OrderBy(ast.Column('a'), ast.Ordering.DESC)]))
 
     def test_orderby_many_asc_desc(self):
         self.assertParse(
             "SELECT * ORDER BY a ASC, b DESC, c;",
-            Select(ast.Wildcard(),
+            Select(ast.Asterisk(),
                    order_by=[
                        ast.OrderBy(ast.Column('a'), ast.Ordering.ASC),
                        ast.OrderBy(ast.Column('b'), ast.Ordering.DESC),
@@ -437,11 +437,11 @@ class TestSelectPivotBy(QueryParserTestBase):
 
         self.assertParse(
             "SELECT * PIVOT BY a, b",
-            Select(ast.Wildcard(), pivot_by=ast.PivotBy([ast.Column('a'), ast.Column('b')])))
+            Select(ast.Asterisk(), pivot_by=ast.PivotBy([ast.Column('a'), ast.Column('b')])))
 
         self.assertParse(
             "SELECT * PIVOT BY 1, 2",
-            Select(ast.Wildcard(), pivot_by=ast.PivotBy([1, 2])))
+            Select(ast.Asterisk(), pivot_by=ast.PivotBy([1, 2])))
 
 
 class TestSelectOptions(QueryParserTestBase):
@@ -452,7 +452,7 @@ class TestSelectOptions(QueryParserTestBase):
 
     def test_limit_present(self):
         self.assertParse(
-            "SELECT * LIMIT 45;", Select(ast.Wildcard(), limit=45))
+            "SELECT * LIMIT 45;", Select(ast.Asterisk(), limit=45))
 
     def test_limit_empty(self):
         with self.assertRaises(parser.ParseError):

@@ -21,7 +21,7 @@ statement
     ;
 
 select::Select
-    = 'SELECT' ['DISTINCT' distinct:`True`] targets:(','.{ target }+ | wildcard)
+    = 'SELECT' ['DISTINCT' distinct:`True`] targets:(','.{ target }+ | asterisk)
       ['FROM' from_clause:(table | subselect | from)]
       ['WHERE' where_clause:expression]
       ['GROUP' 'BY' group_by:groupby]
@@ -228,7 +228,7 @@ literal
 function::Function
     =
     | fname:identifier '(' operands:','.{ expression } ')'
-    | fname:identifier '(' operands+:wildcard ')'
+    | fname:identifier '(' operands+:asterisk ')'
     ;
 
 column::Column
@@ -258,7 +258,7 @@ identifier
     = /[a-zA-Z_][a-zA-Z0-9_]*/
     ;
 
-wildcard
+asterisk
     = '*'
     ;
 

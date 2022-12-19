@@ -568,8 +568,8 @@ def compile_expression(expr, environ):
     if isinstance(expr, ast.Constant):
         return EvalConstant(expr.value)
 
-    if isinstance(expr, ast.Wildcard):
-        return EvalConstant(None, dtype=types.Star)
+    if isinstance(expr, ast.Asterisk):
+        return EvalConstant(None, dtype=types.Asterisk)
 
     raise NotImplementedError
 
@@ -661,7 +661,7 @@ def compile_targets(targets, environ):
       A list of compiled target expressions with resolved names.
     """
     # Bind the targets expressions to the execution context.
-    if isinstance(targets, ast.Wildcard):
+    if isinstance(targets, ast.Asterisk):
         # Insert the full list of available columns.
         targets = [ast.Target(ast.Column(name), None)
                    for name in environ.wildcard_columns]
