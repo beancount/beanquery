@@ -74,7 +74,7 @@ def render_exception(exc, indent='  ', strip=True):
         render_location(exc.tokenizer.text, exc.pos, exc.pos + 1, info.line, indent, strip, out)
         return '\n'.join(out)
 
-    return f'error: {exc}'
+    return 'error:\n' + traceback.format_exc()
 
 
 def convert_bool(string):
