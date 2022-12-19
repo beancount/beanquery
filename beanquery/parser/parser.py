@@ -135,10 +135,10 @@ class BQLParser(Parser):
                         self._target_()
                     self._positive_gather(block3, sep3)
                 with self._option():
-                    self._wildcard_()
+                    self._asterisk_()
                 self._error(
                     'expecting one of: '
-                    '<target> <wildcard>'
+                    '<asterisk> <target>'
                 )
         self.name_last_node('targets')
         with self._optional():
@@ -931,7 +931,7 @@ class BQLParser(Parser):
                 self._identifier_()
                 self.name_last_node('fname')
                 self._token('(')
-                self._wildcard_()
+                self._asterisk_()
                 self.add_last_node_to_name('operands')
                 self._token(')')
 
@@ -1024,7 +1024,7 @@ class BQLParser(Parser):
         self._pattern('[a-zA-Z_][a-zA-Z0-9_]*')
 
     @tatsumasu()
-    def _wildcard_(self):  # noqa
+    def _asterisk_(self):  # noqa
         self._token('*')
 
     @tatsumasu()
@@ -1289,7 +1289,7 @@ class BQLSemantics:
     def identifier(self, ast):  # noqa
         return ast
 
-    def wildcard(self, ast):  # noqa
+    def asterisk(self, ast):  # noqa
         return ast
 
     def string(self, ast):  # noqa

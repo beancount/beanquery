@@ -31,7 +31,7 @@ def node(name, fields):
 # A 'select' query action.
 #
 # Attributes:
-#   targets: Either a single 'Wildcard' instance of a list of 'Target'
+#   targets: Either a single 'Asterisk' instance of a list of 'Target'
 #     instances.
 #   from_clause: An instance of 'From', or None if absent.
 #   where_clause: A root expression node, or None if absent.
@@ -82,8 +82,8 @@ Print = node('Print', 'from_clause')
 #   name: A string, the given name of the target (given by "AS <name>").
 Target = node('Target', 'expression name')
 
-# A wildcard target. This replaces the list in Select.targets.
-Wildcard = node('Wildcard', '')
+# A placeholder in SELECT * or COUNT(*) constructs.
+Asterisk = node('Asterisk', '')
 
 # A FROM clause.
 #

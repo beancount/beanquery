@@ -577,7 +577,7 @@ def aggregator(intypes, name=None):
     return decorator
 
 
-@aggregator([types.Star], name='count')
+@aggregator([types.Asterisk], name='count')
 class Count(query_compile.EvalAggregator):
     """Count the number of input rows."""
     def __init__(self, operands):
