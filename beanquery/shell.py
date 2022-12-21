@@ -305,7 +305,7 @@ class DispatchingShell(cmd.Cmd):
 class BQLShell(DispatchingShell):
     """An interactive shell interpreter for the Beancount query language.
     """
-    prompt = 'beancount> '
+    prompt = 'beanquery> '
 
     def __init__(self, is_interactive, loadfun, outfile,
                  default_format='text', do_numberify=False):
