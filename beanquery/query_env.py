@@ -490,9 +490,10 @@ def currency(x):
 
 
 @function([dict, str], object, name='getitem')
-def getitem_(x, key):
-    """Get the string value of a dict. The value is always converted to a string."""
-    return x.get(key)
+@function([dict, str, types.Any], object, name='getitem')
+def getitem_(x, key, default=None):
+    """Get value for the given key from a dict."""
+    return x.get(key, default)
 
 
 @function([str, set], str)
