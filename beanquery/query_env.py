@@ -945,12 +945,7 @@ column = PostingsTable.column
 
 @column(str)
 def location(context):
-    """The filename:lineno where the posting was parsed from or created.
-
-    If you select this column as the first column, because it renders like
-    errors, Emacs is able to pick those up and you can navigate between an
-    arbitrary list of transactions with next-error and previous-error.
-    """
+    """The filename:lineno where the posting was parsed from or created."""
     meta = context.posting.meta
     return '{:s}:{:d}:'.format(meta['filename'], meta['lineno'])
 
