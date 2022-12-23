@@ -15,8 +15,17 @@ class AnyType:
 # Used in BQL functions signatures for arguments that can have any type.
 Any = AnyType()
 
+
+class AsteriskType:
+    __slots__ = ()
+    __name__ = '*'
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__)
+
+
 # Used for COUNT(*)
-Star = '*'
+Asterisk = AsteriskType()
 
 
 def function_lookup(functions, name, operands):

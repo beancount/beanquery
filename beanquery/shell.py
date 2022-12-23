@@ -4,8 +4,8 @@ __license__ = "GNU GPLv2"
 import atexit
 import cmd
 import io
+import itertools
 import logging
-import operator
 import os
 import re
 import sys
@@ -561,8 +561,8 @@ class BQLShell(DispatchingShell):
           {aggregates}
 
         """)
-        print(template.format(**generate_env_attribute_list(query_compile.TABLES['postings'].columns,
-                                                            query_compile.FUNCTIONS)), file=self.outfile)
+        print(template.format(**_describe(query_compile.TABLES['postings'],
+                                          query_compile.FUNCTIONS)), file=self.outfile)
 
     def help_from(self):
         template = textwrap.dedent("""
@@ -581,8 +581,9 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**generate_env_attribute_list(query_compile.TABLES['entries'].columns,
-                                                            query_compile.FUNCTIONS)), file=self.outfile)
+        print(template.format(**_describe(query_compile.TABLES['entries'],
+                                          query_compile.FUNCTIONS)),
+              file=self.outfile)
 
     def help_where(self):
         template = textwrap.dedent("""
@@ -601,62 +602,46 @@ class BQLShell(DispatchingShell):
           {functions}
 
         """)
-        print(template.format(**generate_env_attribute_list(query_compile.TABLES['postings'].columns,
-                                                            query_compile.FUNCTIONS)), file=self.outfile)
+        print(template.format(**_describe(query_compile.TABLES['postings'],
+                                          query_compile.FUNCTIONS)), file=self.outfile)
 
 
-def generate_env_attribute_list(columns, functions):
-    """Generate a dictionary of rendered attribute lists for help.
-
-    Args:
-      env: An instance of an environment.
-    Returns:
-      A dict with keys 'columns', 'functions' and 'aggregates' to rendered
-      and formatted strings.
-    """
+def _describe_columns(columns):
+    out = io.StringIO()
     wrapper = textwrap.TextWrapper(initial_indent='  ', subsequent_indent='  ', width=80)
-    return dict(
-        columns=generate_env_attributes(wrapper, columns),
-        functions=generate_env_attributes(wrapper, functions, aggregates=False),
-        aggregates=generate_env_attributes(wrapper, functions, aggregates=True))
+    for name, column in columns.items():
+        print(f'{name}: {column.dtype.__name__.lower()}', file=out)
+        print(wrapper.fill(re.sub(r'[ \n\t]+', ' ', column.__doc__ or '')), file=out)
+        print(file=out)
+    return out.getvalue().rstrip()
 
 
-def generate_env_attributes(wrapper, fields, aggregates=False):
-    """Generate a string of all the help functions of the attributes.
-
-    Args:
-      wrapper: A TextWrapper instance to format the paragraphs.
-      field_dict: A dict of the field-names to the node instances, fetch from an
-        environment.
-      filter_pred: A predicate to filter the desired columns. This is applied to
-        the evaluator node instances.
-    Returns:
-      A formatted multiline string, ready for insertion in a help text.
-    """
+def _describe_functions(functions, aggregates=False):
     entries = []
-    for name, field in fields.items():
-        if isinstance(field, list):
-            # Entry in functions registry.
-            if aggregates != issubclass(field[0], query_compile.EvalAggregator):
-                continue
-            name = name.upper()
-            # FIXME: Render the __intypes__ here nicely instead of the key.
-            def _format(f):
-                # pylint: disable=cell-var-from-loop
-                return '{}({})'.format(name, ', '.join(d.__name__.lower() for d in f.__intypes__))
-            signature = '\n'.join(_format(func) for func in field)
-            doc = field[0].__doc__ or ''
-        else:
-            signature = '{} [{}]'.format(name, field.dtype.__name__.lower())
-            doc = field.__doc__ or ''
-        entries.append((name, signature, wrapper.fill(re.sub(r'[ \n\t]+', ' ', doc))))
+    for name, funcs in functions.items():
+        if aggregates != issubclass(funcs[0], query_compile.EvalAggregator):
+            continue
+        name = name.lower()
+        for func in funcs:
+            args = ', '.join(d.__name__.lower() for d in func.__intypes__)
+            doc = re.sub(r'[ \n\t]+', ' ', func.__doc__ or '')
+            entries.append((name, doc, args))
+    entries.sort()
+    out = io.StringIO()
+    wrapper = textwrap.TextWrapper(initial_indent='  ', subsequent_indent='  ', width=80)
+    for key, entries in itertools.groupby(entries, key=lambda x: x[:2]):
+        for name, doc, args in entries:
+            print(f'{name}({args})', file=out)
+        print(wrapper.fill(doc), file=out)
+        print(file=out)
+    return out.getvalue().rstrip()
 
-    oss = io.StringIO()
-    for name, signature, text in sorted(entries, key=operator.itemgetter(0)):
-        print(signature, file=oss)
-        print(text, file=oss)
-        print(file=oss)
-    return oss.getvalue().rstrip()
+
+def _describe(table, functions):
+    return dict(
+        columns=_describe_columns(table.columns),
+        functions=_describe_functions(functions, aggregates=False),
+        aggregates=_describe_functions(functions, aggregates=True))
 
 
 def summary_statistics(entries):
