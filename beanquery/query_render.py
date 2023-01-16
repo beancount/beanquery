@@ -432,7 +432,8 @@ def render_rows(rows, renderers, ctx):
             yield spacerow
 
 
-def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced=False, listsep='  ', null=''):
+def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
+                spaced=False, listsep='  ', null='', narrow=True):
     """Render the result of executing a query in text format.
 
     Args:
@@ -459,7 +460,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced
                 renderer.update(value)
 
     # Compute columns widths.
-    widths = [max(1, len(null), render.prepare()) for render in renderers]
+    widths = [max(1, narrow or len(header), len(null), render.prepare()) for header, render in zip(headers, renderers)]
 
     # Initialize table style.
     if boxed:
