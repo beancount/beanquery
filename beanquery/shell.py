@@ -136,6 +136,7 @@ class DispatchingShell(cmd.Cmd):
             'boxed': convert_bool,
             'spaced': convert_bool,
             'expand': convert_bool,
+            'narrow': convert_bool,
             'nullvalue': str,
             'numberify': convert_bool,
             }
@@ -145,6 +146,7 @@ class DispatchingShell(cmd.Cmd):
             'boxed': False,
             'spaced': False,
             'expand': False,
+            'narrow': True,
             'nullvalue': '',
             'numberify': do_numberify,
             }
@@ -488,6 +490,7 @@ class BQLShell(DispatchingShell):
                 kwds = dict(boxed=self.vars['boxed'],
                             spaced=self.vars['spaced'],
                             expand=self.vars['expand'],
+                            narrow=self.vars['narrow'],
                             null=self.vars['nullvalue'])
                 with self.get_output() as out:
                     query_render.render_text(rtypes, rrows,
