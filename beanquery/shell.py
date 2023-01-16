@@ -136,6 +136,7 @@ class DispatchingShell(cmd.Cmd):
             'boxed': convert_bool,
             'spaced': convert_bool,
             'expand': convert_bool,
+            'nullvalue': str,
             'numberify': convert_bool,
             }
         self.vars = {
@@ -144,6 +145,7 @@ class DispatchingShell(cmd.Cmd):
             'boxed': False,
             'spaced': False,
             'expand': False,
+            'nullvalue': '',
             'numberify': do_numberify,
             }
 
@@ -485,7 +487,8 @@ class BQLShell(DispatchingShell):
             if output_format == 'text':
                 kwds = dict(boxed=self.vars['boxed'],
                             spaced=self.vars['spaced'],
-                            expand=self.vars['expand'])
+                            expand=self.vars['expand'],
+                            null=self.vars['nullvalue'])
                 with self.get_output() as out:
                     query_render.render_text(rtypes, rrows,
                                              self.options['dcontext'],
@@ -500,7 +503,8 @@ class BQLShell(DispatchingShell):
                 query_render.render_csv(rtypes, rrows,
                                         self.options['dcontext'],
                                         self.outfile,
-                                        expand=self.vars['expand'])
+                                        expand=self.vars['expand'],
+                                        null=self.vars['nullvalue'])
 
             else:
                 assert output_format not in _SUPPORTED_FORMATS
