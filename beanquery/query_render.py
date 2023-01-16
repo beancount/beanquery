@@ -432,17 +432,19 @@ def render_rows(rows, renderers, ctx):
             yield spacerow
 
 
-def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced=False, listsep='  ', null=' '):
+def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced=False, listsep='  ', null=''):
     """Render the result of executing a query in text format.
 
     Args:
       columns: A list of (name, dtype) tuples descrining the table columns.
-      rows: A list of ResultRow instances holding the table data.
+      rows: Data to render.
       dcontext: A DisplayContext object prepared for rendering numbers.
       file: A file object to render the results to.
       expand: When true expand columns that render to lists to multiple rows.
       boxed: When true draw an ascii-art table borders.
       spaced: When true insert an empty line between rows.
+      listsep: String to use to separate values in list-like column values.
+      null: String to use to represent NULL values.
 
     """
     ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=listsep, null=null)
@@ -457,7 +459,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced
                 renderer.update(value)
 
     # Compute columns widths.
-    widths = [max(len(null), render.prepare()) for render in renderers]
+    widths = [max(1, len(null), render.prepare()) for render in renderers]
 
     # Initialize table style.
     if boxed:
@@ -484,18 +486,18 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced
     file.write(bottom)
 
 
-def render_csv(columns, rows, dcontext, file, expand=False):
+def render_csv(columns, rows, dcontext, file, expand=False, null=''):
     """Render the result of executing a query in text format.
 
     Args:
-      result_types: A list of items describing the names and data types of the items in
-        each column.
-      result_rows: A list of ResultRow instances.
+      columns: A list of (name, dtype) tuples descrining the table columns.
+      rows: Data to render.
       dcontext: A DisplayContext object prepared for rendering numbers.
       file: A file object to render the results to.
       expand: A boolean, if true, expand columns that render to lists on multiple rows.
+      null: String to use to represent NULL values.
     """
-    ctx = RenderContext(dcontext, expand=expand, spaced=False, listsep=', ', null='')
+    ctx = RenderContext(dcontext, expand=expand, spaced=False, listsep=',', null=null)
     renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
     headers = [name for name, dtype in columns]
 
