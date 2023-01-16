@@ -6,6 +6,7 @@ __license__ = "GNU GPLv2"
 import collections
 import csv
 import datetime
+import enum
 
 from decimal import Decimal
 
@@ -15,14 +16,20 @@ from beancount.core import inventory
 from beancount.core import position
 
 
+class Align(enum.Enum):
+    LEFT = 0
+    RIGHT = 1
+
+
 class RenderContext:
     """Hold the query rendering configuration."""
 
-    def __init__(self, dcontext, expand=False, listsep=', ', spaced=False):
+    def __init__(self, dcontext, expand=False, listsep=', ', spaced=False, null=' '):
         self.dcontext = dcontext
         self.expand = expand
         self.listsep = listsep
         self.spaced = spaced
+        self.null = null
 
 
 # Map of data-types to renderer classes. This is populated by
@@ -50,6 +57,7 @@ class ColumnRenderer:
 
     """
     dtype = None
+    align = Align.LEFT
 
     def __init__(self, ctx):
         self.maxwidth = 0
@@ -103,24 +111,17 @@ class ObjectRenderer(ColumnRenderer):
         self.maxwidth = max(self.maxwidth, len(str(value)))
 
     def format(self, value):
-        return str(value).ljust(self.maxwidth)
+        return str(value)
 
 
 class BoolRenderer(ColumnRenderer):
     dtype = bool
 
-    def __init__(self, ctx):
-        super().__init__(ctx)
-        # The minimum width required for "TRUE" or "FALSE".
-        self.maxwidth = 4
-
     def update(self, value):
-        if not value:
-            # With at least one "FALSE" we need 5 characters.
-            self.maxwidth = 5
+        self.maxwidth = max(self.maxwidth, 4 if value else 5)
 
     def format(self, value):
-        return ('TRUE' if value else 'FALSE').ljust(self.maxwidth)
+        return ('TRUE' if value else 'FALSE')
 
 
 class StringRenderer(ColumnRenderer):
@@ -130,7 +131,7 @@ class StringRenderer(ColumnRenderer):
         self.maxwidth = max(self.maxwidth, len(value))
 
     def format(self, value):
-        return value.ljust(self.maxwidth)
+        return value
 
 
 class SetRenderer(ColumnRenderer):
@@ -144,14 +145,13 @@ class SetRenderer(ColumnRenderer):
         self.maxwidth = max(self.maxwidth, sum(len(x) + len(self.sep) for x in value) - len(self.sep))
 
     def format(self, value):
-        return self.sep.join(str(x) for x in sorted(value)).ljust(self.maxwidth)
+        return self.sep.join(str(x) for x in sorted(value))
 
 
 class DateRenderer(ColumnRenderer):
     dtype = datetime.date
 
-    def __init__(self, ctx):
-        super().__init__(ctx)
+    def update(self, value):
         self.maxwidth = 10
 
     def format(self, value):
@@ -160,16 +160,13 @@ class DateRenderer(ColumnRenderer):
 
 class IntRenderer(ColumnRenderer):
     dtype = int
+    align = Align.RIGHT
 
     def update(self, value):
         self.maxwidth = max(self.maxwidth, len(str(value)))
 
-    def prepare(self):
-        self.frmt = str(self.maxwidth)
-        return super().prepare()
-
     def format(self, value):
-        return format(value, self.frmt)
+        return str(value)
 
 
 class DecimalRenderer(ColumnRenderer):
@@ -397,15 +394,18 @@ class InventoryRenderer(ColumnRenderer):
 def render_rows(rows, renderers, ctx):
     """Render results set row."""
 
-    # Filler for missing values.
-    missing = [''.rjust(renderer.width) for renderer in renderers]
+    # Filler for NULL values.
+    null = ctx.null
+
+    # Spacing row.
+    spacerow = [''] * len(renderers)
 
     for row in rows:
 
         # Render the row cells. Do not pass missing values to the
         # renderers but substitute them with the appropriate
         # placeholder string.
-        cells = [render.format(field) if field is not None else x for render, field, x in zip(renderers, row, missing)]
+        cells = [render.format(value) if value is not None else null for render, value in zip(renderers, row)]
 
         if not any(isinstance(cell, list) for cell in cells):
             # No multi line cells. Yield the row.
@@ -419,20 +419,20 @@ def render_rows(rows, renderers, ctx):
             nlines = max(len(cell) for cell in cells)
 
             # Add placeholder lines to short multi line cells.
-            for cell, placeholder in zip(cells, missing):
+            for cell in cells:
                 if len(cell) < nlines:
-                    cell.extend([placeholder] * (nlines - len(cell)))
+                    cell.extend([''] * (nlines - len(cell)))
 
             # Yield the obtained rows.
             for x in zip(*cells):
                 yield x
 
-        # Add spacing row in needed.
+        # Add spacing row when needed.
         if ctx.spaced:
-            yield missing
+            yield spacerow
 
 
-def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced=False):
+def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced=False, listsep='  ', null=' '):
     """Render the result of executing a query in text format.
 
     Args:
@@ -445,9 +445,10 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced
       spaced: When true insert an empty line between rows.
 
     """
-    ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep='  ')
+    ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=listsep, null=null)
     renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
     headers = [name for name, dtype in columns]
+    alignment = [renderer.align for renderer in renderers]
 
     # Prime the renderers.
     for row in rows:
@@ -456,7 +457,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced
                 renderer.update(value)
 
     # Compute columns widths.
-    widths = [render.prepare() for render in renderers]
+    widths = [max(len(null), render.prepare()) for render in renderers]
 
     # Initialize table style.
     if boxed:
@@ -476,7 +477,8 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False, spaced
 
     # Rows.
     for row in render_rows(rows, renderers, ctx):
-        file.write(frmt.format(colsep.join(row)))
+        file.write(frmt.format(colsep.join(x.ljust(w) if a == Align.LEFT else x.rjust(w)
+                                           for x, w, a in zip(row, widths, alignment))))
 
     # Footer.
     file.write(bottom)
@@ -493,7 +495,7 @@ def render_csv(columns, rows, dcontext, file, expand=False):
       file: A file object to render the results to.
       expand: A boolean, if true, expand columns that render to lists on multiple rows.
     """
-    ctx = RenderContext(dcontext, expand=expand, spaced=False, listsep=', ')
+    ctx = RenderContext(dcontext, expand=expand, spaced=False, listsep=', ', null='')
     renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
     headers = [name for name, dtype in columns]
 
