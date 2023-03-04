@@ -206,6 +206,10 @@ class DispatchingShell(cmd.Cmd):
             cmd = cmd.lower()
         return cmd, arg, line
 
+    def do_help(self, arg):
+        """List available commands with "help" or detailed help with "help cmd"."""
+        super().do_help(arg.lower())
+
     def do_history(self, line):
         "Print the command-line history statement."
         if readline is not None:
