@@ -2,6 +2,7 @@ __copyright__ = "Copyright (C) 2014-2016  Martin Blais"
 __license__ = "GNU GPLv2"
 
 import datetime
+import textwrap
 import unittest
 
 from decimal import Decimal as D
@@ -598,6 +599,30 @@ class TestRepr(unittest.TestCase):
     def test_ast_node(self):
         self.assertEqual(repr(ast.Constant(1)), 'Constant(value=1)')
         self.assertEqual(repr(ast.Not(ast.Constant(False))), 'Not(operand=Constant(value=False))')
+
+    def test_tosexp(self):
+        sexp = parser.parse('SELECT a + 1 FROM #test WHERE a > 42 ORDER BY b DESC').tosexp()
+        self.assertEqual(sexp, textwrap.dedent('''\
+            (select
+              targets: (
+                (target
+                  expression: (add
+                    left: (column
+                      name: 'a')
+                    right: (constant
+                      value: 1))))
+              from-clause: (table
+                name: 'test')
+              where-clause: (greater
+                left: (column
+                  name: 'a')
+                right: (constant
+                  value: 42))
+              order-by: (
+                (orderby
+                  column: (column
+                    name: 'b')
+                  ordering: desc)))'''))
 
 
 class TestNodeText(unittest.TestCase):
