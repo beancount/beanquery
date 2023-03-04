@@ -25,5 +25,6 @@ disable=
   unsubscriptable-object,
   unused-argument,
   unused-variable,
+  use-dict-literal,
 ignore-paths=
   beanquery/parser/parser.py
