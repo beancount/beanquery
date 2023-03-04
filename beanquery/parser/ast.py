@@ -1,7 +1,30 @@
 import enum
 import sys
+import textwrap
 
-from dataclasses import make_dataclass, field
+from dataclasses import make_dataclass, field, fields
+
+
+def _indent(text):
+    return textwrap.indent(text, '  ')
+
+
+def _fields(node):
+    for field in fields(node):
+        yield field.name, getattr(node, field.name)
+
+
+def tosexp(node):
+    if isinstance(node, Node):
+        return f'({node.__class__.__name__.lower()}\n' + _indent(
+            '\n'.join(f'{name.replace("_", "-")}: {tosexp(value)}'
+                      for name, value in _fields(node)
+                      if value is not None and name != 'parseinfo') + ')')
+    if isinstance(node, list):
+        return '(\n' + _indent('\n'.join(tosexp(i) for i in node)) + ')'
+    if isinstance(node, enum.Enum):
+        return node.name.lower()
+    return repr(node)
 
 
 class Node:
@@ -15,6 +38,9 @@ class Node:
             return None
         text = self.parseinfo.tokenizer.text
         return text[self.parseinfo.pos:self.parseinfo.endpos]
+
+    def tosexp(self):
+        return tosexp(self)
 
 
 def node(name, fields):

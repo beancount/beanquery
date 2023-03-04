@@ -256,12 +256,9 @@ class DispatchingShell(cmd.Cmd):
     def do_parse(self, line):
         "Just run the parser on the following command and print the output."
         try:
-            statement = self.parser.parse(line, True)
-            print(statement, file=self.outfile)
-        except parser.ParseError as exc:
-            print(render_exception(exc), file=sys.stderr)
+            print(self.parser.parse(line).tosexp())
         except Exception as exc:
-            traceback.print_exc(file=sys.stderr)
+            print(render_exception(exc), file=sys.stderr)
 
     def dispatch(self, statement):
         """Dispatch the given statement to a suitable method.
