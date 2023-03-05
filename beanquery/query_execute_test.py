@@ -2,7 +2,6 @@ __copyright__ = "Copyright (C) 2014-2017  Martin Blais"
 __license__ = "GNU GPLv2"
 
 import datetime
-import decimal
 import io
 import unittest
 import textwrap
@@ -233,6 +232,9 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 4.0 / 2", Decimal(2))
         self.assertResult("SELECT 4 / 2.0", Decimal(2))
         self.assertResult("SELECT 4.0 / 2.0", Decimal(2))
+        self.assertResult("SELECT 4 / 0", None, Decimal)
+        self.assertResult("SELECT 4.0 / 0", None, Decimal)
+        self.assertResult("SELECT 4 / 0.0", None, Decimal)
 
         # mod
         self.assertResult("SELECT 3 % 2", 1)
@@ -1194,18 +1196,16 @@ class TestArithmeticFunctions(QueryBase):
             [('result', Decimal)],
             [(D("2.50"),)])
 
-        # Test dbz, should fail result query.
-        with self.assertRaises(decimal.DivisionByZero):
-            self.check_query(
-                """
-                  2010-02-23 *
-                    Assets:Something       5.00 USD
-                """,
-                """
-                  SELECT number / 0 as result;
-                """,
-                [('result', Decimal)],
-                [(D("2.50"),)])
+        self.check_query(
+            """
+              2010-02-23 *
+                Assets:Something       5.00 USD
+            """,
+            """
+              SELECT number / 0 as result;
+            """,
+            [('result', Decimal)],
+            [(None,)])
 
     def test_safe_div(self):
         self.check_query(
