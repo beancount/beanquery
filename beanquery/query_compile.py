@@ -219,11 +219,15 @@ def mul_(x, y):
 @binaryop(ast.Div, [Decimal, int], Decimal)
 @binaryop(ast.Div, [int, Decimal], Decimal)
 def div_(x, y):
+    if y == 0:
+        return None
     return x / y
 
 
 @binaryop(ast.Div, [int, int], Decimal)
 def div_int(x, y):
+    if y == 0:
+        return None
     return Decimal(x) / y
 
 
@@ -232,6 +236,8 @@ def div_int(x, y):
 @binaryop(ast.Mod, [int, Decimal], Decimal)
 @binaryop(ast.Mod, [Decimal, Decimal], Decimal)
 def mod_(x, y):
+    if y == 0:
+        return None
     return x % y
 
 
