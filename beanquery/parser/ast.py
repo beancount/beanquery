@@ -11,15 +11,15 @@ def _indent(text):
 
 def _fields(node):
     for field in fields(node):
-        yield field.name, getattr(node, field.name)
+        if field.repr:
+            yield field.name, getattr(node, field.name)
 
 
 def tosexp(node):
     if isinstance(node, Node):
         return f'({node.__class__.__name__.lower()}\n' + _indent(
             '\n'.join(f'{name.replace("_", "-")}: {tosexp(value)}'
-                      for name, value in _fields(node)
-                      if value is not None and name != 'parseinfo') + ')')
+                      for name, value in _fields(node) if value is not None) + ')')
     if isinstance(node, list):
         return '(\n' + _indent('\n'.join(tosexp(i) for i in node)) + ')'
     if isinstance(node, enum.Enum):
