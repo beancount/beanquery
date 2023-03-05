@@ -189,12 +189,12 @@ def neg_(x):
     return -x
 
 
-@unaryop(ast.IsNull, [object], bool, nullsafe=True)
+@unaryop(ast.IsNull, [types.Any], bool, nullsafe=True)
 def null(x):
     return x is None
 
 
-@unaryop(ast.IsNotNull, [object], bool, nullsafe=True)
+@unaryop(ast.IsNotNull, [types.Any], bool, nullsafe=True)
 def not_null(x):
     return x is not None
 

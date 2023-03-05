@@ -265,8 +265,12 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT not meta('missing')", True)
 
         # is null
+        self.assertResult("SELECT date IS NULL", False)
         self.assertResult("SELECT meta('missing') IS NULL", True)
         self.assertResult("SELECT meta('int') IS NULL", False)
+
+        # is not null
+        self.assertResult("SELECT date IS NOT NULL", True)
         self.assertResult("SELECT meta('missing') IS NOT NULL", False)
         self.assertResult("SELECT meta('int') IS NOT NULL", True)
 
