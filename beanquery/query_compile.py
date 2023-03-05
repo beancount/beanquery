@@ -150,14 +150,6 @@ class EvalBinaryOp(EvalNode):
         return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
 
 
-# Note: We ought to implement implicit type promotion here,
-# e.g., int -> float -> Decimal.
-
-# Note(2): This does not support multiplication on Amount, Position, Inventory.
-# We need to rewrite the evaluator to support types in order to do this
-# properly.
-
-
 def unaryop(op, intypes, outtype, nullsafe=False):
     def decorator(func):
         class Op(EvalUnaryOp if nullsafe else EvalUnaryOpSafe):
