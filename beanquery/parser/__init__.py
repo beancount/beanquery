@@ -1,7 +1,6 @@
 import datetime
 import decimal
 
-import dateutil.parser
 import tatsu
 
 from . import ast
