@@ -352,7 +352,7 @@ class TestCompileSelect(CompileSelectBase):
             self.compile("""
               SELECT length(account) and sum(length(account));
             """)
-        self.assertRegex(str(assertion.exception), 'Mixed aggregates and non-aggregates')
+        self.assertRegex(str(assertion.exception), 'mixed aggregates and non-aggregates')
 
     def test_compile_aggregates_of_aggregates(self):
         # Check mixed aggregates and non-aggregates in a target.
@@ -360,14 +360,14 @@ class TestCompileSelect(CompileSelectBase):
             self.compile("""
               SELECT sum(sum(length(account)));
             """)
-        self.assertRegex(str(assertion.exception), 'Aggregates of aggregates')
+        self.assertRegex(str(assertion.exception), 'aggregates of aggregates')
 
     def test_compile_having_non_aggregate(self):
         with self.assertRaises(qc.CompilationError) as assertion:
             self.compile("""
               SELECT account, sum(number) GROUP BY account HAVING flag;
             """)
-        self.assertRegex(str(assertion.exception), 'The HAVING clause must be an aggregate')
+        self.assertRegex(str(assertion.exception), 'the HAVING clause must be an aggregate')
 
     def test_compile_group_by_inventory(self):
         with self.assertRaises(qc.CompilationError):
