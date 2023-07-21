@@ -353,8 +353,7 @@ class EvalCoalesce(EvalNode):
         for arg in args:
             if arg.dtype != args[0].dtype:
                 dtypes = ', '.join(arg.dtype.__name__ for arg in args)
-                raise CompilationError(
-                    f"coalesce() function arguments must have uniform type, found: {dtypes}")
+                raise CompilationError(f'coalesce() function arguments must have uniform type, found: {dtypes}')
         super().__init__(args[0].dtype)
         self.args = args
 
@@ -551,7 +550,7 @@ def compile_expression(expr, environ):
         function = types.function_lookup(OPERATORS, type(expr), [operand])
         if function is None:
             raise CompilationError(
-                f'Operator {type(expr).__name__.lower()}({operand.dtype.__name__}) not supported')
+                f'operator "{type(expr).__name__.lower()}({operand.dtype.__name__})" not supported', expr)
         function = function(operand)
         # Constants folding.
         if isinstance(operand, EvalConstant):
@@ -603,8 +602,8 @@ def compile_expression(expr, environ):
             break
 
         raise CompilationError(
-            f'Operator {type(expr).__name__.lower()}('
-            f'{left.dtype.__name__}, {right.dtype.__name__}) not supported')
+            f'operator "{type(expr).__name__.lower()}('
+            f'{left.dtype.__name__}, {right.dtype.__name__})" not supported', expr)
 
     if isinstance(expr, ast.Constant):
         return EvalConstant(expr.value)
@@ -718,15 +717,13 @@ def compile_targets(targets, environ):
 
         # Check for mixed aggregates and non-aggregates.
         if columns and aggregates:
-            raise CompilationError(
-                "Mixed aggregates and non-aggregates are not allowed")
+            raise CompilationError('mixed aggregates and non-aggregates are not allowed')
 
         # Check for aggregates of aggregates.
         for aggregate in aggregates:
             for child in aggregate.childnodes():
                 if is_aggregate(child):
-                    raise CompilationError(
-                        "Aggregates of aggregates are not allowed")
+                    raise CompilationError('aggregates of aggregates are not allowed')
 
     return c_targets
 
@@ -773,8 +770,7 @@ def compile_group_by(group_by, c_targets, environ):
             if isinstance(column, int):
                 index = column - 1
                 if not 0 <= index < len(c_targets):
-                    raise CompilationError(
-                        "Invalid GROUP-BY column index {}".format(column))
+                    raise CompilationError(f'invalid GROUP-BY column index {column}')
 
             else:
                 # Process target references by name. These will be parsed as
@@ -792,9 +788,7 @@ def compile_group_by(group_by, c_targets, environ):
                     # Check if the new expression is an aggregate.
                     aggregate = is_aggregate(c_expr)
                     if aggregate:
-                        raise CompilationError(
-                            "GROUP-BY expressions may not be aggregates: '{}'".format(
-                                column))
+                        raise CompilationError(f'GROUP-BY expressions may not be aggregates: "{column}"')
 
                     # Attempt to reconcile the expression with one of the existing
                     # target expressions.
@@ -813,21 +807,17 @@ def compile_group_by(group_by, c_targets, environ):
             # Check that the group-by column references a non-aggregate.
             c_expr = new_targets[index].c_expr
             if is_aggregate(c_expr):
-                raise CompilationError(
-                    "GROUP-BY expressions may not reference aggregates: '{}'".format(
-                        column))
+                raise CompilationError(f'GROUP-BY expressions may not reference aggregates: "{column}"')
 
             # Check that the group-by column has a supported hashable type.
             if not issubclass(c_expr.dtype, collections.abc.Hashable):
-                raise CompilationError(
-                    "GROUP-BY a non-hashable type is not supported: '{}'".format(
-                        column))
+                raise CompilationError(f'GROUP-BY a non-hashable type is not supported: "{column}"')
 
         # Compile HAVING clause.
         if group_by.having is not None:
             c_expr = compile_expression(group_by.having, environ)
             if not is_aggregate(c_expr):
-                raise CompilationError("The HAVING clause must be an aggregate expression")
+                raise CompilationError('the HAVING clause must be an aggregate expression')
             having_index = len(new_targets)
             new_targets.append(EvalTarget(c_expr, None, True))
             c_target_expressions.append(c_expr)
@@ -851,8 +841,7 @@ def compile_group_by(group_by, c_targets, environ):
                     index for index, c_target in enumerate(c_targets)
                     if not c_target.is_aggregate]
             else:
-                raise CompilationError(
-                    "Aggregate query without a GROUP-BY should have only aggregates")
+                raise CompilationError('aggregate query without a GROUP-BY should have only aggregates')
         else:
             # This is not an aggregate query; don't set group_indexes to
             # anything useful, we won't need it.
@@ -899,8 +888,7 @@ def compile_order_by(order_by, c_targets, environ):
         if isinstance(column, int):
             index = column - 1
             if not 0 <= index < len(c_targets):
-                raise CompilationError(
-                    "Invalid ORDER-BY column index {}".format(column))
+                raise CompilationError(f'invalid ORDER-BY column index {column}')
 
         else:
             # Process target references by name. These will be parsed as
@@ -953,7 +941,7 @@ def compile_pivot_by(pivot_by, targets, group_indexes):
         if isinstance(column, int):
             index = column - 1
             if not 0 <= index < len(targets):
-                raise CompilationError(f'Invalid PIVOT BY column index {column}')
+                raise CompilationError(f'invalid PIVOT BY column index {column}')
             indexes.append(index)
             continue
 
@@ -970,9 +958,9 @@ def compile_pivot_by(pivot_by, targets, group_indexes):
 
     # Sanity checks.
     if indexes[0] == indexes[1]:
-        raise CompilationError('The two PIVOT BY columns cannot be the same column')
+        raise CompilationError('the two PIVOT BY columns cannot be the same column')
     if indexes[1] not in group_indexes:
-        raise CompilationError('The second PIVOT BY column must be a GROUP BY column')
+        raise CompilationError('the second PIVOT BY column must be a GROUP BY column')
 
     return indexes
 
@@ -1001,12 +989,12 @@ def compile_from(from_clause, environ):
 
     # Check that the FROM clause does not contain aggregates.
     if c_expression is not None and is_aggregate(c_expression):
-        raise CompilationError("Aggregates are not allowed in FROM clause")
+        raise CompilationError('aggregates are not allowed in FROM clause')
 
     if (isinstance(from_clause.open, datetime.date) and
         isinstance(from_clause.close, datetime.date) and
         from_clause.open > from_clause.close):
-        raise CompilationError("Invalid dates: CLOSE date must follow OPEN date")
+        raise CompilationError('CLOSE date must follow OPEN date')
 
     c_from = EvalFrom(from_clause.open, from_clause.close, from_clause.clear)
 
@@ -1093,7 +1081,7 @@ def compile_select(context, select):
     # should never trigger if the compilation environment does not
     # contain any aggregate.
     if c_where is not None and is_aggregate(c_where):
-        raise CompilationError("Aggregates are not allowed in WHERE clause")
+        raise CompilationError('aggregates are not allowed in WHERE clause')
 
     # Combine FROM and WHERE clauses
     if c_from_expr is not None:
@@ -1123,8 +1111,8 @@ def compile_select(context, select):
             missing_names = ['"{}"'.format(c_targets[index].name)
                              for index in non_aggregate_indexes - set(group_indexes)]
             raise CompilationError(
-                "All non-aggregates must be covered by GROUP-BY clause in aggregate query; "
-                "the following targets are missing: {}".format(",".join(missing_names)))
+                'all non-aggregates must be covered by GROUP-BY clause in aggregate query: '
+                'the following targets are missing: {}'.format(','.join(missing_names)))
 
     query = EvalQuery(table,
                       c_targets,
