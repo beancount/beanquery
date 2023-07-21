@@ -36,7 +36,7 @@ subselect
 
 from::From
     = expression:[expression]
-      ['OPEN' ('ON' open:date | {} open:`True`)]
+      ['OPEN' 'ON' open:date]
       ['CLOSE' ('ON' close:date | {} close:`True`)]
       ['CLEAR' clear:`True`]
     ;
