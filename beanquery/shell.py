@@ -288,7 +288,11 @@ class DispatchingShell(cmd.Cmd):
           default_close_date: A datetimed.date instance, the default close date.
         """
         try:
-            statement = self.parser.parse(line, default_close_date=default_close_date)
+            statement = self.parser.parse(line)
+            if (isinstance(statement, parser.ast.Select) and
+                statement.from_clause is not None and
+                not statement.from_clause.close):
+                statement.from_clause.close = default_close_date
             self.dispatch(statement)
         except Exception as exc:
             print(render_exception(exc), file=sys.stderr)
