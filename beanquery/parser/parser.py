@@ -236,30 +236,9 @@ class BQLParser(Parser):
         self.name_last_node('expression')
         with self._optional():
             self._token('OPEN')
-            with self._group():
-                with self._choice():
-                    with self._option():
-                        self._token('ON')
-                        self._date_()
-                        self.name_last_node('open')
-
-                        self._define(
-                            ['open'],
-                            []
-                        )
-                    with self._option():
-                        self._empty_closure()
-                        self._constant(True)
-                        self.name_last_node('open')
-
-                        self._define(
-                            ['open'],
-                            []
-                        )
-                    self._error(
-                        'expecting one of: '
-                        "'ON'"
-                    )
+            self._token('ON')
+            self._date_()
+            self.name_last_node('open')
 
             self._define(
                 ['open'],
