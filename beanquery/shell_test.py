@@ -119,16 +119,22 @@ def load():
     return entries, errors, options
 
 
+def run_shell_command(cmd):
+    """Run a shell command and return its output."""
+    with test_utils.capture('stdout') as stdout:
+        shell_obj = shell.BQLShell(False, None, sys.stdout)
+        entries, errors, options = load()
+        add_beancount_tables(shell_obj.context, entries, errors, options)
+        shell_obj._extract_queries(entries)  # pylint: disable=protected-access
+        shell_obj.onecmd(cmd)
+    return stdout.getvalue()
+
+
 def runshell(function):
     """Decorate a function to run the shell and return the output."""
     def wrapper(self):
-        with test_utils.capture('stdout') as stdout:
-            shell_obj = shell.BQLShell(False, None, sys.stdout)
-            entries, errors, options = load()
-            add_beancount_tables(shell_obj.context, entries, errors, options)
-            shell_obj._extract_queries(entries)
-            shell_obj.onecmd(function.__doc__)
-        return function(self, stdout.getvalue())
+        output = run_shell_command(function.__doc__)
+        return function(self, output)
     return wrapper
 
 
@@ -286,6 +292,14 @@ class TestRun(unittest.TestCase):
         self.assertRegex(output, r'ACME \| Salary')
         self.assertRegex(output, 'account +total')
         self.assertRegex(output, 'Expenses:Home:Rent')
+
+
+class TestHelp(unittest.TestCase):
+
+    def test_help_functions(self):
+        for name in dir(shell.BQLShell):
+            if name.startswith('help_'):
+                run_shell_command('help ' + name[5:])
 
 
 class ClickTestCase(unittest.TestCase):
