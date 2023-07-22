@@ -325,7 +325,7 @@ class BQLShell(DispatchingShell):
     def parse(self, line, default_close_date=None):
         statement = parser.parse(line)
         if (isinstance(statement, parser.ast.Select) and
-            statement.from_clause is not None and
+            isinstance(statement.from_clause, parser.ast.From) and
             not statement.from_clause.close):
             statement.from_clause.close = default_close_date
         return statement
