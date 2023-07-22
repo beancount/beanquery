@@ -95,12 +95,11 @@ class DispatchingShell(cmd.Cmd):
     doc_header = "Shell utility commands (type help <topic>):"
     misc_header = "Beancount query commands:"
 
-    def __init__(self, is_interactive, parser, outfile, default_format, do_numberify):
+    def __init__(self, is_interactive, outfile, default_format, do_numberify):
         """Create a shell with history.
 
         Args:
           is_interactive: A boolean, true if this serves an interactive tty.
-          parser: A command parser.
           outfile: An output file object to write communications to.
           default_format: A string, the default output format.
         """
@@ -123,7 +122,6 @@ class DispatchingShell(cmd.Cmd):
                     pass
                 atexit.register(readline.write_history_file, history_filepath)
         self.is_interactive = is_interactive
-        self.parser = parser
         self.initialize_vars(default_format, do_numberify)
         self.add_help()
         self.outfile = outfile
@@ -256,9 +254,12 @@ class DispatchingShell(cmd.Cmd):
     def do_parse(self, line):
         "Just run the parser on the following command and print the output."
         try:
-            print(self.parser.parse(line).tosexp())
+            print(self.parse(line).tosexp())
         except Exception as exc:
             print(render_exception(exc), file=sys.stderr)
+
+    def parse(self, line, **kwargs):
+        raise NotImplementedError
 
     def dispatch(self, statement):
         """Dispatch the given statement to a suitable method.
@@ -278,21 +279,16 @@ class DispatchingShell(cmd.Cmd):
         Args:
           line: The string to be parsed.
         """
-        self.run_parser(line)
+        self.execute(line)
 
-    def run_parser(self, line, default_close_date=None):
+    def execute(self, line, **kwargs):
         """Handle statements via our parser instance and dispatch to appropriate methods.
 
         Args:
           line: The string to be parsed.
-          default_close_date: A datetimed.date instance, the default close date.
         """
         try:
-            statement = self.parser.parse(line)
-            if (isinstance(statement, parser.ast.Select) and
-                statement.from_clause is not None and
-                not statement.from_clause.close):
-                statement.from_clause.close = default_close_date
+            statement = self.parse(line, **kwargs)
             self.dispatch(statement)
         except Exception as exc:
             print(render_exception(exc), file=sys.stderr)
@@ -318,13 +314,21 @@ class BQLShell(DispatchingShell):
 
     def __init__(self, is_interactive, loadfun, outfile,
                  default_format='text', do_numberify=False):
-        super().__init__(is_interactive, parser, outfile,
+        super().__init__(is_interactive, outfile,
                          default_format, do_numberify)
 
         self.loadfun = loadfun
         self.entries = None
         self.errors = None
         self.options = None
+
+    def parse(self, line, default_close_date=None):
+        statement = parser.parse(line)
+        if (isinstance(statement, parser.ast.Select) and
+            statement.from_clause is not None and
+            not statement.from_clause.close):
+            statement.from_clause.close = default_close_date
+        return statement
 
     def do_reload(self, _line=None):
         "Reload the Beancount input file."
@@ -365,7 +369,7 @@ class BQLShell(DispatchingShell):
             # Execute all.
             for name, query in sorted(self.named_queries.items()):
                 print(f'{name}:')
-                self.run_parser(query.query_string, default_close_date=query.date)
+                self.execute(query.query_string, default_close_date=query.date)
                 print()
                 print()
             return
@@ -379,7 +383,7 @@ class BQLShell(DispatchingShell):
         if not query:
             print(f"ERROR: Query '{name}' not found.")
             return
-        self.run_parser(query.query_string, default_close_date=query.date)
+        self.execute(query.query_string, default_close_date=query.date)
 
     def complete_run(self, text, _line, _begidx, _endidx):
         return [name for name in self.named_queries if name.startswith(text)]
@@ -390,7 +394,7 @@ class BQLShell(DispatchingShell):
         pr = lambda *args: print(*args, file=self.outfile)
 
         try:
-            statement = self.parser.parse(line)
+            statement = self.parse(line)
             pr("parsed statement:")
             pr(f"  {statement}")
             pr()
