@@ -16,7 +16,7 @@ import operator
 from decimal import Decimal
 
 from beanquery import parser
-from beanquery import query_execute  # pylint: disable=cyclic-import
+from beanquery import query_execute
 from beanquery import types
 from beanquery import tables
 from beanquery.parser import ast
@@ -369,7 +369,6 @@ class EvalCoalesce(EvalNode):
         return None
 
 
-# pylint: disable=abstract-method
 class EvalFunction(EvalNode):
     __slots__ = ('operands',)
 
@@ -798,7 +797,6 @@ def compile_group_by(group_by, c_targets, environ):
             # If the query is an aggregate query, check that all the targets are
             # aggregates.
             if all(aggregate_bools):
-                # pylint: disable=use-implicit-booleaness-not-comparison
                 # FIXME: shold we really be checking for the empty
                 # list or is checking for a false value enough?
                 assert group_indexes == []
@@ -1186,7 +1184,6 @@ def compile_print(print_stmt):
     return EvalPrint(table, expr)
 
 
-# pylint: disable=redefined-builtin
 def compile(statement):
     """Prepare an AST any of the statement into an executable statement.
 

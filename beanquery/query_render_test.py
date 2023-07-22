@@ -167,7 +167,7 @@ class TestRenderer(RendererTestBase):
 
 class TestAmountRenderer(RendererTestBase):
 
-    def render(self, values, **kwargs):  # pylint: disable=arguments-differ
+    def render(self, values, **kwargs):
         return super().render(Amount, values, **kwargs)
 
     def test_amount(self):
@@ -230,7 +230,7 @@ class TestAmountRenderer(RendererTestBase):
 
 class TestPositionRenderer(RendererTestBase):
 
-    def render(self, values, **kwargs):  # pylint: disable=arguments-differ
+    def render(self, values, **kwargs):
         return super().render(Position, values, **kwargs)
 
     def setUp(self):
@@ -262,7 +262,7 @@ class TestPositionRenderer(RendererTestBase):
 
 class TestInventoryRenderer(RendererTestBase):
 
-    def render(self, values, **kwargs):  # pylint: disable=arguments-differ
+    def render(self, values, **kwargs):
         return super().render(Inventory, values, **kwargs)
 
     def setUp(self):
