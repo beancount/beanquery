@@ -49,7 +49,6 @@ def node(name, fields):
         name,
         [*fields.split(), ('parseinfo', None, dataclasses.field(default=None, compare=False, repr=False))],
         bases=(Node,),
-        frozen=True,
         **({'slots': True} if sys.version_info[:2] >= (3, 10) else {}))
 
 
