@@ -802,18 +802,17 @@ def compile_group_by(group_by, c_targets, environ):
                 # FIXME: shold we really be checking for the empty
                 # list or is checking for a false value enough?
                 assert group_indexes == []
-            else:
+            elif SUPPORT_IMPLICIT_GROUPBY:
                 # If some of the targets aren't aggregates, automatically infer
                 # that they are to be implicit group by targets. This makes for
                 # a much more convenient syntax for our lightweight SQL, where
                 # grouping is optional.
-                if SUPPORT_IMPLICIT_GROUPBY:
-                    group_indexes = [index
-                                     for index, c_target in enumerate(c_targets)
-                                     if not c_target.is_aggregate]
-                else:
-                    raise CompilationError(
-                        "Aggregate query without a GROUP-BY should have only aggregates")
+                group_indexes = [
+                    index for index, c_target in enumerate(c_targets)
+                    if not c_target.is_aggregate]
+            else:
+                raise CompilationError(
+                    "Aggregate query without a GROUP-BY should have only aggregates")
         else:
             # This is not an aggregate query; don't set group_indexes to
             # anything useful, we won't need it.
@@ -1078,9 +1077,8 @@ def compile_select(select):
     # targets to the list of group-by expressions and should have resolved all
     # the indexes.
     if group_indexes is not None:
-        non_aggregate_indexes = set(index
-                                    for index, c_target in enumerate(c_targets)
-                                    if not c_target.is_aggregate)
+        non_aggregate_indexes = {index for index, c_target in enumerate(c_targets)
+                                 if not c_target.is_aggregate}
         if non_aggregate_indexes != set(group_indexes):
             missing_names = ['"{}"'.format(c_targets[index].name)
                              for index in non_aggregate_indexes - set(group_indexes)]

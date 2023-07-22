@@ -102,7 +102,7 @@ NULL = NullType()
 def nullitemgetter(item, *items):
     """An itemgetter() that replaces None values with NULL."""
     if items:
-        items = (item, ) + items
+        items = (item, *items)
         def func(obj):
             r = []
             for i in items:
@@ -141,7 +141,7 @@ def execute_query(query):
         othercols = [i for i in range(len(columns)) if i not in query.pivots]
         nother = len(othercols)
         other = lambda x: tuple(x[i] for i in othercols)
-        keys = sorted(set(row[col2] for row in rows))
+        keys = sorted({row[col2] for row in rows})
 
         # Compute the new column names and dtypes.
         if nother > 1:

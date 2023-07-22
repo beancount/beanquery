@@ -22,7 +22,7 @@ from beanquery import query_execute as qx
 from beanquery import parser
 from beanquery import tables
 
-from beanquery import compat  # pylint: disable=unused-import
+from beanquery import compat  # noqa: F401
 
 
 class QueryBase(cmptest.TestCase):
@@ -469,24 +469,24 @@ class TestFilterEntries(CommonInputBase, QueryBase):
           2010-01-01 open Assets:ForeignBank:Checking
 
           2012-12-31 'S "Opening balance for 'Assets:Bank:Checking' (Summarization)"
-            Assets:Bank:Checking                                                   303.00 USD
-            Equity:Opening-Balances                                               -303.00 USD
+            Assets:Bank:Checking          303.00 USD
+            Equity:Opening-Balances      -303.00 USD
 
           2012-12-31 'S "Opening balance for 'Equity:Earnings:Previous' (Summarization)"
-            Equity:Earnings:Previous                                              -303.00 USD
-            Equity:Opening-Balances                                                303.00 USD
+            Equity:Earnings:Previous     -303.00 USD
+            Equity:Opening-Balances       303.00 USD
 
           2013-03-03 * "Dinner with Tres"
-            Assets:Bank:Checking                                                   103.00 USD
-            Expenses:Restaurant                                                   -103.00 USD
+            Assets:Bank:Checking          103.00 USD
+            Expenses:Restaurant          -103.00 USD
 
           2013-10-10 * "International Transfer"
-            Assets:Bank:Checking                                                   -50.00 USD                                   ;     -50.00 USD
-            Assets:ForeignBank:Checking                                            -60.00 CAD                        @ 1.20 USD ;     -72.00 USD
+            Assets:Bank:Checking          -50.00 USD            ; -50.00 USD
+            Assets:ForeignBank:Checking   -60.00 CAD @ 1.20 USD ; -72.00 USD
 
           2014-04-04 * "Dinner with Quatro"
-            Assets:Bank:Checking                                                   104.00 USD
-            Expenses:Restaurant                                                   -104.00 USD
+            Assets:Bank:Checking          104.00 USD
+            Expenses:Restaurant          -104.00 USD
 
         """, filtered_entries)
 
@@ -1409,8 +1409,7 @@ class SimpleTable(tables.Table):
         self.nrows = nrows
 
     def __iter__(self):
-        for i in range(self.nrows):
-            yield i
+        yield from range(self.nrows)
 
 
 class TestExecuteTables(QueryBase):
