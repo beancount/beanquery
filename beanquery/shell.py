@@ -85,7 +85,7 @@ def convert_bool(string):
     Returns:
       The corresponding boolean.
     """
-    return not string.lower() in ('f', 'false', '0')
+    return string.lower() not in ('f', 'false', '0')
 
 
 class DispatchingShell(cmd.Cmd):
@@ -410,7 +410,7 @@ class BQLShell(DispatchingShell):
 
         except (parser.ParseError, query_compile.CompilationError) as exc:
             print(render_exception(exc), file=sys.stderr)
-        except Exception as exc:
+        except Exception:
             traceback.print_exc(file=sys.stderr)
 
 
@@ -641,7 +641,7 @@ def _describe_functions(functions, aggregates=False):
     entries.sort()
     out = io.StringIO()
     wrapper = textwrap.TextWrapper(initial_indent='  ', subsequent_indent='  ', width=80)
-    for key, entries in itertools.groupby(entries, key=lambda x: x[:2]):
+    for key, entries in itertools.groupby(entries, key=lambda x: x[:2]):  # noqa: B020
         for name, doc, args in entries:
             print(f'{name}({args})', file=out)
         print(wrapper.fill(doc), file=out)

@@ -1,8 +1,7 @@
+import dataclasses
 import enum
 import sys
 import textwrap
-
-from dataclasses import make_dataclass, field, fields
 
 
 def _indent(text):
@@ -10,7 +9,7 @@ def _indent(text):
 
 
 def _fields(node):
-    for field in fields(node):
+    for field in dataclasses.fields(node):
         if field.repr:
             yield field.name, getattr(node, field.name)
 
@@ -46,9 +45,9 @@ class Node:
 def node(name, fields):
     """Manufacture an AST node class."""
 
-    return make_dataclass(
+    return dataclasses.make_dataclass(
         name,
-        fields.split() + [('parseinfo', None, field(default=None, compare=False, repr=False))],
+        [*fields.split(), ('parseinfo', None, dataclasses.field(default=None, compare=False, repr=False))],
         bases=(Node,),
         frozen=True,
         **({'slots': True} if sys.version_info[:2] >= (3, 10) else {}))
@@ -141,7 +140,7 @@ class Ordering(enum.IntEnum):
     DESC = 1
 
     def __repr__(self):
-        return "%s.%s" % (self.__class__.__name__, self.name)
+        return f"{self.__class__.__name__}.{self.name}"
 
 # An PIVOT BY clause.
 #

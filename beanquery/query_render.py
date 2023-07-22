@@ -210,7 +210,7 @@ class DecimalRenderer(ColumnRenderer):
             return str(value).rjust(self.nintegral).ljust(self.maxwidth)
         # Compute the padding required to align the decimal point.
         left = self.nintegral - (max(1, len(n.digits) + n.exponent) + n.sign)
-        return f'{"":>{left}}{str(value):<{self.maxwidth - left}}'
+        return f'{"":>{left}}{value:<{self.maxwidth - left}}'
 
 
 class AmountRenderer(ColumnRenderer):
@@ -509,7 +509,7 @@ def render_csv(columns, rows, dcontext, file, expand=False, null=''):
                 renderer.update(value)
 
     # Prepare the renders.
-    widths = [render.prepare() for render in renderers]
+    [render.prepare() for render in renderers]
 
     # Write the CSV file.
     writer = csv.writer(file)
