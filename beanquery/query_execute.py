@@ -110,7 +110,6 @@ def nullitemgetter(item, *items):
                 r.append(value if value is not None else NULL)
             return tuple(r)
         return func
-    # pylint: disable=function-redefined
     def func(obj):
         value = obj[item]
         return value if value is not None else NULL

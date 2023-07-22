@@ -35,8 +35,6 @@ from beanquery import query_compile
 from beanquery import tables
 from beanquery import types
 
-# pylint: disable=function-redefined
-
 
 def function(intypes, outtype, pass_context=False, name=None):
     def decorator(func):
