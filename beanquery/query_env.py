@@ -714,35 +714,6 @@ class Max(query_compile.EvalAggregator):
 class Row:
     """A dumb container for information used by a row expression."""
 
-    rowid = None
-
-    # The current posting being evaluated.
-    posting = None
-
-    # The current transaction of the posting being evaluated.
-    entry = None
-
-    # The current running balance *after* applying the posting.
-    balance = None
-
-    # The parser's options_map.
-    options_map = None
-
-    # An AccountTypes tuple of the account types.
-    account_types = None
-
-    # A dict of account name strings to (open, close) entries for those accounts.
-    open_close_map = None
-
-    # A dict of currency name strings to the corresponding Commodity entry.
-    commodity_map = None
-
-    # A price dict as computed by build_price_map()
-    price_map = None
-
-    # A storage area for computing aggregate expression.
-    store = None
-
     # The context hash is used in caching column accessor functions.
     # Instead than hashing the row context content, use the rowid as
     # hash.
@@ -751,13 +722,26 @@ class Row:
 
     def __init__(self, entries, options):
         self.rowid = 0
+
+        # The current transaction of the posting being evaluated.
+        self.entry = None
+
+        # The current posting being evaluated.
+        self.posting = None
+
+        # The current running balance.
         self.balance = inventory.Inventory()
-        self.balance_update_rowid = -1
-        # Global properties used by some of the accessors.
-        self.options = options
+
+        # An AccountTypes tuple of the account types.
         self.account_types = opts.get_account_types(options)
+
+        # A dict of account name strings to (open, close) entries for those accounts.
         self.open_close_map = getters.get_account_open_close(entries)
+
+        # A dict of currency name strings to the corresponding Commodity entry.
         self.commodity_map = getters.get_commodity_directives(entries)
+
+        # A price dict.
         self.price_map = prices.build_price_map(entries)
 
 
