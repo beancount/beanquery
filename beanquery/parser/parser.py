@@ -819,6 +819,7 @@ class BQLParser(Parser):
         )
 
     @tatsumasu()
+    @nomemo
     def _factor_(self):  # noqa
         with self._choice():
             with self._option():
@@ -830,10 +831,11 @@ class BQLParser(Parser):
                 self._token(')')
             self._error(
                 'expecting one of: '
-                "'(' <literal> <uminus> <unary> <uplus>"
+                "'(' <primary> <uminus> <unary> <uplus>"
             )
 
     @tatsumasu()
+    @nomemo
     def _unary_(self):  # noqa
         with self._choice():
             with self._option():
@@ -841,18 +843,17 @@ class BQLParser(Parser):
             with self._option():
                 self._uminus_()
             with self._option():
-                self._literal_()
+                self._primary_()
             self._error(
                 'expecting one of: '
-                "'+' '-' 'SELECT' <column> <constant>"
-                '<function> <literal> <select> <uminus>'
-                '<uplus>'
+                "'+' '-' <atom> <primary> <subscript>"
+                '<uminus> <uplus>'
             )
 
     @tatsumasu()
     def _uplus_(self):  # noqa
         self._token('+')
-        self._literal_()
+        self._atom_()
         self.name_last_node('@')
 
     @tatsumasu('Neg')
@@ -867,7 +868,37 @@ class BQLParser(Parser):
         )
 
     @tatsumasu()
-    def _literal_(self):  # noqa
+    @leftrec
+    def _primary_(self):  # noqa
+        with self._choice():
+            with self._option():
+                self._subscript_()
+            with self._option():
+                self._atom_()
+            self._error(
+                'expecting one of: '
+                "'SELECT' <atom> <column> <constant>"
+                '<function> <primary> <select>'
+                '<subscript>'
+            )
+
+    @tatsumasu('Subscript')
+    @nomemo
+    def _subscript_(self):  # noqa
+        self._primary_()
+        self.name_last_node('operand')
+        self._token('[')
+        self._string_()
+        self.name_last_node('key')
+        self._token(']')
+
+        self._define(
+            ['key', 'operand'],
+            []
+        )
+
+    @tatsumasu()
+    def _atom_(self):  # noqa
         with self._choice():
             with self._option():
                 self._select_()
@@ -881,8 +912,8 @@ class BQLParser(Parser):
                 'expecting one of: '
                 "'SELECT' <boolean> <column> <constant>"
                 '<date> <decimal> <function> <identifier>'
-                '<integer> <list> <null> <select>'
-                '<string> <value>'
+                '<integer> <list> <literal> <null>'
+                '<select> <string>'
             )
 
     @tatsumasu('Function')
@@ -929,7 +960,7 @@ class BQLParser(Parser):
         self.name_last_node('name')
 
     @tatsumasu()
-    def _value_(self):  # noqa
+    def _literal_(self):  # noqa
         with self._choice():
             with self._option():
                 self._date_()
@@ -957,7 +988,7 @@ class BQLParser(Parser):
         with self._group():
             with self._choice():
                 with self._option():
-                    self._value_()
+                    self._literal_()
                 with self._option():
                     self._list_()
                 self._error(
@@ -966,8 +997,8 @@ class BQLParser(Parser):
                     '([0-9]+\\.[0-9]*|[0-9]*\\.[0-9]+)'
                     '(\\"[^\\"]*\\"|\\\'[^\\\']*\\\')'
                     '(\\d{4}-\\d{2}-\\d{2}) <boolean> <date>'
-                    '<decimal> <integer> <list> <null>'
-                    '<string> <value> \\d+'
+                    '<decimal> <integer> <list> <literal>'
+                    '<null> <string> \\d+'
                 )
         self.name_last_node('value')
 
@@ -976,7 +1007,7 @@ class BQLParser(Parser):
         self._token('(')
         with self._if():
             with self._group():
-                self._value_()
+                self._literal_()
                 self._token(',')
 
         def sep1():
@@ -986,12 +1017,12 @@ class BQLParser(Parser):
             with self._group():
                 with self._choice():
                     with self._option():
-                        self._value_()
+                        self._literal_()
                     with self._option():
                         self._void()
                     self._error(
                         'expecting one of: '
-                        '<value>'
+                        '<literal>'
                     )
         self._positive_gather(block1, sep1)
         self.name_last_node('@')
@@ -1247,7 +1278,13 @@ class BQLSemantics:
     def uminus(self, ast):  # noqa
         return ast
 
-    def literal(self, ast):  # noqa
+    def primary(self, ast):  # noqa
+        return ast
+
+    def subscript(self, ast):  # noqa
+        return ast
+
+    def atom(self, ast):  # noqa
         return ast
 
     def function(self, ast):  # noqa
@@ -1256,7 +1293,7 @@ class BQLSemantics:
     def column(self, ast):  # noqa
         return ast
 
-    def value(self, ast):  # noqa
+    def literal(self, ast):  # noqa
         return ast
 
     def constant(self, ast):  # noqa
