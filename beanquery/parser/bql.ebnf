@@ -206,18 +206,28 @@ unary
     =
     | uplus
     | uminus
-    | literal
+    | primary
     ;
 
 uplus
-    = '+' @:literal
+    = '+' @:atom
     ;
 
 uminus::Neg::UnaryOp
     = '-' operand:factor
     ;
 
-literal
+primary
+    =
+    | subscript
+    | atom
+    ;
+
+subscript::Subscript
+    = operand:primary '[' key:string ']'
+    ;
+
+atom
     =
     | select
     | function
@@ -235,7 +245,7 @@ column::Column
     = name:identifier
     ;
 
-value
+literal
     =
     | date
     | decimal
@@ -246,11 +256,11 @@ value
     ;
 
 constant::Constant
-    = value:(value | list)
+    = value:(literal | list)
     ;
 
 list
-    = '(' &( value ',') @:','.{ (value | ()) }+ ')'
+    = '(' &( literal ',') @:','.{ (literal | ()) }+ ')'
     ;
 
 @name

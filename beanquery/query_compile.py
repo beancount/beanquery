@@ -377,6 +377,21 @@ class EvalFunction(EvalNode):
         self.operands = operands
 
 
+class EvalGetItem(EvalNode):
+    __slots__ = ('operand', 'key')
+
+    def __init__(self, operand, key):
+        super().__init__(object)
+        self.operand = operand
+        self.key = key
+
+    def __call__(self, context):
+        operand = self.operand(context)
+        if operand is None:
+            return None
+        return operand.get(self.key)
+
+
 class EvalColumn(EvalNode):
     pass
 
@@ -500,6 +515,12 @@ def compile_expression(expr, environ):
         if all(isinstance(operand, EvalConstant) for operand in operands) and function.pure:
             return EvalConstant(function(None), function.dtype)
         return function
+
+    if isinstance(expr, ast.Subscript):
+        operand = compile_expression(expr.operand, environ)
+        if issubclass(operand.dtype, dict):
+            return EvalGetItem(operand, expr.key)
+        raise CompilationError('column type is not subscriptable', expr)
 
     if isinstance(expr, ast.UnaryOp):
         operand = compile_expression(expr.operand, environ)
