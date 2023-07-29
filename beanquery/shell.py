@@ -104,6 +104,7 @@ class Settings:
     numberify: bool = False
     pager: str = ''
     spaced: bool = False
+    unicode: bool = False
 
     def bool(self, value):
         if value in {True, False}:

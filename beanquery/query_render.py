@@ -425,7 +425,7 @@ def render_rows(rows, renderers, ctx):
 
 
 def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
-                spaced=False, listsep='  ', nullvalue='', narrow=True, **kwargs):
+                spaced=False, listsep='  ', nullvalue='', narrow=True, unicode=False, **kwargs):
     """Render the result of executing a query in text format.
 
     Args:
@@ -439,6 +439,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
       listsep: String to use to separate values in list-like column values.
       nullvalue: String to use to represent NULL values.
       narrow: When true truncate headers to the maximum column values width.
+      unicode: When true use unicode box drawing characters to draw tables.
 
     """
     ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=listsep, null=nullvalue)
@@ -455,21 +456,30 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
     # Compute columns widths.
     widths = [max(1, narrow or len(header), len(nullvalue), render.prepare()) for header, render in zip(headers, renderers)]
 
-    # Initialize table style.
+    # Initialize table style. For unicode box drawing characters,
+    # see https://www.unicode.org/charts/PDF/U2500.pdf
     if boxed:
-        frmt = '| {} |\n'
-        colsep = ' | '
-        top = middle = bottom = '+-{}-+\n'.format('-+-'.join(''.rjust(width, '-') for width in widths))
+        if unicode:
+            frmt = '\u2502 {} \u2502\n'
+            colsep = ' \u2502 '
+            lines = [''.rjust(width, '\u2500') for width in widths]
+            top =    '\u250C\u2500{}\u2500\u2510\n'.format('\u2500\u252C\u2500'.join(lines))
+            hline =  '\u251C\u2500{}\u2500\u2524\n'.format('\u2500\u253C\u2500'.join(lines))
+            bottom = '\u2514\u2500{}\u2500\u2518\n'.format('\u2500\u2534\u2500'.join(lines))
+        else:
+            frmt = '| {} |\n'
+            colsep = ' | '
+            top = hline = bottom = '+-{}-+\n'.format('-+-'.join(''.rjust(width, '-') for width in widths))
     else:
         frmt = '{}\n'
-        colsep = ' '
+        colsep = '  '
         top = bottom = ''
-        middle = '{}\n'.format(' '.join(''.rjust(width, '-') for width in widths))
+        hline = '{}\n'.format(colsep.join(''.rjust(width, '\u2500' if unicode else '-') for width in widths))
 
     # Header.
     file.write(top)
     file.write(frmt.format(colsep.join(header[:width].center(width) for header, width in zip(headers, widths))))
-    file.write(middle)
+    file.write(hline)
 
     # Rows.
     for row in render_rows(rows, renderers, ctx):

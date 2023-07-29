@@ -341,10 +341,21 @@ class TestQueryRenderText(unittest.TestCase):
             [('x', int), ('y', int), ('z', int)],
             [(1, 2, 3), (4, 5, 6)]), textwrap.dedent(
                 """\
-                x y z
-                - - -
-                1 2 3
-                4 5 6
+                x  y  z
+                -  -  -
+                1  2  3
+                4  5  6
+                """))
+
+    def test_render_simple_unicode(self):
+        self.assertEqual(self.render(
+            [('x', int), ('y', int), ('z', int)],
+            [(1, 2, 3), (4, 5, 6)], unicode=True), textwrap.dedent(
+                """\
+                x  y  z
+                ─  ─  ─
+                1  2  3
+                4  5  6
                 """))
 
     def test_render_boxed(self):
@@ -360,15 +371,28 @@ class TestQueryRenderText(unittest.TestCase):
                 +---+---+---+
                 """))
 
+    def test_render_boxed_unicode(self):
+        self.assertEqual(self.render(
+            [('x', int), ('y', int), ('z', int)],
+            [(1, 2, 3), (4, 5, 6)], boxed=True, unicode=True), textwrap.dedent(
+                """\
+                ┌───┬───┬───┐
+                │ x │ y │ z │
+                ├───┼───┼───┤
+                │ 1 │ 2 │ 3 │
+                │ 4 │ 5 │ 6 │
+                └───┴───┴───┘
+                """))
+
     def test_render_header_centering(self):
         self.assertEqual(self.render(
             [('x', int), ('y', int), ('z', int)],
             [(1, 22222, 3), (4, 5, 6)]), textwrap.dedent(
                 """\
-                x   y   z
-                - ----- -
-                1 22222 3
-                4     5 6
+                x    y    z
+                -  -----  -
+                1  22222  3
+                4      5  6
                 """))
 
     def test_render_header_truncation(self):
@@ -376,10 +400,10 @@ class TestQueryRenderText(unittest.TestCase):
             [('x', int), ('abcdefg', int), ('z', int)],
             [(1, 222, 3), (4, 5, 6)]), textwrap.dedent(
                 """\
-                x abc z
-                - --- -
-                1 222 3
-                4   5 6
+                x  abc  z
+                -  ---  -
+                1  222  3
+                4    5  6
                 """))
 
     def test_render_missing_values(self):
@@ -387,10 +411,10 @@ class TestQueryRenderText(unittest.TestCase):
             [('xx', int), ('yy', int), ('zz', int)],
             [(12, None, 34), (None, 56, 78)]), textwrap.dedent(
                 """\
-                xx yy zz
-                -- -- --
-                12    34
-                   56 78
+                xx  yy  zz
+                --  --  --
+                12      34
+                    56  78
                 """))
 
     def test_render_missing_values_boxed(self):
