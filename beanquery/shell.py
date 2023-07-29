@@ -277,8 +277,6 @@ class DispatchingShell(cmd.Cmd):
                 value = components[1]
                 try:
                     self.settings.setstr(name, value)
-                    value = self.settings.getstr(name)
-                    print(f'{name}: {value}', file=self.outfile)
                 except ValueError as ex:
                     print(f'error: {ex!s}')
                 except AttributeError:
