@@ -3,33 +3,35 @@ __license__ = "GNU GPLv2"
 
 import atexit
 import cmd
+import enum
 import io
 import itertools
 import logging
 import os
 import re
-import sys
 import shlex
+import sys
 import textwrap
 import traceback
 
-from contextlib import nullcontext
+from contextlib import nullcontext, suppress
+from dataclasses import dataclass, asdict
 from os import path
 
 import click
 
 from beancount.parser import printer
 from beancount.core import data
-from beancount.utils import misc_utils
 from beancount.utils import pager
+from beancount.utils.misc_utils import get_screen_height
 
 import beanquery
 
-from beanquery import numberify
 from beanquery import parser
 from beanquery import query_compile
-from beanquery import query_render
+from beanquery.numberify import numberify_results
 from beanquery.query_execute import execute_print
+from beanquery.query_render import render_text, render_csv
 
 try:
     import readline
@@ -77,15 +79,56 @@ def render_exception(exc, indent='  ', strip=True):
     return 'error:\n' + traceback.format_exc()
 
 
-def convert_bool(string):
-    """Convert a string to a boolean.
+class Format(enum.Enum):
+    CSV = 'csv'
+    TEXT = 'text'
 
-    Args:
-      string: A string representing a boolean.
-    Returns:
-      The corresponding boolean.
-    """
-    return string.lower() not in ('f', 'false', '0')
+    def __str__(self):
+        return self.value
+
+    @classmethod
+    def _missing_(cls, value):
+        raise ValueError(f'"{value}" is not a valid format') from None
+
+
+@dataclass
+class Settings:
+    boxed: bool = False
+    expand: bool = False
+    format: Format = Format.TEXT
+    narrow: bool = True
+    nullvalue: str = ''
+    numberify: bool = False
+    pager: str = ''
+    spaced: bool = False
+
+    def bool(self, value):
+        if value in {True, False}:
+            return value
+        norm = value.strip().lower()
+        if norm in {"1", "true", "t", "yes", "y", "on"}:
+            return True
+        if norm in {"0", "false", "f", "no", "n", "off"}:
+            return False
+        raise ValueError(f'"{value}" is not a valid boolean')
+
+    def getstr(self, name):
+        value = getattr(self, name)
+        if isinstance(value, bool):
+            value = 'true' if value else 'false'
+        return str(value)
+
+    def setstr(self, name, value):
+        vtype = type(getattr(self, name))
+        parse = getattr(self, vtype.__name__, vtype)
+        value = parse(value)
+        setattr(self, name, value)
+
+    def todict(self):
+        return asdict(self)
+
+    def __iter__(self):
+        return iter(self.todict().keys())
 
 
 class DispatchingShell(cmd.Cmd):
@@ -95,16 +138,22 @@ class DispatchingShell(cmd.Cmd):
     doc_header = "Shell utility commands (type help <topic>):"
     misc_header = "Beancount query commands:"
 
-    def __init__(self, is_interactive, outfile, default_format, do_numberify):
+    def __init__(self, outfile, interactive, settings):
         """Create a shell with history.
 
         Args:
-          is_interactive: A boolean, true if this serves an interactive tty.
           outfile: An output file object to write communications to.
-          default_format: A string, the default output format.
+          interactive: A boolean, true if this serves an interactive tty.
+          settings: The shell settings.
         """
         super().__init__()
-        if is_interactive:
+
+        self.outfile = outfile
+        self.interactive = interactive
+        self.settings = settings
+        self.add_help()
+
+        if interactive:
             if readline is not None:
                 readline.parse_and_bind("tab: complete")
                 # Readline is used to complete command names, which are
@@ -115,39 +164,11 @@ class DispatchingShell(cmd.Cmd):
                 # remove "-" from the delimiters list setup by Python.
                 readline.set_completer_delims(" \t\n\"\\'`@$><=;|&{(")
                 history_filepath = path.expanduser(HISTORY_FILENAME)
-                try:
+                with suppress(FileNotFoundError):
                     readline.read_history_file(history_filepath)
                     readline.set_history_length(2048)
-                except FileNotFoundError:
-                    pass
                 atexit.register(readline.write_history_file, history_filepath)
-        self.is_interactive = is_interactive
-        self.initialize_vars(default_format, do_numberify)
-        self.add_help()
-        self.outfile = outfile
 
-    def initialize_vars(self, default_format, do_numberify):
-        """Initialize the setting variables of the interactive shell."""
-        self.vars_types = {
-            'pager': str,
-            'format': str,
-            'boxed': convert_bool,
-            'spaced': convert_bool,
-            'expand': convert_bool,
-            'narrow': convert_bool,
-            'nullvalue': str,
-            'numberify': convert_bool,
-            }
-        self.vars = {
-            'pager': os.environ.get('PAGER', None),
-            'format': default_format,
-            'boxed': False,
-            'spaced': False,
-            'expand': False,
-            'narrow': True,
-            'nullvalue': '',
-            'numberify': do_numberify,
-            }
 
     def add_help(self):
         "Attach help functions for each of the parsed token handlers."
@@ -167,13 +188,13 @@ class DispatchingShell(cmd.Cmd):
           A context manager.
 
         """
-        if self.is_interactive:
-            return pager.ConditionalPager(self.vars.get('pager', None),
-                                          minlines=misc_utils.get_screen_height())
+        if self.interactive:
+            return pager.ConditionalPager(self.settings.pager, minlines=get_screen_height())
         return pager.flush_only(sys.stdout)
 
-    def get_output(self):
-        """Return where to direct command output.
+    @property
+    def output(self):
+        """Where to direct command output.
 
         When the output stream is connected to the standard output,
         and we are running interactively, use an indirection that can
@@ -196,6 +217,8 @@ class DispatchingShell(cmd.Cmd):
                 break
             except KeyboardInterrupt:
                 print('\n(interrupted)', file=self.outfile)
+            except Exception as exc:
+                print(render_exception(exc), file=sys.stderr)
 
     def parseline(self, line):
         """Override command line parsing for case insensitive commands lookup."""
@@ -209,7 +232,7 @@ class DispatchingShell(cmd.Cmd):
         super().do_help(arg.lower())
 
     def do_history(self, line):
-        "Print the command-line history statement."
+        """Print the command-line history."""
         if readline is not None:
             num_entries = readline.get_current_history_length()
             try:
@@ -222,41 +245,44 @@ class DispatchingShell(cmd.Cmd):
                 print(line, file=self.outfile)
 
     def do_clear(self, _):
-        "Clear the history."
+        """Clear the command-line history."""
         if readline is not None:
             readline.clear_history()
 
     def do_set(self, line):
-        "Get/set shell settings variables."
+        """Set shell settings variables."""
         if not line:
-            for varname, value in sorted(self.vars.items()):
-                print(f'{varname}: {value}', file=self.outfile)
+            for name in self.settings:
+                value = self.settings.getstr(name)
+                print(f'{name}: {value}', file=self.outfile)
         else:
             components = shlex.split(line)
-            varname = components[0]
+            name = components[0]
             if len(components) == 1:
                 try:
-                    value = self.vars[varname]
-                    print(f'{varname}: {value}', file=self.outfile)
-                except KeyError:
-                    print(f"Variable '{varname}' does not exist.", file=self.outfile)
+                    value = self.settings.getstr(name)
+                    print(f'{name}: {value}', file=self.outfile)
+                except AttributeError:
+                    print(f'error: variable "{name}" does not exist', file=self.outfile)
             elif len(components) == 2:
                 value = components[1]
                 try:
-                    converted_value = self.vars_types[varname](value)
-                    self.vars[varname] = converted_value
-                    print(f'{varname}: {converted_value}', file=self.outfile)
-                except KeyError:
-                    print(f"Variable '{varname}' does not exist.", file=self.outfile)
+                    self.settings.setstr(name, value)
+                    value = self.settings.getstr(name)
+                    print(f'{name}: {value}', file=self.outfile)
+                except ValueError as ex:
+                    print(f'error: {ex!s}')
+                except AttributeError:
+                    print(f'error: variable "{name}" does not exist', file=self.outfile)
             else:
-                print("Invalid number of arguments.", file=self.outfile)
+                print('error: invalid number of arguments', file=self.outfile)
+
+    def complete_set(self, text, _line, _begidx, _endidx):
+        return [name for name in self.settings if name.startswith(text)]
 
     def do_parse(self, line):
-        "Just run the parser on the following command and print the output."
-        try:
-            print(self.parse(line).tosexp())
-        except Exception as exc:
-            print(render_exception(exc), file=sys.stderr)
+        """Run the parser on the following command and print the output."""
+        print(self.parse(line).tosexp())
 
     def parse(self, line, **kwargs):
         raise NotImplementedError
@@ -287,24 +313,22 @@ class DispatchingShell(cmd.Cmd):
         Args:
           line: The string to be parsed.
         """
-        try:
-            statement = self.parse(line, **kwargs)
-            self.dispatch(statement)
-        except Exception as exc:
-            print(render_exception(exc), file=sys.stderr)
+        statement = self.parse(line, **kwargs)
+        self.dispatch(statement)
 
     def emptyline(self):
         """Do nothing on an empty line."""
 
-    def exit(self, _):
-        """Exit the parser."""
-        print('exit', file=self.outfile)
-        return 1
+    def do_exit(self, _):
+        """Exit the command interpreter."""
+        return True
 
-    # Commands to exit.
-    do_exit = exit
-    do_quit = exit
-    do_EOF = exit
+    do_quit = do_exit
+
+    def do_EOF(self, _):
+        """Exit the command interpreter."""
+        print('exit', file=self.outfile)
+        return self.do_exit(_)
 
 
 class BQLShell(DispatchingShell):
@@ -312,9 +336,9 @@ class BQLShell(DispatchingShell):
     """
     prompt = 'beanquery> '
 
-    def __init__(self, is_interactive, filename, outfile, default_format='text', do_numberify=False):
-        super().__init__(is_interactive, outfile, default_format, do_numberify)
-
+    def __init__(self, filename, outfile, interactive=False, format=Format.TEXT, numberify=False):
+        settings = Settings(format=format, numberify=numberify)
+        super().__init__(outfile, interactive, settings)
         self.context = beanquery.connect(None)
         self.filename = filename
         self.queries = {}
@@ -335,7 +359,7 @@ class BQLShell(DispatchingShell):
         self.context.attach('beancount:' + self.filename)
         table = self.context.tables['entries']
         self._extract_queries(table.entries)
-        if self.is_interactive:
+        if self.interactive:
             print_statistics(table.entries, table.options, self.outfile)
 
     def _extract_queries(self, entries):
@@ -432,7 +456,7 @@ class BQLShell(DispatchingShell):
         """
         # Compile the print statement.
         query = self.context.compile(statement)
-        with self.get_output() as out:
+        with self.output as out:
             execute_print(query, out)
 
     def on_Select(self, statement):
@@ -481,39 +505,18 @@ class BQLShell(DispatchingShell):
         """
         rtypes, rrows = self.context.execute(statement)
 
-        # Output the resulting rows.
         if not rrows:
             print("(empty)", file=self.outfile)
+        elif self.settings.format == Format.TEXT:
+            with self.output as out:
+                render_text(rtypes, rrows, self.context.options['dcontext'], out, **self.settings.todict())
+        elif self.settings.format == Format.CSV:
+            if self.settings.numberify:
+                dformat = self.context.options['dcontext'].build()
+                rtypes, rrows = numberify_results(rtypes, rrows, dformat)
+            render_csv(rtypes, rrows, self.context.options['dcontext'], self.outfile, **self.settings.todict())
         else:
-            output_format = self.vars['format']
-            if output_format == 'text':
-                kwds = dict(boxed=self.vars['boxed'],
-                            spaced=self.vars['spaced'],
-                            expand=self.vars['expand'],
-                            narrow=self.vars['narrow'],
-                            null=self.vars['nullvalue'])
-                with self.get_output() as out:
-                    query_render.render_text(rtypes, rrows,
-                                             self.context.options['dcontext'],
-                                             out, **kwds)
-
-            elif output_format == 'csv':
-                # Numberify CSV output if requested.
-                if self.vars['numberify']:
-                    dformat = self.context.options['dcontext'].build()
-                    rtypes, rrows = numberify.numberify_results(rtypes, rrows, dformat)
-
-                query_render.render_csv(rtypes, rrows,
-                                        self.context.options['dcontext'],
-                                        self.outfile,
-                                        expand=self.vars['expand'],
-                                        null=self.vars['nullvalue'])
-
-            else:
-                assert output_format not in _SUPPORTED_FORMATS
-                print(f"Unsupported output format: '{output_format}'.",
-                      file=self.outfile)
-
+            raise NotImplementedError
 
     def on_Journal(self, journal):
         """
@@ -686,23 +689,19 @@ def print_statistics(entries, options, outfile):
           file=outfile)
 
 
-_SUPPORTED_FORMATS = ('text', 'csv')
-
-
 @click.command()
 @click.argument('filename')
 @click.argument('query', nargs=-1)
 @click.option('--numberify', '-m', is_flag=True,
               help="Numberify the output, removing the currencies.")
-@click.option('--format', '-f', 'output_format',
-              type=click.Choice(_SUPPORTED_FORMATS),
-              default=_SUPPORTED_FORMATS[0], help="Output format.")
+@click.option('--format', '-f', type=click.Choice([x.value for x in Format]), default='text',
+              help="Output format.")
 @click.option('--output', '-o', type=click.File('w'), default='-',
               help="Output filename.")
 @click.option('--no-errors', '-q', is_flag=True,
               help="Do not report errors.")
 @click.version_option()
-def main(filename, query, numberify, output_format, output, no_errors):
+def main(filename, query, numberify, format, output, no_errors):
     """An interactive interpreter for the Beancount Query Language.
 
     Load Beancount ledger FILENAME and run Beancount Query Language
@@ -712,15 +711,12 @@ def main(filename, query, numberify, output_format, output, no_errors):
 
     """
     # Create the shell.
-    is_interactive = sys.stdin.isatty() and not query
-    shell_obj = BQLShell(is_interactive, filename, output, output_format, numberify)
+    interactive = sys.stdin.isatty() and not query
+    shell = BQLShell(filename, output, interactive, Format(format), numberify)
 
     # Run interactively if we're a TTY and no query is supplied.
-    if is_interactive:
-        try:
-            shell_obj.cmdloop()
-        except KeyboardInterrupt:
-            print('\nExit')
+    if interactive:
+        shell.cmdloop()
     else:
         # Run in batch mode (Non-interactive).
         if query:
@@ -731,4 +727,4 @@ def main(filename, query, numberify, output_format, output, no_errors):
             # standard input.
             query = sys.stdin.read()
 
-        shell_obj.onecmd(query)
+        shell.onecmd(query)

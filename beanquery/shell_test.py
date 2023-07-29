@@ -122,7 +122,7 @@ def load():
 def run_shell_command(cmd):
     """Run a shell command and return its output."""
     with test_utils.capture('stdout') as stdout:
-        shell_obj = shell.BQLShell(False, None, sys.stdout)
+        shell_obj = shell.BQLShell(None, sys.stdout)
         entries, errors, options = load()
         add_beancount_tables(shell_obj.context, entries, errors, options)
         shell_obj._extract_queries(entries)  # pylint: disable=protected-access
