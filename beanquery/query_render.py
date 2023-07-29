@@ -124,14 +124,8 @@ class BoolRenderer(ColumnRenderer):
         return ('TRUE' if value else 'FALSE')
 
 
-class StringRenderer(ColumnRenderer):
+class StringRenderer(ObjectRenderer):
     dtype = str
-
-    def update(self, value):
-        self.maxwidth = max(self.maxwidth, len(value))
-
-    def format(self, value):
-        return value
 
 
 class SetRenderer(ColumnRenderer):
@@ -158,15 +152,9 @@ class DateRenderer(ColumnRenderer):
         return value.strftime('%Y-%m-%d')
 
 
-class IntRenderer(ColumnRenderer):
+class IntRenderer(ObjectRenderer):
     dtype = int
     align = Align.RIGHT
-
-    def update(self, value):
-        self.maxwidth = max(self.maxwidth, len(str(value)))
-
-    def format(self, value):
-        return str(value)
 
 
 class DecimalRenderer(ColumnRenderer):
