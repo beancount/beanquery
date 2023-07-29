@@ -114,6 +114,10 @@ class ObjectRenderer(ColumnRenderer):
         return str(value)
 
 
+class DictRenderer(ObjectRenderer):
+    dtype = dict
+
+
 class BoolRenderer(ColumnRenderer):
     dtype = bool
 
