@@ -846,8 +846,8 @@ class BQLParser(Parser):
                 self._primary_()
             self._error(
                 'expecting one of: '
-                "'+' '-' <atom> <primary> <subscript>"
-                '<uminus> <uplus>'
+                "'+' '-' <atom> <attribute> <primary>"
+                '<subscript> <uminus> <uplus>'
             )
 
     @tatsumasu()
@@ -872,15 +872,31 @@ class BQLParser(Parser):
     def _primary_(self):  # noqa
         with self._choice():
             with self._option():
+                self._attribute_()
+            with self._option():
                 self._subscript_()
             with self._option():
                 self._atom_()
             self._error(
                 'expecting one of: '
-                "'SELECT' <atom> <column> <constant>"
-                '<function> <primary> <select>'
+                "'SELECT' <atom> <attribute> <column>"
+                '<constant> <function> <primary> <select>'
                 '<subscript>'
             )
+
+    @tatsumasu('Attribute')
+    @nomemo
+    def _attribute_(self):  # noqa
+        self._primary_()
+        self.name_last_node('operand')
+        self._token('.')
+        self._identifier_()
+        self.name_last_node('name')
+
+        self._define(
+            ['name', 'operand'],
+            []
+        )
 
     @tatsumasu('Subscript')
     @nomemo
@@ -1279,6 +1295,9 @@ class BQLSemantics:
         return ast
 
     def primary(self, ast):  # noqa
+        return ast
+
+    def attribute(self, ast):  # noqa
         return ast
 
     def subscript(self, ast):  # noqa

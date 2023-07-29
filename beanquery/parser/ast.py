@@ -167,6 +167,8 @@ Column = node('Column', 'name')
 #     evaluate. This is possibly an empty list.
 Function = node('Function', 'fname operands')
 
+Attribute = node('Attribute', 'operand name')
+
 Subscript = node('Subscript', 'operand key')
 
 # A constant node.

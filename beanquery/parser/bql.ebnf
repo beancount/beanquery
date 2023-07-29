@@ -219,8 +219,13 @@ uminus::Neg::UnaryOp
 
 primary
     =
+    | attribute
     | subscript
     | atom
+    ;
+
+attribute::Attribute
+    = operand:primary '.' name:identifier
     ;
 
 subscript::Subscript
