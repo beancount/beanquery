@@ -221,7 +221,7 @@ class TestUseCases(unittest.TestCase):
         JOURNAL 'Assets:Checking'
         FROM OPEN ON 2022-02-01 CLOSE ON 2022-03-01;
         """
-        self.assertRegex(output, "2022-01-31 S *Opening balance for 'Assets:Checking'")
+        self.assertRegex(output, "2022-01-31 +S +Opening balance for 'Assets:Checking'")
         self.assertRegex(output, "Test 02")
 
     @runshell
