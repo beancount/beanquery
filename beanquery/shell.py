@@ -155,21 +155,20 @@ class DispatchingShell(cmd.Cmd):
         self.settings = settings
         self.add_help()
 
-        if interactive:
-            if readline is not None:
-                readline.parse_and_bind("tab: complete")
-                # Readline is used to complete command names, which are
-                # strictly alphanumeric strings, and named query
-                # identifiers, which may contain any ascii characters. To
-                # enable completion of the latter, reduce the set of
-                # completion word delimiters to the shell default. Notably
-                # remove "-" from the delimiters list setup by Python.
-                readline.set_completer_delims(" \t\n\"\\'`@$><=;|&{(")
-                history_filepath = path.expanduser(HISTORY_FILENAME)
-                with suppress(FileNotFoundError):
-                    readline.read_history_file(history_filepath)
-                    readline.set_history_length(2048)
-                atexit.register(readline.write_history_file, history_filepath)
+        if interactive and readline is not None:
+            readline.parse_and_bind("tab: complete")
+            # Readline is used to complete command names, which are
+            # strictly alphanumeric strings, and named query
+            # identifiers, which may contain any ascii characters. To
+            # enable completion of the latter, reduce the set of
+            # completion word delimiters to the shell default. Notably
+            # remove "-" from the delimiters list setup by Python.a
+            readline.set_completer_delims(" \t\n\"\\'`@$><=;|&{(")
+            history_filepath = path.expanduser(HISTORY_FILENAME)
+            with suppress(FileNotFoundError):
+                readline.read_history_file(history_filepath)
+                readline.set_history_length(2048)
+            atexit.register(readline.write_history_file, history_filepath)
 
 
     def add_help(self):
