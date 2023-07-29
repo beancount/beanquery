@@ -425,7 +425,7 @@ def render_rows(rows, renderers, ctx):
 
 
 def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
-                spaced=False, listsep='  ', null='', narrow=True):
+                spaced=False, listsep='  ', nullvalue='', narrow=True, **kwargs):
     """Render the result of executing a query in text format.
 
     Args:
@@ -437,10 +437,11 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
       boxed: When true draw an ascii-art table borders.
       spaced: When true insert an empty line between rows.
       listsep: String to use to separate values in list-like column values.
-      null: String to use to represent NULL values.
+      nullvalue: String to use to represent NULL values.
+      narrow: When true truncate headers to the maximum column values width.
 
     """
-    ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=listsep, null=null)
+    ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=listsep, null=nullvalue)
     renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
     headers = [name for name, dtype in columns]
     alignment = [renderer.align for renderer in renderers]
@@ -452,7 +453,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
                 renderer.update(value)
 
     # Compute columns widths.
-    widths = [max(1, narrow or len(header), len(null), render.prepare()) for header, render in zip(headers, renderers)]
+    widths = [max(1, narrow or len(header), len(nullvalue), render.prepare()) for header, render in zip(headers, renderers)]
 
     # Initialize table style.
     if boxed:
@@ -479,7 +480,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
     file.write(bottom)
 
 
-def render_csv(columns, rows, dcontext, file, expand=False, null=''):
+def render_csv(columns, rows, dcontext, file, expand=False, nullvalue='', **kwargs):
     """Render the result of executing a query in text format.
 
     Args:
@@ -488,9 +489,9 @@ def render_csv(columns, rows, dcontext, file, expand=False, null=''):
       dcontext: A DisplayContext object prepared for rendering numbers.
       file: A file object to render the results to.
       expand: A boolean, if true, expand columns that render to lists on multiple rows.
-      null: String to use to represent NULL values.
+      nullvalue: String to use to represent NULL values.
     """
-    ctx = RenderContext(dcontext, expand=expand, spaced=False, listsep=',', null=null)
+    ctx = RenderContext(dcontext, expand=expand, spaced=False, listsep=',', null=nullvalue)
     renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
     headers = [name for name, dtype in columns]
 

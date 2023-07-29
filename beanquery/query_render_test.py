@@ -81,7 +81,7 @@ class TestRenderer(RendererTestBase):
             ' ',
             ' ',
         ])
-        self.assertEqual(self.render(str, ['', None], null='NULL'), [
+        self.assertEqual(self.render(str, ['', None], nullvalue='NULL'), [
             '    ',
             'NULL',
         ])
