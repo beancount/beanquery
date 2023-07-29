@@ -61,19 +61,21 @@ def render_location(text, pos, endpos, lineno, indent, strip, out):
 # exceptions to have a common base class and to store location
 # information uniformly. This requires translating TatSu exceptions
 # into something else.
-def render_exception(exc, indent='  ', strip=True):
+def render_exception(exc, indent='| ', strip=True):
     if isinstance(exc, beanquery.CompilationError) and exc.parseinfo:
-        out = [f'error: {exc}', '']
+        out = []
         pos = exc.parseinfo.pos
         endpos = exc.parseinfo.endpos
         lineno = exc.parseinfo.line
         render_location(exc.parseinfo.tokenizer.text, pos, endpos, lineno, indent, strip, out)
+        out.append(f'error: {exc}')
         return '\n'.join(out)
 
     if isinstance(exc, beanquery.ParseError):
-        out = ['error: syntax error', '']
+        out = []
         info = exc.tokenizer.line_info(exc.pos)
         render_location(exc.tokenizer.text, exc.pos, exc.pos + 1, info.line, indent, strip, out)
+        out.append('error: syntax error')
         return '\n'.join(out)
 
     return 'error:\n' + traceback.format_exc()
