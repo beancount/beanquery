@@ -39,7 +39,7 @@ except ImportError:
     readline = None
 
 
-HISTORY_FILENAME = "~/.bean-shell-history"
+HISTORY_FILENAME = '~/.config/beanquery/history'
 
 
 def render_location(text, pos, endpos, lineno, indent, strip, out):
@@ -165,6 +165,7 @@ class DispatchingShell(cmd.Cmd):
             # remove "-" from the delimiters list setup by Python.a
             readline.set_completer_delims(" \t\n\"\\'`@$><=;|&{(")
             history_filepath = path.expanduser(HISTORY_FILENAME)
+            os.makedirs(path.dirname(history_filepath), exist_ok=True)
             with suppress(FileNotFoundError):
                 readline.read_history_file(history_filepath)
                 readline.set_history_length(2048)
