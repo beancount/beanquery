@@ -392,6 +392,21 @@ class EvalGetItem(EvalNode):
         return operand.get(self.key)
 
 
+class EvalGetter(EvalNode):
+    __slots__ = ('operand', 'getter')
+
+    def __init__(self, operand, getter, dtype):
+        super().__init__(dtype)
+        self.operand = operand
+        self.getter = getter
+
+    def __call__(self, context):
+        operand = self.operand(context)
+        if operand is None:
+            return None
+        return self.getter(operand)
+
+
 class EvalColumn(EvalNode):
     pass
 
@@ -521,6 +536,15 @@ def compile_expression(expr, environ):
         if issubclass(operand.dtype, dict):
             return EvalGetItem(operand, expr.key)
         raise CompilationError('column type is not subscriptable', expr)
+
+    if isinstance(expr, ast.Attribute):
+        operand = compile_expression(expr.operand, environ)
+        if issubclass(operand.dtype, types.Structure):
+            getter = operand.dtype.columns.get(expr.name)
+            if getter is None:
+                raise CompilationError(f'structured type has no attribute "{expr.name}"', expr)
+            return EvalGetter(operand, getter, getter.dtype)
+        raise CompilationError('column type is not structured', expr)
 
     if isinstance(expr, ast.UnaryOp):
         operand = compile_expression(expr.operand, environ)

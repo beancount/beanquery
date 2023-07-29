@@ -28,6 +28,11 @@ class AsteriskType:
 Asterisk = AsteriskType()
 
 
+class Structure:
+    """Base class for structured data types."""
+    pass
+
+
 def function_lookup(functions, name, operands):
     """Lookup a BQL function implementation.
 
