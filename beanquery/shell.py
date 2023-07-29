@@ -40,6 +40,7 @@ except ImportError:
 
 
 HISTORY_FILENAME = '~/.config/beanquery/history'
+INIT_FILENAME = '~/.config/beanquery/init'
 
 
 def render_location(text, pos, endpos, lineno, indent, strip, out):
@@ -140,12 +141,13 @@ class DispatchingShell(cmd.Cmd):
     doc_header = "Shell utility commands (type help <topic>):"
     misc_header = "Beancount query commands:"
 
-    def __init__(self, outfile, interactive, settings):
+    def __init__(self, outfile, interactive, runinit, settings):
         """Create a shell with history.
 
         Args:
           outfile: An output file object to write communications to.
           interactive: A boolean, true if this serves an interactive tty.
+          runinit: When true, execute the commands from the user init file.
           settings: The shell settings.
         """
         super().__init__()
@@ -171,6 +173,11 @@ class DispatchingShell(cmd.Cmd):
                 readline.set_history_length(2048)
             atexit.register(readline.write_history_file, history_filepath)
 
+        if runinit:
+            with suppress(FileNotFoundError):
+                with open(path.expanduser(INIT_FILENAME)) as f:
+                    for line in f:
+                        self.onecmd(line)
 
     def add_help(self):
         "Attach help functions for each of the parsed token handlers."
@@ -338,9 +345,9 @@ class BQLShell(DispatchingShell):
     """
     prompt = 'beanquery> '
 
-    def __init__(self, filename, outfile, interactive=False, format=Format.TEXT, numberify=False):
+    def __init__(self, filename, outfile, interactive=False, runinit=False, format=Format.TEXT, numberify=False):
         settings = Settings(format=format, numberify=numberify)
-        super().__init__(outfile, interactive, settings)
+        super().__init__(outfile, interactive, runinit, settings)
         self.context = beanquery.connect(None)
         self.filename = filename
         self.queries = {}
@@ -714,7 +721,7 @@ def main(filename, query, numberify, format, output, no_errors):
     """
     # Create the shell.
     interactive = sys.stdin.isatty() and not query
-    shell = BQLShell(filename, output, interactive, Format(format), numberify)
+    shell = BQLShell(filename, output, interactive, True, Format(format), numberify)
 
     # Run interactively if we're a TTY and no query is supplied.
     if interactive:
