@@ -311,6 +311,20 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT COUNT(NULL)", 0)
         self.assertResult("SELECT COUNT(meta('missing'))", 0)
 
+    def test_getitem(self):
+        self.assertResult("SELECT meta['lineno']", 6, object)
+        self.assertResult("SELECT 1 + meta['lineno']", Decimal('7'))
+        self.assertResult("SELECT meta['filename']", '<string>', object)
+        self.assertResult("SELECT meta['missing']", None, object)
+        self.assertError ("SELECT position['foo']")
+
+    def test_getatrr(self):
+        self.assertResult("SELECT entry.flag", '*')
+        self.assertResult("SELECT int(entry.meta['lineno'])", 5)
+        self.assertError ("SELECT entry.foo")
+        self.assertError ("SELECT position.foo")
+
+
 class TestFilterEntries(CommonInputBase, QueryBase):
 
     @staticmethod

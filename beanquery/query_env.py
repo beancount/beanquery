@@ -922,6 +922,11 @@ def links(context):
     return context.entry.links
 
 
+@column(dict)
+def meta(context):
+    return context.entry.meta
+
+
 class PostingsTable(EntriesTable):
     name = 'postings'
     columns = EntriesTable.columns.copy()
@@ -1080,6 +1085,15 @@ def balance(context):
     context.balance.add_position(context.posting)
     return copy.copy(context.balance)
 
+
+@column(dict)
+def meta(context):
+    return context.posting.meta
+
+
+@column(EntriesTable)
+def entry(context):
+    return context
 
 
 # Backward compatibility definitions for use in tests. These work
