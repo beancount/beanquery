@@ -947,9 +947,23 @@ class PostingsTable(EntriesTable):
 column = PostingsTable.column
 
 
+# redefine EntriesTable's column definition to return posting information
+@column(str)
+def filename(context):
+    """The ledger where the posting is defined."""
+    return context.posting.meta["filename"]
+
+
+# redefine EntriesTable's column definition to return posting information
+@column(int)
+def lineno(context):
+    """The line number in the ledger file where the posting is defined."""
+    return context.posting.meta["lineno"]
+
+
 @column(str)
 def location(context):
-    """The filename:lineno where the posting was parsed from or created."""
+    """The filename:lineno location where the posting is defined."""
     meta = context.posting.meta
     return '{:s}:{:d}:'.format(meta['filename'], meta['lineno'])
 
