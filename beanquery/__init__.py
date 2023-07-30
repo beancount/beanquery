@@ -11,6 +11,9 @@ from .parser import ParseError  # noqa: F401
 from .query_compile import CompilationError  # noqa: F401
 
 
+__version__ = '0.1.dev0'
+
+
 def connect(uri):
     return Connection(uri)
 

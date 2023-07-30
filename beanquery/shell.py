@@ -19,6 +19,7 @@ from dataclasses import dataclass, asdict
 from os import path
 
 import click
+import beancount
 
 from beancount.parser import printer
 from beancount.core import data
@@ -708,7 +709,7 @@ def print_statistics(entries, options, outfile):
               help="Output filename.")
 @click.option('--no-errors', '-q', is_flag=True,
               help="Do not report errors.")
-@click.version_option()
+@click.version_option('', message=f'beanquery {beanquery.__version__}, beancount {beancount.__version__}')
 def main(filename, query, numberify, format, output, no_errors):
     """An interactive interpreter for the Beancount Query Language.
 
