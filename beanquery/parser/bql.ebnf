@@ -114,6 +114,7 @@ comparison
     | match
     | isnull
     | isnotnull
+    | between
     | sum
     ;
 
@@ -159,6 +160,10 @@ isnull::IsNull::UnaryOp
 
 isnotnull::IsNotNull::UnaryOp
     = operand:sum 'IS' 'NOT' 'NULL'
+    ;
+
+between::Between
+    = operand:sum 'BETWEEN' lower:sum 'AND' upper:sum
     ;
 
 sum

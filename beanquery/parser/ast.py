@@ -193,6 +193,8 @@ BinaryOp = node('BinaryOp', 'left right')
 # Base class for boolean operators.
 BoolOp = node('BoolOp', 'args')
 
+# Between
+Between = node('Between', 'operand lower upper')
 
 # Negation operator.
 class Not(UnaryOp):

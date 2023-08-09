@@ -14,6 +14,7 @@ import re
 import operator
 
 from decimal import Decimal
+from itertools import product
 
 from beanquery import parser
 from beanquery import query_execute
@@ -148,6 +149,28 @@ class EvalBinaryOp(EvalNode):
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.left!r}, {self.right!r})'
+
+
+class EvalBetween(EvalNode):
+    __slots__ = ('operand', 'lower', 'upper')
+
+    def __init__(self, operand, lower, upper):
+        super().__init__(bool)
+        self.operand = operand
+        self.lower = lower
+        self.upper = upper
+
+    def __call__(self, context):
+        operand = self.operand(context)
+        if operand is None:
+            return None
+        lower = self.lower(context)
+        if lower is None:
+            return None
+        upper = self.upper(context)
+        if upper is None:
+            return None
+        return lower <= operand <= upper
 
 
 def unaryop(op, intypes, outtype, nullsafe=False):
@@ -309,6 +332,19 @@ _intypes = [
 for node, op in _comparisons:
     for intypes in _intypes:
         binaryop(node, intypes, bool)(op)
+
+_comparable = [
+    # lists of types that can be compared with each other
+    [int, Decimal],
+    [datetime.date],
+    [str],
+]
+
+for comparable in _comparable:
+    for intypes in product(comparable, repeat=3):
+        class Between(EvalBetween):
+            __intypes__ = list(intypes)
+        OPERATORS[ast.Between].append(Between)
 
 
 class EvalAnd(EvalNode):
@@ -557,6 +593,19 @@ def compile_expression(expr, environ):
         if isinstance(operand, EvalConstant):
             return EvalConstant(function(None), function.dtype)
         return function
+
+    if isinstance(expr, ast.Between):
+        operand = compile_expression(expr.operand, environ)
+        lower = compile_expression(expr.lower, environ)
+        upper = compile_expression(expr.upper, environ)
+        intypes = [operand.dtype, lower.dtype, upper.dtype]
+        for candidate in OPERATORS[type(expr)]:
+            if candidate.__intypes__ == intypes:
+                func = candidate(operand, lower, upper)
+                return func
+        raise CompilationError(
+            f'operator "{types.name(operand.dtype)} BETWEEN {types.name(lower.dtype)} '
+            f'AND {types.name(upper.dtype)}" not supported', expr)
 
     if isinstance(expr, ast.BinaryOp):
         left = compile_expression(expr.left, environ)

@@ -514,9 +514,9 @@ class BQLParser(Parser):
                 self._comparison_()
             self._error(
                 'expecting one of: '
-                "'NOT' <comparison> <eq> <gt> <gte> <in>"
-                '<isnotnull> <isnull> <lt> <lte> <match>'
-                '<neq> <not> <notin> <sum>'
+                "'NOT' <between> <comparison> <eq> <gt>"
+                '<gte> <in> <isnotnull> <isnull> <lt>'
+                '<lte> <match> <neq> <not> <notin> <sum>'
             )
 
     @tatsumasu('Not')
@@ -557,12 +557,14 @@ class BQLParser(Parser):
             with self._option():
                 self._isnotnull_()
             with self._option():
+                self._between_()
+            with self._option():
                 self._sum_()
             self._error(
                 'expecting one of: '
-                '<add> <eq> <gt> <gte> <in> <isnotnull>'
-                '<isnull> <lt> <lte> <match> <neq>'
-                '<notin> <sub> <sum> <term>'
+                '<add> <between> <eq> <gt> <gte> <in>'
+                '<isnotnull> <isnull> <lt> <lte> <match>'
+                '<neq> <notin> <sub> <sum> <term>'
             )
 
     @tatsumasu('Less')
@@ -706,6 +708,22 @@ class BQLParser(Parser):
 
         self._define(
             ['operand'],
+            []
+        )
+
+    @tatsumasu('Between')
+    def _between_(self):  # noqa
+        self._sum_()
+        self.name_last_node('operand')
+        self._token('BETWEEN')
+        self._sum_()
+        self.name_last_node('lower')
+        self._token('AND')
+        self._sum_()
+        self.name_last_node('upper')
+
+        self._define(
+            ['lower', 'operand', 'upper'],
             []
         )
 
@@ -1259,6 +1277,9 @@ class BQLSemantics:
         return ast
 
     def isnotnull(self, ast):  # noqa
+        return ast
+
+    def between(self, ast):  # noqa
         return ast
 
     def sum(self, ast):  # noqa
