@@ -250,6 +250,36 @@ class AmountRenderer(ColumnRenderer):
         return f'{self.func(value.number, value.currency)} {value.currency:<{self.curwidth}}'
 
 
+class CostRenderer(ObjectRenderer):
+    dtype = position.Cost
+
+    def __init__(self, ctx):
+        super().__init__(ctx)
+        self.amount_renderer = AmountRenderer(ctx)
+        self.date_width = 0
+        self.label_width = 0
+
+    def update(self, value):
+        self.amount_renderer.update(value)
+        if value.date is not None:
+            self.date_width = 10 + 2
+        if value.label is not None:
+            self.label_width = max(self.label_width, len(value.label) + 4)
+
+    def prepare(self):
+        cost_width = self.amount_renderer.prepare()
+        self.maxwidth = cost_width + self.date_width + self.label_width
+        return super().prepare()
+
+    def format(self, value):
+        parts = [self.amount_renderer.format(value)]
+        if value.date is not None:
+            parts.append(f'{value.date:%Y-%m-%d}')
+        if value.label is not None:
+            parts.append(f'"{value.label}"')
+        return ', '.join(parts)
+
+
 class PositionRenderer(ColumnRenderer):
     """Renderer for Position instrnaces.
 

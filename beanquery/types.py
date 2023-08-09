@@ -28,9 +28,18 @@ class AsteriskType:
 Asterisk = AsteriskType()
 
 
+# Keep track of the defined structured types to allow introspection.
+TYPES = {}
+
+
 class Structure:
     """Base class for structured data types."""
-    pass
+    name = None
+    columns = {}
+
+    def __init_subclass__(cls):
+        if cls.name:
+            TYPES[cls.name] = cls
 
 
 def function_lookup(functions, name, operands):
@@ -59,6 +68,12 @@ MAP = {
     int: 'int',
     str: 'str',
 }
+
+
+# Map between Python types and BQL structured types. Functions and
+# columns definitions can use Python types. The corresponding BQL
+# structured type is looked up when compiling the subscrip operator.
+ALIASES = {}
 
 
 def name(datatype):

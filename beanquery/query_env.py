@@ -757,9 +757,6 @@ class Row:
 
 
 class BeanTable(tables.Table):
-    name = None
-    columns = {}
-
     def __init__(self, entries, options, open=None, close=None, clear=None):
         super().__init__()
         self.entries = entries
@@ -1105,7 +1102,11 @@ def meta(context):
     return context.posting.meta
 
 
-@column(EntriesTable)
+class Entry(EntriesTable, types.Structure):
+    name = 'entry'
+
+
+@column(Entry)
 def entry(context):
     return context
 

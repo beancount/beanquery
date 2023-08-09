@@ -1,7 +1,4 @@
-from . import types
-
-
-class Table(types.Structure):
+class Table:
     columns = {}
     name = None
 
