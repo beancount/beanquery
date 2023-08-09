@@ -12,7 +12,7 @@ from beancount.core import display_context
 from beancount.core.amount import Amount, A
 from beancount.core.inventory import Inventory, from_string as I
 from beancount.core.number import D
-from beancount.core.position import Position, from_string as P
+from beancount.core.position import Cost, Position, from_string as P
 
 from beanquery import query_render
 from beanquery.cursor import Column
@@ -324,6 +324,22 @@ class TestInventoryRenderer(RendererTestBase):
                                       I('5 AA, 6 EE, 7 FF')], expand=False, listsep=' & '), [
             '10 AA & 2 BB & 3 CC & 4 DD              ',
             ' 5 AA & 6 EE & 7 FF                     ',
+        ])
+
+
+class TestCostRenderer(RendererTestBase):
+
+    def render(self, values, **kwargs):
+        return super().render(Cost, values, **kwargs)
+
+    def test_cost(self):
+        self.dcontext.update(Decimal('1.0000'), 'ETH')
+        self.assertEqual(self.render([Cost(D('1.0'), 'ETH', None, None),
+                                      Cost(D('1.0'), 'ETH', datetime.date(2023, 8, 14), None),
+                                      Cost(D('1.0'), 'ETH', datetime.date(2023, 8, 14), 'label')]), [
+            '1.0000 ETH                     ',
+            '1.0000 ETH, 2023-08-14         ',
+            '1.0000 ETH, 2023-08-14, "label"',
         ])
 
 
