@@ -27,10 +27,16 @@ class AsteriskType:
 # Used for COUNT(*)
 Asterisk = AsteriskType()
 
+TYPES = {}
 
 class Structure:
     """Base class for structured data types."""
-    pass
+    name = None
+    columns = {}
+
+    def __init_subclass__(cls):
+        if cls.name:
+            TYPES[cls.name] = cls
 
 
 def function_lookup(functions, name, operands):
@@ -59,3 +65,10 @@ MAP = {
     int: 'int',
     str: 'str',
 }
+
+
+def name(dtype):
+    return dtype.__name__.lower()
+
+
+ALIASES = {}

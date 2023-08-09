@@ -538,8 +538,9 @@ def compile_expression(expr, environ):
 
     if isinstance(expr, ast.Attribute):
         operand = compile_expression(expr.operand, environ)
-        if issubclass(operand.dtype, types.Structure):
-            getter = operand.dtype.columns.get(expr.name)
+        dtype = types.ALIASES.get(operand.dtype, operand.dtype)
+        if issubclass(dtype, types.Structure):
+            getter = dtype.columns.get(expr.name)
             if getter is None:
                 raise CompilationError(f'structured type has no attribute "{expr.name}"', expr)
             return EvalGetter(operand, getter, getter.dtype)

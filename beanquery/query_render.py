@@ -383,6 +383,13 @@ class InventoryRenderer(ColumnRenderer):
         return self.listsep.join(strings)
 
 
+class CostRenderer(ObjectRenderer):
+    dtype = position.Cost
+
+    def format(self, value):
+        return position.cost_to_str(value, self.ctx.dcontext)
+
+
 def render_rows(rows, renderers, ctx):
     """Render results set row."""
 
