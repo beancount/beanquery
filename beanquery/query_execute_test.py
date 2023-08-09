@@ -272,6 +272,15 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 3 NOT IN (2, 3, 4)", False)
         self.assertResult("SELECT 1 NOT IN (2, 3, 4)", True)
 
+        # between
+        self.assertResult("SELECT 2 BETWEEN 1 AND 3", True)
+        self.assertResult("SELECT 1 BETWEEN 2 AND 3", False)
+        self.assertResult("SELECT 2.0 BETWEEN 1.0 AND 3.0", True)
+        self.assertResult("SELECT 1.0 BETWEEN 2 AND 3.0", False)
+        self.assertResult("SELECT 2023-08-02 BETWEEN 2023-08-01 AND 2023-08-03", True)
+        self.assertResult("SELECT 'b' BETWEEN 'a' AND 'c'", True)
+        self.assertError ("SELECT 2023-08-02 BETWEEN 'a' AND 2")
+
     def test_operators_type_inference(self):
         self.assertResult("SELECT 1 + meta('int')", Decimal(2))
         self.assertResult("SELECT 1 + meta('str3')", Decimal(4))
