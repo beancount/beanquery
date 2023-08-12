@@ -15,6 +15,7 @@ from beancount.core.number import D
 from beancount.core.position import Position, from_string as P
 
 from beanquery import query_render
+from beanquery.cursor import Column
 
 
 class TestColumnRenderer(unittest.TestCase):
@@ -40,7 +41,7 @@ class RendererTestBase(unittest.TestCase):
     def render(self, dtype, values, **kwargs):
         out = io.StringIO()
         rows = [(x, ) for x in values]
-        query_render.render_text([('', dtype)], rows, self.dcontext, out, **kwargs)
+        query_render.render_text([Column('', dtype)], rows, self.dcontext, out, **kwargs)
         return out.getvalue().splitlines()[2:]
 
 
@@ -332,6 +333,7 @@ class TestQueryRenderText(unittest.TestCase):
         self.dcontext = display_context.DisplayContext()
 
     def render(self, types, rows, **kwargs):
+        types = [Column(*t) for t in types]
         oss = io.StringIO()
         query_render.render_text(types, rows, self.dcontext, oss, **kwargs)
         return oss.getvalue()

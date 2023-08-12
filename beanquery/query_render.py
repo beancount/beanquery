@@ -443,8 +443,8 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
 
     """
     ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=listsep, null=nullvalue)
-    renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
-    headers = [name for name, dtype in columns]
+    renderers = [RENDERERS[c.datatype](ctx) for c in columns]
+    headers = [c.name for c in columns]
     alignment = [renderer.align for renderer in renderers]
 
     # Prime the renderers.

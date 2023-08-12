@@ -51,7 +51,7 @@ class TestSimple(unittest.TestCase):
         """
 
         rtypes, rrows = query.run_query(entries, options, sql_query, 'Expenses', numberify=True)
-        columns = [rt[0] for rt in rtypes]
+        columns = [c.name for c in rtypes]
         self.assertEqual(columns, ['account', 'amount (USD)', 'amount (VACHR)', 'amount (IRAUSD)'])
         self.assertEqual(len(rrows[0]), 4)
 

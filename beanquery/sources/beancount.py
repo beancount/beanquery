@@ -10,7 +10,7 @@ def add_beancount_tables(context, entries, errors, options):
     context.errors.extend(errors)
 
 
-def attach(context, uri):
-    filename = urlparse(uri).path
+def attach(context, dsn):
+    filename = urlparse(dsn).path
     entries, errors, options = loader.load_file(filename)
     add_beancount_tables(context, entries, errors, options)

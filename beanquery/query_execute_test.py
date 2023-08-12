@@ -12,7 +12,6 @@ from beancount.core.number import D
 from beancount.core import inventory
 from beancount.core.inventory import from_string as I
 from beancount.parser import cmptest
-from beancount.utils import misc_utils
 from beancount import loader
 
 from beanquery import query_compile as qc
@@ -24,6 +23,7 @@ from beanquery import compat  # noqa: F401
 
 from beanquery import Connection
 from beanquery.sources.beancount import add_beancount_tables
+
 
 class QueryBase(cmptest.TestCase):
     INPUT = ""
@@ -37,24 +37,15 @@ class QueryBase(cmptest.TestCase):
     def compile(self, query):
         return self.ctx.compile(self.ctx.parse(query))
 
-    def check_query(self, input_string, query, expected_types, expected_rows, sort_rows=False, debug=False):
+    def check_query(self, input_string, query, expected_types, expected_rows):
         entries, errors, options = loader.load_string(input_string)
         ctx = Connection()
         add_beancount_tables(ctx, entries, errors, options)
 
-        result_types, result_rows = ctx.execute(query)
-        if debug:
-            with misc_utils.box('result_types'):
-                print(result_types)
-            with misc_utils.box('result_rows'):
-                print(result_rows)
-        self.assertEqual(expected_types, result_types)
-        if sort_rows:
-            result_rows.sort()
+        curs = ctx.execute(query)
+        self.assertEqual(tuple(expected_types), curs.description)
+        result_rows = curs.fetchall()
         self.assertEqual(expected_rows, result_rows)
-
-    def check_sorted_query(self, input_string, bql_string, expected_types, expected_rows):
-        return self.check_query(input_string, bql_string, expected_types, expected_rows, True)
 
 
 class CommonInputBase(unittest.TestCase):
@@ -110,10 +101,10 @@ class TestFundamentals(QueryBase):
               null: NULL
         """)
 
-    def assertResult(self, query, result, dtype=None):
-        dtypes, rows = self.ctx.execute(query)
-        self.assertEqual([dtype for name, dtype in dtypes], [dtype or type(result)])
-        self.assertEqual(rows, [(result, )])
+    def assertResult(self, query, result, datatype=None):
+        curs = self.ctx.execute(query)
+        self.assertEqual([c.datatype for c in curs.description], [datatype or type(result)])
+        self.assertEqual(curs.fetchall(), [(result, )])
 
     def assertError(self, query):
         with self.assertRaises(qc.CompilationError):
@@ -658,7 +649,7 @@ class TestExecuteAggregatedQuery(QueryBase):
 
     def test_aggregated_group_by_all_explicit(self):
         # All columns ('account', 'len') are subject of a group-by.
-        self.check_sorted_query(
+        self.check_query(
             self.INPUT,
             """
             SELECT account, length(account) as len
@@ -673,7 +664,7 @@ class TestExecuteAggregatedQuery(QueryBase):
                 ('Expenses:Restaurant', 19),
                 ])
 
-        self.check_sorted_query(
+        self.check_query(
             """
             2010-02-21 * "First"
               Assets:Bank:Checking       -1.00 USD
@@ -699,7 +690,7 @@ class TestExecuteAggregatedQuery(QueryBase):
 
     def test_aggregated_group_by_visible(self):
         # GROUP-BY: 'account' is visible.
-        self.check_sorted_query(
+        self.check_query(
             self.INPUT,
             """
             SELECT account, sum(position) as amount
@@ -716,7 +707,7 @@ class TestExecuteAggregatedQuery(QueryBase):
 
     def test_aggregated_group_by_invisible(self):
         # GROUP-BY: 'account' is invisible.
-        self.check_sorted_query(
+        self.check_query(
             self.INPUT,
             """
             SELECT count(position)
@@ -1025,7 +1016,7 @@ class TestExecuteOptions(QueryBase):
                 ])
 
     def test_distinct(self):
-        self.check_sorted_query(
+        self.check_query(
             """
               2010-02-23 *
                 Assets:AssetA       5.00 USD
@@ -1046,7 +1037,7 @@ class TestExecuteOptions(QueryBase):
                 ('Equity:Rest',),
                 ])
 
-        self.check_sorted_query(
+        self.check_query(
             """
               2010-02-23 *
                 Assets:AssetA       5.00 USD
@@ -1260,7 +1251,10 @@ class TestExecutePivot(QueryBase):
         add_beancount_tables(self.ctx, entries, errors, options)
 
     def execute(self, query):
-        return self.ctx.execute(query)
+        curs = self.ctx.execute(query)
+        rows = curs.fetchall()
+        columns = [(c.name, c.datatype) for c in curs.description]
+        return columns, rows
 
     data = """
       2012-01-01 open Assets:Cash
@@ -1371,9 +1365,15 @@ class TestExecutePivot(QueryBase):
 
 class TestExecuteSubquery(QueryBase):
 
+    def execute(self, query):
+        curs = self.ctx.execute(query)
+        rows = curs.fetchall()
+        columns = [(c.name, c.datatype) for c in curs.description]
+        return columns, rows
+
     def test_subquery(self):
         self.assertEqual(
-            self.ctx.execute("""SELECT a + 2 AS b FROM (SELECT 3 AS a FROM #)"""),
+            self.execute("""SELECT a + 2 AS b FROM (SELECT 3 AS a FROM #)"""),
             ([('b', int)], [(5, )]))
 
 
@@ -1413,14 +1413,14 @@ class TestExecuteTables(QueryBase):
     def test_null_table(self):
         self.assertEqual(
             self.execute("""SELECT 1 + 1 AS test FROM #"""),
-            ([('test', int)], [(2, )]))
+            ((('test', int), ), [(2, )]))
 
     def test_simple_table(self):
         self.assertEqual(
             self.execute("""SELECT column FROM #test WHERE column < 2"""),
-            ([('column', int)], [(0, ), (1, )]))
+            ((('column', int), ), [(0, ), (1, )]))
 
     def test_simple_table_aggregation(self):
         self.assertEqual(
             self.execute("""SELECT sum(column) FROM #test GROUP BY column % 2"""),
-            ([('sum(column)', int)], [(56, ), (64, )]))
+            ((('sum(column)', int), ), [(56, ), (64, )]))

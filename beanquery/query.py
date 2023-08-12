@@ -33,7 +33,9 @@ def run_query(entries, options_map, query, *format_args, numberify=False):
     formatted_query = query.format(*format_args)
 
     # Execute it to obtain the result rows.
-    rtypes, rrows = ctx.execute(formatted_query)
+    curs = ctx.execute(formatted_query)
+    rrows = curs.fetchall()
+    rtypes = curs.description
 
     # Numberify the results, if requested.
     if numberify:

@@ -11,7 +11,9 @@ from beancount.core import amount
 from beancount.core import position
 from beancount.core import inventory
 from beancount.core import display_context
+
 from beanquery import numberify
+from beanquery.cursor import Column
 
 
 class TestNumerifySimple(unittest.TestCase):
@@ -25,9 +27,9 @@ class TestNumerifySimple(unittest.TestCase):
                      "110 JPY",
                      "-947.00 USD"]
 
-    expected_types = [('pos (CAD)', Decimal),
+    expected_types = (('pos (CAD)', Decimal),
                       ('pos (USD)', Decimal),
-                      ('pos (JPY)', Decimal)]
+                      ('pos (JPY)', Decimal))
 
     expected_rows = [[D('24.17'), None, None],
                      [D('-77.02'), None, None],
@@ -39,21 +41,21 @@ class TestNumerifySimple(unittest.TestCase):
                      [None, D('-947.00'), None]]
 
     def test_amount(self):
-        itypes = [('pos', amount.Amount)]
+        itypes = (Column('pos', amount.Amount), )
         irows = [(A(string),) for string in self.input_amounts]
         atypes, arows = numberify.numberify_results(itypes, irows)
         self.assertEqual(self.expected_types, atypes)
         self.assertEqual(self.expected_rows, arows)
 
     def test_position(self):
-        itypes = [('pos', position.Position)]
+        itypes = (Column('pos', position.Position), )
         irows = [(position.from_string(string),) for string in self.input_amounts]
         atypes, arows = numberify.numberify_results(itypes, irows)
         self.assertEqual(self.expected_types, atypes)
         self.assertEqual(self.expected_rows, arows)
 
     def test_inventory(self):
-        itypes = [('pos', inventory.Inventory)]
+        itypes = (Column('pos', inventory.Inventory), )
         irows = [(inventory.from_string(string),) for string in self.input_amounts]
         atypes, arows = numberify.numberify_results(itypes, irows)
         self.assertEqual(self.expected_types, atypes)
@@ -63,7 +65,7 @@ class TestNumerifySimple(unittest.TestCase):
 class TestNumerifyIdentity(unittest.TestCase):
 
     def test_identity(self):
-        itypes = [('date', datetime.date), ('name', str), ('count', int)]
+        itypes = (Column('date', datetime.date), Column('name', str), Column('count', int), )
         irows = [[datetime.date(2015, 9, 8), 'Testing', 3]]
         atypes, arows = numberify.numberify_results(itypes, irows)
         self.assertEqual(itypes, atypes)
@@ -73,15 +75,15 @@ class TestNumerifyIdentity(unittest.TestCase):
 class TestNumerifyInventory(unittest.TestCase):
 
     def test_inventory(self):
-        itypes = [('balance', inventory.Inventory)]
+        itypes = (Column('balance', inventory.Inventory), )
         irows = [[inventory.from_string('10 HOOL {23.00 USD}')],
                  [inventory.from_string('2.11 USD, 3.44 CAD')],
                  [inventory.from_string('-2 HOOL {24.00 USD}, 5.66 CAD')]]
         atypes, arows = numberify.numberify_results(itypes, irows)
 
-        self.assertEqual([('balance (HOOL)', Decimal),
+        self.assertEqual((('balance (HOOL)', Decimal),
                           ('balance (CAD)', Decimal),
-                          ('balance (USD)', Decimal)], atypes)
+                          ('balance (USD)', Decimal), ), atypes)
 
         self.assertEqual([[D('10'), None, None],
                           [None, D('3.44'), D('2.11')],
@@ -99,10 +101,10 @@ class TestNumerifyPrecision(unittest.TestCase):
         dformat = dcontext.build()
 
         # Input data.
-        itypes = [('number', Decimal),
-                  ('amount', amount.Amount),
-                  ('position', position.Position),
-                  ('inventory', inventory.Inventory)]
+        itypes = (Column('number', Decimal),
+                  Column('amount', amount.Amount),
+                  Column('position', position.Position),
+                  Column('inventory', inventory.Inventory))
         irows = [[D(amt.split()[0]),
                   A(amt),
                   position.from_string(amt),
