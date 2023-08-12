@@ -4,8 +4,8 @@ from urllib.parse import urlparse
 
 from . import parser
 from . import query_compile
-from . import query_execute
 from . import tables
+from . import cursor
 
 from .parser import ParseError  # noqa: F401
 from .query_compile import CompilationError  # noqa: F401
@@ -14,31 +14,35 @@ from .query_compile import CompilationError  # noqa: F401
 __version__ = '0.1.dev0'
 
 
-def connect(uri):
-    return Connection(uri)
+def connect(dsn=None):
+    return Connection(dsn)
 
 
 class Connection:
-    def __init__(self, uri=None):
+    def __init__(self, dsn=None):
         self.tables = {None: tables.NullTable()}
         self.options = {}
         self.errors = []
-        if uri is not None:
-            self.attach(uri)
+        if dsn is not None:
+            self.attach(dsn)
 
-    def attach(self, uri):
-        scheme = urlparse(uri).scheme
+    def attach(self, dsn):
+        scheme = urlparse(dsn).scheme
         source = importlib.import_module(f'beanquery.sources.{scheme}')
-        source.attach(self, uri)
+        source.attach(self, dsn)
 
-    def parse(self, statement):
-        return parser.parse(statement)
+    def close(self):
+        # Required by the DB-API.
+        pass
 
-    def compile(self, statement):
-        return query_compile.compile(self, statement)
+    def parse(self, query):
+        return parser.parse(query)
 
-    def execute(self, statement):
-        if not isinstance(statement, parser.ast.Node):
-            statement = parser.parse(statement)
-        query = query_compile.compile(self, statement)
-        return query_execute.execute_query(query)
+    def compile(self, query):
+        return query_compile.compile(self, query)
+
+    def execute(self, query, params=None):
+        return self.cursor().execute(query, params)
+
+    def cursor(self):
+        return cursor.Cursor(self)

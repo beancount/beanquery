@@ -512,7 +512,9 @@ class BQLShell(DispatchingShell):
           CLEAR: Transfer final Income and Expenses balances to Equity.
 
         """
-        rtypes, rrows = self.context.execute(statement)
+        cursor = self.context.execute(statement)
+        rtypes = cursor.description
+        rrows = cursor.fetchall()
 
         if not rrows:
             print("(empty)", file=self.outfile)

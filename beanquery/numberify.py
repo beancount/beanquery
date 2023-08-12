@@ -65,8 +65,10 @@ from beancount.core import amount
 from beancount.core import position
 from beancount.core import inventory
 
+from .cursor import Column
 
-def numberify_results(dtypes, drows, dformat=None):
+
+def numberify_results(columns, drows, dformat=None):
     """Number rows containing Amount, Position or Inventory types.
 
     Args:
@@ -81,18 +83,17 @@ def numberify_results(dtypes, drows, dformat=None):
     """
     # Build an array of converters.
     converters = []
-    for index, col_desc in enumerate(dtypes):
-        name, dtype = col_desc
-        convert_col_fun = CONVERTING_TYPES.get(dtype, None)
+    for index, column in enumerate(columns):
+        convert_col_fun = CONVERTING_TYPES.get(column.datatype)
         if convert_col_fun is None:
-            converters.append(IdentityConverter(name, dtype, index))
+            converters.append(IdentityConverter(column.name, column.datatype, index))
         else:
-            col_converters = convert_col_fun(name, drows, index)
+            col_converters = convert_col_fun(column.name, drows, index)
             converters.extend(col_converters)
 
     # Derive the output types from the expected outputs from the converters
     # themselves.
-    otypes = [(c.name, c.dtype) for c in converters]
+    otypes = tuple(Column(c.name, c.dtype) for c in converters)
 
     # Convert the input rows by processing them through the converters.
     orows = []

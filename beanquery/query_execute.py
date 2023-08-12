@@ -10,7 +10,8 @@ import operator
 from beancount.core import display_context
 from beancount.parser import printer
 
-from beanquery import query_compile
+from . import query_compile
+from .cursor import Column
 
 
 def uniquify(iterable):
@@ -148,8 +149,8 @@ def execute_query(query):
             names = [f'{columns[col1].name}/{columns[col2].name}'] + [f'{key}/{col.name}' for key, col in it]
         else:
             names = [f'{columns[col1].name}/{columns[col2].name}'] + [f'{key}' for key in keys]
-        dtypes = [columns[col1].dtype] + [col.dtype for col in other(columns)] * len(keys)
-        columns = [Column(name, dtype) for name, dtype in zip(names, dtypes)]
+        datatypes = [columns[col1].datatype] + [col.datatype for col in other(columns)] * len(keys)
+        columns = tuple(Column(name, datatype) for name, datatype in zip(names, datatypes))
 
         # Populate the pivoted table.
         pivoted = []
@@ -167,9 +168,6 @@ def execute_query(query):
     raise RuntimeError
 
 
-Column = collections.namedtuple('Column', 'name dtype')
-
-
 def execute_select(query):
     """Given a compiled select statement, execute the query.
 
@@ -184,9 +182,9 @@ def execute_select(query):
           'result_types'.
     """
     # Figure out the result types that describe what we return.
-    result_types = [Column(target.name, target.c_expr.dtype)
-                    for target in query.c_targets
-                    if target.name is not None]
+    result_types = tuple(Column(target.name, target.c_expr.dtype)
+                         for target in query.c_targets
+                         if target.name is not None)
 
     # Pre-compute lists of the expressions to evaluate.
     group_indexes = (set(query.group_indexes)

@@ -59,3 +59,7 @@ MAP = {
     int: 'int',
     str: 'str',
 }
+
+
+def name(datatype):
+    return getattr(datatype, 'name', datatype.__name__)
