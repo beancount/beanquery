@@ -10,6 +10,7 @@ import operator
 from beancount.core import display_context
 from beancount.parser import printer
 
+from . import compiler
 from . import query_compile
 from .cursor import Column
 
@@ -225,7 +226,7 @@ def execute_select(query):
             if index in group_indexes:
                 c_nonaggregate_exprs.append(c_expr)
             else:
-                _, aggregate_exprs = query_compile.get_columns_and_aggregates(c_expr)
+                _, aggregate_exprs = compiler.get_columns_and_aggregates(c_expr)
                 c_aggregate_exprs.extend(aggregate_exprs)
         # Note: it is possible that there are no aggregates to compute here. You could
         # have all columns be non-aggregates and group-by the entire list of columns.

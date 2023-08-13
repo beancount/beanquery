@@ -5,7 +5,8 @@ import datetime
 import unittest
 from decimal import Decimal
 
-from beanquery import Connection
+from beanquery import Connection, CompilationError
+from beanquery import compiler
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import parser
@@ -24,30 +25,33 @@ class Table:
 
 class TestCompileExpression(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        context = Connection()
+        cls.compiler = compiler.Compiler(context)
+        cls.compiler.table = qe.PostingsEnvironment()
+
+    def compile(self, expr):
+        return self.compiler.compile(expr)
+
     def test_expr_invalid(self):
-        with self.assertRaises(qc.CompilationError):
-            qc.compile_expression(ast.Column('invalid'), qe.PostingsEnvironment())
+        with self.assertRaises(CompilationError):
+            self.compile(ast.Column('invalid'))
 
     def test_expr_column(self):
         self.assertEqual(
             qe.Column('filename'),
-            qc.compile_expression(
-                ast.Column('filename'),
-                qe.PostingsEnvironment()))
+            self.compile(ast.Column('filename')))
 
     def test_expr_function(self):
         self.assertEqual(
             qe.SumPosition([qe.Column('position')]),
-            qc.compile_expression(
-                ast.Function('sum', [ast.Column('position')]),
-                qe.PostingsEnvironment()))
+            self.compile(ast.Function('sum', [ast.Column('position')])))
 
     def test_expr_unaryop(self):
         self.assertEqual(
             qc.Operator(ast.Not, [qe.Column('account')]),
-            qc.compile_expression(
-                ast.Not(ast.Column('account')),
-                qe.PostingsEnvironment()))
+            self.compile(ast.Not(ast.Column('account'))))
 
     def test_expr_binaryop(self):
         self.assertEqual(
@@ -55,35 +59,40 @@ class TestCompileExpression(unittest.TestCase):
                 qe.Column('date'),
                 qc.EvalConstant(datetime.date(2014, 1, 1))
             ]),
-            qc.compile_expression(
-                ast.Equal(ast.Column('date'), ast.Constant(datetime.date(2014, 1, 1))),
-                qe.PostingsEnvironment()))
+            self.compile(ast.Equal(ast.Column('date'), ast.Constant(datetime.date(2014, 1, 1)))))
 
     def test_expr_constant(self):
         self.assertEqual(
             qc.EvalConstant(Decimal(17)),
-            qc.compile_expression(
-                ast.Constant(Decimal(17)), qe.PostingsEnvironment()))
-
-
-class TestCompileExpressionDataTypes(unittest.TestCase):
+            self.compile(ast.Constant(Decimal(17))))
 
     def test_expr_function_arity(self):
         # Compile with the correct number of arguments.
-        qc.compile_expression(ast.Function('sum', [ast.Column('number')]),
-                              qe.PostingsEnvironment())
+        self.compile(ast.Function('sum', [ast.Column('number')]))
 
         # Compile with an incorrect number of arguments.
-        with self.assertRaises(qc.CompilationError):
-            qc.compile_expression(ast.Function('sum', [ast.Column('date'),
-                                                       ast.Column('account')]),
-                                  qe.PostingsEnvironment())
+        with self.assertRaises(CompilationError):
+            self.compile(ast.Function('sum', [ast.Column('date'), ast.Column('account')]))
+
+    def test_constants_folding(self):
+        # unary op
+        self.assertEqual(
+            self.compile(ast.Neg(ast.Constant(2))),
+            qc.EvalConstant(-2))
+        # binary op
+        self.assertEqual(
+            self.compile(ast.Add(ast.Constant(2), ast.Constant(2))),
+            qc.EvalConstant(4))
+        # funtion
+        self.assertEqual(
+            self.compile(ast.Function('root', [ast.Constant('Assets:Cash'), ast.Constant(1)])),
+            qc.EvalConstant('Assets'))
 
 
 class TestCompileAggregateChecks(unittest.TestCase):
 
     def test_is_aggregate_derived(self):
-        columns, aggregates = qc.get_columns_and_aggregates(
+        columns, aggregates = compiler.get_columns_and_aggregates(
             qc.EvalAnd([
                 qc.Operator(ast.Equal, [
                     qe.Column('lineno'),
@@ -101,7 +110,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
             ]))
         self.assertEqual((2, 0), (len(columns), len(aggregates)))
 
-        columns, aggregates = qc.get_columns_and_aggregates(
+        columns, aggregates = compiler.get_columns_and_aggregates(
             qc.EvalAnd([
                 qc.Operator(ast.Equal, [
                     qe.Column('lineno'),
@@ -125,42 +134,42 @@ class TestCompileAggregateChecks(unittest.TestCase):
     def test_get_columns_and_aggregates(self):
         # Simple column.
         c_query = qe.Column('position')
-        columns, aggregates = qc.get_columns_and_aggregates(c_query)
+        columns, aggregates = compiler.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 0), (len(columns), len(aggregates)))
-        self.assertFalse(qc.is_aggregate(c_query))
+        self.assertFalse(compiler.is_aggregate(c_query))
 
         # Multiple columns.
         c_query = qc.EvalAnd([qe.Column('position'), qe.Column('date')])
-        columns, aggregates = qc.get_columns_and_aggregates(c_query)
+        columns, aggregates = compiler.get_columns_and_aggregates(c_query)
         self.assertEqual((2, 0), (len(columns), len(aggregates)))
-        self.assertFalse(qc.is_aggregate(c_query))
+        self.assertFalse(compiler.is_aggregate(c_query))
 
         # Simple aggregate.
         c_query = qe.SumPosition([qe.Column('position')])
-        columns, aggregates = qc.get_columns_and_aggregates(c_query)
+        columns, aggregates = compiler.get_columns_and_aggregates(c_query)
         self.assertEqual((0, 1), (len(columns), len(aggregates)))
-        self.assertTrue(qc.is_aggregate(c_query))
+        self.assertTrue(compiler.is_aggregate(c_query))
 
         # Multiple aggregates.
         c_query = qc.EvalAnd([qe.First([qe.Column('date')]), qe.Last([qe.Column('flag')])])
-        columns, aggregates = qc.get_columns_and_aggregates(c_query)
+        columns, aggregates = compiler.get_columns_and_aggregates(c_query)
         self.assertEqual((0, 2), (len(columns), len(aggregates)))
-        self.assertTrue(qc.is_aggregate(c_query))
+        self.assertTrue(compiler.is_aggregate(c_query))
 
         # Simple non-aggregate function.
         c_query = qe.Function('length', [qe.Column('account')])
-        columns, aggregates = qc.get_columns_and_aggregates(c_query)
+        columns, aggregates = compiler.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 0), (len(columns), len(aggregates)))
-        self.assertFalse(qc.is_aggregate(c_query))
+        self.assertFalse(compiler.is_aggregate(c_query))
 
         # Mix of column and aggregates (this is used to detect this illegal case).
         c_query = qc.EvalAnd([
             qe.Function('length', [qe.Column('account')]),
             qe.SumPosition([qe.Column('position')]),
         ])
-        columns, aggregates = qc.get_columns_and_aggregates(c_query)
+        columns, aggregates = compiler.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 1), (len(columns), len(aggregates)))
-        self.assertTrue(qc.is_aggregate(c_query))
+        self.assertTrue(compiler.is_aggregate(c_query))
 
 
 class CompileSelectBase(unittest.TestCase):
@@ -197,7 +206,7 @@ class CompileSelectBase(unittest.TestCase):
         if query.group_indexes is not None:
             non_aggregate_indexes = [index
                                      for index, c_target in enumerate(query.c_targets)
-                                     if not qc.is_aggregate(c_target.c_expr)]
+                                     if not compiler.is_aggregate(c_target.c_expr)]
 
             self.assertEqual(set(non_aggregate_indexes), set(query.group_indexes),
                              "Invalid indexes: {}".format(query))
@@ -222,10 +231,10 @@ class CompileSelectBase(unittest.TestCase):
         # Compute the list of _visible_ aggregates and non-aggregates.
         simple_indexes = [index
                           for index, c_target in enumerate(query.c_targets)
-                          if c_target.name and not qc.is_aggregate(c_target.expression)]
+                          if c_target.name and not compiler.is_aggregate(c_target.expression)]
         aggregate_indexes = [index
                              for index, c_target in enumerate(query.c_targets)
-                             if c_target.name and qc.is_aggregate(c_target.expression)]
+                             if c_target.name and compiler.is_aggregate(c_target.expression)]
 
         self.assertEqual(set(expected_simple_indexes), set(simple_indexes))
 
@@ -297,7 +306,7 @@ class TestCompileFundamentals(CompileSelectBase):
                 ]), 'expr', False)
         ], None, None, None, None, None, None))
 
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("SELECT coalesce(narration, date, 1)")
 
 
@@ -312,7 +321,7 @@ class TestCompileSelect(CompileSelectBase):
         query = self.compile("SELECT account FROM length(payee) != 0;")
         self.assertTrue(isinstance(query.c_where, qc.EvalNode))
 
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             query = self.compile("SELECT account FROM sum(payee) != 0;")
 
     def test_compile_from_invalid_dates(self):
@@ -324,7 +333,7 @@ class TestCompileSelect(CompileSelectBase):
           SELECT account FROM  OPEN ON 2014-03-02  CLOSE ON 2014-03-02;
         """)
 
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT account FROM  OPEN ON 2014-03-03  CLOSE ON 2014-03-02;
             """)
@@ -348,7 +357,7 @@ class TestCompileSelect(CompileSelectBase):
 
     def test_compile_mixed_aggregates(self):
         # Check mixed aggregates and non-aggregates in a target.
-        with self.assertRaises(qc.CompilationError) as assertion:
+        with self.assertRaises(CompilationError) as assertion:
             self.compile("""
               SELECT length(account) and sum(length(account));
             """)
@@ -356,21 +365,21 @@ class TestCompileSelect(CompileSelectBase):
 
     def test_compile_aggregates_of_aggregates(self):
         # Check mixed aggregates and non-aggregates in a target.
-        with self.assertRaises(qc.CompilationError) as assertion:
+        with self.assertRaises(CompilationError) as assertion:
             self.compile("""
               SELECT sum(sum(length(account)));
             """)
         self.assertRegex(str(assertion.exception), 'aggregates of aggregates')
 
     def test_compile_having_non_aggregate(self):
-        with self.assertRaises(qc.CompilationError) as assertion:
+        with self.assertRaises(CompilationError) as assertion:
             self.compile("""
               SELECT account, sum(number) GROUP BY account HAVING flag;
             """)
         self.assertRegex(str(assertion.exception), 'the HAVING clause must be an aggregate')
 
     def test_compile_group_by_inventory(self):
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT sum(number), balance GROUP BY balance;
             """)
@@ -383,7 +392,7 @@ class TestCompileSelectGroupBy(CompileSelectBase):
           SELECT payee GROUP BY payee, length(account);
         """)
 
-        with self.assertRaises(qc.CompilationError) as assertion:
+        with self.assertRaises(CompilationError) as assertion:
             self.compile("""
               SELECT payee GROUP BY payee, last(account);
             """)
@@ -403,7 +412,7 @@ class TestCompileSelectGroupBy(CompileSelectBase):
           SELECT payee, last(account) as len GROUP BY payee, date;
         """)
 
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT payee, last(account) as len GROUP BY something;
             """)
@@ -413,30 +422,30 @@ class TestCompileSelectGroupBy(CompileSelectBase):
           SELECT date, payee, narration GROUP BY 1, 2, 3;
         """)
 
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT date, payee, narration GROUP BY 1, 2, 3, 4;
             """)
 
     def test_compile_group_by_reference_an_aggregate(self):
         # By name.
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT payee, last(account) as last GROUP BY last;
             """)
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT account, sum(number) as sum_num GROUP BY account, sum_num;
             """)
 
         # By number.
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT payee, last(account) as last GROUP BY 2;
             """)
 
         # Explicit aggregate in group-by clause.
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT account, sum(number) GROUP BY account, sum(number);
             """)
@@ -473,18 +482,18 @@ class TestCompileSelectGroupBy(CompileSelectBase):
         self.assertEqual([0, 2], query.group_indexes)
 
         # Non-aggregates not covered by group-by clause.
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT account, date, sum(number) GROUP BY account;
             """)
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT payee, last(account) as len GROUP BY date;
             """)
 
         # Non-aggregates not covered by group-by clause, and no aggregates in
         # the list of targets.
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT date, flag, account, number GROUP BY date, flag;
             """)
@@ -528,12 +537,12 @@ class TestCompileSelectOrderBy(CompileSelectBase):
         self.assertEqual([(1, False)], query.order_spec)
 
     def test_compile_order_by_create_non_agg(self):
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT account, last(narration) GROUP BY account ORDER BY year(date);
             """)
 
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             self.compile("""
               SELECT account GROUP BY account ORDER BY year(date);
             """)
@@ -605,7 +614,7 @@ class TestTranslationJournal(CompileSelectBase):
 
     def test_journal(self):
         journal = parser.parse("JOURNAL;")
-        select = qc.transform_journal(journal)
+        select = compiler.transform_journal(journal)
         self.assertEqual(select,
             ast.Select([
                 ast.Target(ast.Column('date'), None),
@@ -622,7 +631,7 @@ class TestTranslationJournal(CompileSelectBase):
 
     def test_journal_with_account(self):
         journal = parser.parse("JOURNAL 'liabilities';")
-        select = qc.transform_journal(journal)
+        select = compiler.transform_journal(journal)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('date'), None),
             ast.Target(ast.Column('flag'), None),
@@ -642,7 +651,7 @@ class TestTranslationJournal(CompileSelectBase):
 
     def test_journal_with_account_and_from(self):
         journal = parser.parse("JOURNAL 'liabilities' FROM year = 2014;")
-        select = qc.transform_journal(journal)
+        select = compiler.transform_journal(journal)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('date'), None),
             ast.Target(ast.Column('flag'), None),
@@ -662,7 +671,7 @@ class TestTranslationJournal(CompileSelectBase):
 
     def test_journal_with_account_func_and_from(self):
         journal = parser.parse("JOURNAL 'liabilities' AT cost FROM year = 2014;")
-        select = qc.transform_journal(journal)
+        select = compiler.transform_journal(journal)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('date'), None),
             ast.Target(ast.Column('flag'), None),
@@ -692,7 +701,7 @@ class TestTranslationBalance(CompileSelectBase):
 
     def test_balance(self):
         balance = parser.parse("BALANCES;")
-        select = qc.transform_balances(balance)
+        select = compiler.transform_balances(balance)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('account'), None),
             ast.Target(ast.Function('sum', [
@@ -703,7 +712,7 @@ class TestTranslationBalance(CompileSelectBase):
 
     def test_balance_with_units(self):
         balance = parser.parse("BALANCES AT cost;")
-        select = qc.transform_balances(balance)
+        select = compiler.transform_balances(balance)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('account'), None),
             ast.Target(ast.Function('sum', [
@@ -716,7 +725,7 @@ class TestTranslationBalance(CompileSelectBase):
 
     def test_balance_with_units_and_from(self):
         balance = parser.parse("BALANCES AT cost FROM year = 2014;")
-        select = qc.transform_balances(balance)
+        select = compiler.transform_balances(balance)
         self.assertEqual(select, ast.Select([
             ast.Target(ast.Column('account'), None),
             ast.Target(ast.Function('sum', [
@@ -740,23 +749,3 @@ class TestTranslationBalance(CompileSelectBase):
                     qc.EvalConstant(2014),
                 ])),
             "PRINT FROM year = 2014;")
-
-
-class TestCompileConstantsFolding(unittest.TestCase):
-
-    def compile(self, expr):
-        return qc.compile_expression(expr, qe.PostingsEnvironment())
-
-    def test_constants_folding(self):
-        # unary op
-        self.assertEqual(
-            self.compile(ast.Neg(ast.Constant(2))),
-            qc.EvalConstant(-2))
-        # binary op
-        self.assertEqual(
-            self.compile(ast.Add(ast.Constant(2), ast.Constant(2))),
-            qc.EvalConstant(4))
-        # funtion
-        self.assertEqual(
-            self.compile(ast.Function('root', [ast.Constant('Assets:Cash'), ast.Constant(1)])),
-            qc.EvalConstant('Assets'))
