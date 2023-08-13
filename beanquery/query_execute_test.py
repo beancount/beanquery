@@ -14,6 +14,7 @@ from beancount.core.inventory import from_string as I
 from beancount.parser import cmptest
 from beancount import loader
 
+from beanquery import CompilationError
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query_execute as qx
@@ -107,7 +108,7 @@ class TestFundamentals(QueryBase):
         self.assertEqual(curs.fetchall(), [(result, )])
 
     def assertError(self, query):
-        with self.assertRaises(qc.CompilationError):
+        with self.assertRaises(CompilationError):
             dtypes, rows = self.ctx.execute(query)
 
     def test_type_casting(self):

@@ -3,12 +3,12 @@ import importlib
 from urllib.parse import urlparse
 
 from . import parser
-from . import query_compile
+from . import compiler
 from . import tables
 from . import cursor
 
 from .parser import ParseError  # noqa: F401
-from .query_compile import CompilationError  # noqa: F401
+from .compiler import CompilationError  # noqa: F401
 
 
 __version__ = '0.1.dev0'
@@ -39,7 +39,7 @@ class Connection:
         return parser.parse(query)
 
     def compile(self, query):
-        return query_compile.compile(self, query)
+        return compiler.compile(self, query)
 
     def execute(self, query, params=None):
         return self.cursor().execute(query, params)

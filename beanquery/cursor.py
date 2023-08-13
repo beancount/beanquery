@@ -3,7 +3,7 @@ from typing import Sequence
 
 from . import types
 from . import parser
-from . import query_compile
+from . import compiler
 from . import query_execute
 
 
@@ -89,7 +89,7 @@ class Cursor:
     def execute(self, query, params=None):
         if not isinstance(query, parser.ast.Node):
             query = parser.parse(query)
-        query = query_compile.compile(self._context, query)
+        query = compiler.compile(self._context, query)
         description, rows = query_execute.execute_query(query)
         self._description = description
         self._rows = rows
