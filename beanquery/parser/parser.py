@@ -930,8 +930,8 @@ class BQLParser(Parser):
             self._error(
                 'expecting one of: '
                 "'SELECT' <atom> <attribute> <column>"
-                '<constant> <function> <primary> <select>'
-                '<subscript>'
+                '<constant> <function> <placeholder>'
+                '<primary> <select> <subscript>'
             )
 
     @tatsumasu('Attribute')
@@ -974,12 +974,41 @@ class BQLParser(Parser):
                 self._constant_()
             with self._option():
                 self._column_()
+            with self._option():
+                self._placeholder_()
             self._error(
                 'expecting one of: '
-                "'SELECT' <boolean> <column> <constant>"
-                '<date> <decimal> <function> <identifier>'
-                '<integer> <list> <literal> <null>'
-                '<select> <string>'
+                "'%(' '%s' 'SELECT' <boolean> <column>"
+                '<constant> <date> <decimal> <function>'
+                '<identifier> <integer> <list> <literal>'
+                '<null> <placeholder> <select> <string>'
+            )
+
+    @tatsumasu('Placeholder')
+    def _placeholder_(self):  # noqa
+        with self._choice():
+            with self._option():
+                self._token('%s')
+                self._constant('')
+                self.name_last_node('name')
+
+                self._define(
+                    ['name'],
+                    []
+                )
+            with self._option():
+                self._token('%(')
+                self._identifier_()
+                self.name_last_node('name')
+                self._token(')s')
+
+                self._define(
+                    ['name'],
+                    []
+                )
+            self._error(
+                'expecting one of: '
+                "'%(' '%s'"
             )
 
     @tatsumasu('Function')
@@ -1360,6 +1389,9 @@ class BQLSemantics:
         return ast
 
     def atom(self, ast):  # noqa
+        return ast
+
+    def placeholder(self, ast):  # noqa
         return ast
 
     def function(self, ast):  # noqa

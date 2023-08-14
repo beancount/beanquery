@@ -26,6 +26,16 @@ def tosexp(node):
     return repr(node)
 
 
+def walk(node):
+    if isinstance(node, Node):
+        for name, child in _fields(node):
+            yield from walk(child)
+        yield node
+    if isinstance(node, list):
+        for child in node:
+            yield from walk(child)
+
+
 class Node:
     """Base class for BQL AST nodes."""
     __slots__ = ()
@@ -40,6 +50,9 @@ class Node:
 
     def tosexp(self):
         return tosexp(self)
+
+    def walk(self):
+        return walk(self)
 
 
 def node(name, fields):
@@ -176,6 +189,12 @@ Subscript = node('Subscript', 'operand key')
 # Attributes:
 #   value: The constant value this represents.
 Constant = node('Constant', 'value')
+
+# A query parameter placeholder.
+#
+# Attributes:
+#   name: The placeholder name
+Placeholder = node('Placeholder', 'name')
 
 # Base class for unary operators.
 #

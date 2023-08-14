@@ -248,6 +248,13 @@ atom
     | function
     | constant
     | column
+    | placeholder
+    ;
+
+placeholder::Placeholder
+    =
+    | '%s' name:``
+    | '%(' name:identifier ')s'
     ;
 
 function::Function
