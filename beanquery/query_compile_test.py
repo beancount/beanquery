@@ -5,13 +5,14 @@ import datetime
 import unittest
 from decimal import Decimal
 
-from beanquery import Connection, CompilationError
+from beanquery import Connection, CompilationError, ProgrammingError
 from beanquery import compiler
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import parser
 from beanquery import tables
 from beanquery.parser import ast
+
 
 class Table:
     def __init__(self, name):
@@ -749,3 +750,43 @@ class TestTranslationBalance(CompileSelectBase):
                     qc.EvalConstant(2014),
                 ])),
             "PRINT FROM year = 2014;")
+
+
+class TestCompileParameters(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.context = Connection()
+
+    def compile(self, query, params):
+        c = compiler.Compiler(self.context)
+        c.table = self.context.tables.get('')
+        return c.compile(parser.parse(query), params)
+
+    def test_named_parameters(self):
+        query = self.compile('''SELECT %(x)s + %(y)s''', {'x': 1, 'y': 2})
+        self.assertEqual(query, qc.EvalQuery(
+            Table(''), [
+                # addition of constants is optimized away
+                qc.EvalTarget(qc.EvalConstant(3), '%(x)s + %(y)s', False)
+            ], None, None, None, None, None, None))
+
+    def test_positional_parameters(self):
+        query = self.compile('''SELECT %s + %s''', (1, 2, ))
+        self.assertEqual(query, qc.EvalQuery(
+            Table(''), [
+                # addition of constants is optimized away
+                qc.EvalTarget(qc.EvalConstant(3), '%s + %s', False)
+            ], None, None, None, None, None, None))
+
+    def test_mixing_parameters(self):
+        with self.assertRaises(ProgrammingError):
+            self.compile('''SELECT %s + %(foo)s''', (1, 2))
+
+    def test_missing_parameters_positional(self):
+        with self.assertRaises(ProgrammingError):
+            self.compile('''SELECT %s + %s''', (1, ))
+
+    def test_missing_parameters_named(self):
+        with self.assertRaises(ProgrammingError):
+            self.compile('''SELECT %(x)s + %(y)s''', {'x': 1})

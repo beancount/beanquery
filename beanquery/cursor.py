@@ -89,7 +89,7 @@ class Cursor:
     def execute(self, query, params=None):
         if not isinstance(query, parser.ast.Node):
             query = parser.parse(query)
-        query = compiler.compile(self._context, query)
+        query = compiler.compile(self._context, query, params)
         description, rows = query_execute.execute_query(query)
         self._description = description
         self._rows = rows
@@ -97,6 +97,7 @@ class Cursor:
         return self
 
     def executemany(self, query, params=None):
+        query = parser.parse(query)
         for p in params:
             self.execute(query, p)
 

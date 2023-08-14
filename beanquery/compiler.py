@@ -2,7 +2,7 @@ import collections.abc
 
 from decimal import Decimal
 from functools import singledispatchmethod
-from typing import Optional
+from typing import Optional, Sequence, Mapping
 
 from . import types
 from . import parser
@@ -44,8 +44,30 @@ class Compiler:
         self.context = context
         self.table = context.tables.get('postings')
 
-    def compile(self, query):
+    def compile(self, query, parameters=None):
         """Compile an AST into an executable statement."""
+        self.parameters = parameters
+
+        placeholders = [node for node in query.walk() if isinstance(node, ast.Placeholder)]
+        if placeholders:
+            names = {placeholder.name for placeholder in placeholders}
+            if all(names):
+                if not isinstance(parameters, Mapping):
+                    raise TypeError('query parameters should be a mapping when using named placeholders')
+                if names - parameters.keys():
+                    missing = ', '.join(sorted(names - parameters.keys()))
+                    raise ProgrammingError(f'query parameter missing: {missing}')
+            elif not any(names):
+                if not isinstance(parameters, Sequence):
+                    raise TypeError('query parameters should be a sequence when using positional placeholders')
+                if len(placeholders) != len(parameters):
+                    raise ProgrammingError(
+                        f'the query has {len(placeholders)} placeholders but {len(parameters)} parameters were passed')
+                for i, placeholder in enumerate(sorted(placeholders, key=lambda node: node.parseinfo.pos)):
+                    placeholder.name = i
+            else:
+                raise ProgrammingError('positional and named parameters cannot be mixed')
+
         return self._compile(query)
 
     @singledispatchmethod
@@ -551,6 +573,10 @@ class Compiler:
         return EvalConstant(node.value)
 
     @_compile.register
+    def _placeholder(self, node: ast.Placeholder):
+        return EvalConstant(self.parameters[node.name])
+
+    @_compile.register
     def _asterisk(self, node: ast.Asterisk):
         return EvalConstant(None, dtype=types.Asterisk)
 
@@ -697,5 +723,5 @@ def is_aggregate(node):
     return bool(aggregates)
 
 
-def compile(context, statement):
-    return Compiler(context).compile(statement)
+def compile(context, statement, parameters=None):
+    return Compiler(context).compile(statement, parameters)

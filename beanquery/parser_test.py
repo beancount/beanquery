@@ -624,6 +624,11 @@ class TestRepr(unittest.TestCase):
                     name: 'b')
                   ordering: desc)))'''))
 
+    def test_walk(self):
+        query = parser.parse('SELECT a + 1 FROM #test WHERE a > %(foo)s ORDER BY b DESC')
+        placeholders = [node for node in query.walk() if isinstance(node, ast.Placeholder)]
+        self.assertEqual(placeholders, [ast.Placeholder(name='foo')])
+
 
 class TestNodeText(unittest.TestCase):
 
