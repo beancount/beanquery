@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from beancount.core.number import D
 from beancount.parser import parser
+from beancount import loader
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query
@@ -200,6 +201,40 @@ class TestEnv(unittest.TestCase):
         rtypes, rrows = query.run_query(entries, options_map,
                                         'SELECT date_add(date, -1) as m')
         self.assertEqual([(datetime.date(2016, 11, 19),)], rrows)
+
+    def test_func_meta(self):
+        # use the loader to have the pad transaction inserted
+        entries, _, options = loader.load_string('''
+          2019-01-01 open Assets:Main USD
+          2019-01-01 open Assets:Other USD
+          2019-01-14 * "Test"
+            entry: 1
+            both: 3
+            Assets:Main  100.00 USD
+              post: 2
+              both: 3
+            Assets:Other
+              post: 4
+          2019-01-15 pad Assets:Main Assets:Other
+          2019-01-16 balance Assets:Main 1000.00 USD
+        ''', dedent=True)
+        rtypes, rrows = query.run_query(entries, options, '''
+          SELECT
+            entry_meta('post'),
+            meta('post'),
+            any_meta('post'),
+            entry_meta('entry'),
+            meta('entry'),
+            any_meta('entry'),
+            any_meta('both')
+        ''')
+        self.assertEqual([
+            (None, D(2), D(2), D(1), None, D(1), D(3)),
+            (None, D(4), D(4), D(1), None, D(1), D(3)),
+            # postings from pad directive
+            (None, None, None, None, None, None, None),
+            (None, None, None, None, None, None, None),
+        ], rrows)
 
 
 if __name__ == '__main__':
