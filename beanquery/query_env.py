@@ -320,7 +320,9 @@ def meta(context, key):
     """Get some metadata key of the Posting."""
     try:
         return context.posting.meta[key]
-    except (AttributeError, KeyError):
+    # Postings for pad transactions have their meta fields set to
+    # None. See https://github.com/beancount/beancount/issues/767
+    except (AttributeError, KeyError, TypeError):
         pass
     return None
 
@@ -340,7 +342,9 @@ def any_meta(context, key):
     """Get metadata from the posting or its parent transaction's metadata if not present."""
     try:
         return context.posting.meta[key]
-    except (AttributeError, KeyError):
+    # Postings for pad transactions have their meta fields set to
+    # None. See https://github.com/beancount/beancount/issues/767
+    except (AttributeError, KeyError, TypeError):
         pass
     try:
         return context.entry.meta[key]
