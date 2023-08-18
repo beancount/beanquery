@@ -297,6 +297,11 @@ def match_(x, y):
     return bool(re.search(y, x, re.IGNORECASE))
 
 
+@binaryop(ast.NotMatch, [str, str], bool)
+def not_match_(x, y):
+    return not bool(re.search(y, x, re.IGNORECASE))
+
+
 @binaryop(ast.In, [types.Any, set], bool)
 @binaryop(ast.In, [types.Any, list], bool)
 @binaryop(ast.In, [types.Any, dict], bool)

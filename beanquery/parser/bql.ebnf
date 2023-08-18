@@ -112,6 +112,7 @@ comparison
     | in
     | notin
     | match
+    | notmatch
     | isnull
     | isnotnull
     | between
@@ -152,6 +153,10 @@ notin::NotIn::BinaryOp
 
 match::Match::BinaryOp
     = left:sum '~' right:sum
+    ;
+
+notmatch::NotMatch::BinaryOp
+    = left:sum '!~' right:sum
     ;
 
 isnull::IsNull::UnaryOp
