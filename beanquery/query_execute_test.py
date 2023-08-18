@@ -237,6 +237,10 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 'foobarbaz' ~ 'bar'", True)
         self.assertResult("SELECT 'foobarbaz' ~ 'quz'", False)
 
+        # mot match
+        self.assertResult("SELECT 'foobarbaz' !~ 'bar'", False)
+        self.assertResult("SELECT 'foobarbaz' !~ 'quz'", True)
+
         # and
         self.assertResult("SELECT 1 and FALSE", False)
         self.assertResult("SELECT 'something' and FALSE", False)
