@@ -20,6 +20,7 @@ exclude = [
 ]
 
 line-length = 128
+target-version = 'py38'
 
 [per-file-ignores]
 'beanquery/query_env.py' = ['F811']
