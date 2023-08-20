@@ -12,8 +12,6 @@ ParseError = tatsu.exceptions.ParseError
 
 
 class BQLSemantics:
-    def __init__(self, default_close_date=None):
-        self.default_close_date = default_close_date
 
     def set_context(self, ctx):
         self._ctx = ctx
@@ -61,4 +59,4 @@ class BQLSemantics:
 
 
 def parse(text, default_close_date=None):
-    return parser.BQLParser().parse(text, semantics=BQLSemantics(default_close_date))
+    return parser.BQLParser().parse(text, semantics=BQLSemantics())
