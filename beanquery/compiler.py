@@ -85,7 +85,7 @@ class Compiler:
                 self.table = self.table.update(**c_from._asdict())
 
         # Compile the targets.
-        c_targets = self._compile_targets(node.targets, self.table)
+        c_targets = self._compile_targets(node.targets)
 
         # Bind the WHERE expression to the execution environment.
         c_where = self._compile(node.where_clause)
@@ -101,15 +101,11 @@ class Compiler:
             c_where = c_from_expr if c_where is None else EvalAnd([c_from_expr, c_where])
 
         # Process the GROUP-BY clause.
-        new_targets, group_indexes, having_index = self._compile_group_by(node.group_by,
-                                                                          c_targets,
-                                                                          self.table)
+        new_targets, group_indexes, having_index = self._compile_group_by(node.group_by, c_targets)
         c_targets.extend(new_targets)
 
         # Process the ORDER-BY clause.
-        new_targets, order_spec = self._compile_order_by(node.order_by,
-                                                         c_targets,
-                                                         self.table)
+        new_targets, order_spec = self._compile_order_by(node.order_by, c_targets)
         c_targets.extend(new_targets)
 
         # If this is an aggregate query (it groups, see list of indexes), check that
@@ -169,12 +165,11 @@ class Compiler:
 
         return c_from, c_expression
 
-    def _compile_targets(self, targets, environ):
+    def _compile_targets(self, targets):
         """Compile the targets and check for their validity. Process wildcard.
 
         Args:
           targets: A list of target expressions from the parser.
-          environ: A compilation context for the targets.
         Returns:
           A list of compiled target expressions with resolved names.
         """
@@ -182,7 +177,7 @@ class Compiler:
         if isinstance(targets, ast.Asterisk):
             # Insert the full list of available columns.
             targets = [ast.Target(ast.Column(name), None)
-                       for name in environ.wildcard_columns]
+                       for name in self.table.wildcard_columns]
 
         # Compile targets.
         c_targets = []
@@ -205,13 +200,12 @@ class Compiler:
 
         return c_targets
 
-    def _compile_order_by(self, order_by, c_targets, environ):
+    def _compile_order_by(self, order_by, c_targets):
         """Process an order-by clause.
 
         Args:
           order_by: A OrderBy instance as provided by the parser.
           c_targets: A list of compiled target expressions.
-          environ: A compilation context to be used to evaluate ORDER BY expressions.
         Returns:
           A tuple of
            new_targets: A list of new compiled target nodes.
@@ -318,13 +312,12 @@ class Compiler:
 
         return indexes
 
-    def _compile_group_by(self, group_by, c_targets, environ):
+    def _compile_group_by(self, group_by, c_targets):
         """Process a group-by clause.
 
         Args:
           group_by: A GroupBy instance as provided by the parser.
           c_targets: A list of compiled target expressions.
-          environ: A compilation context to be used to evaluate GROUP BY expressions.
         Returns:
           A tuple of
            new_targets: A list of new compiled target nodes.
