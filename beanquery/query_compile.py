@@ -520,15 +520,6 @@ class SubqueryTable(tables.Table):
 EvalTarget = collections.namedtuple('EvalTarget', 'c_expr name is_aggregate')
 
 
-# A compile FROM clause.
-#
-# Attributes:
-#   open:
-#   close:
-#   clear: See ast.From attributes description.
-EvalFrom = collections.namedtuple('EvalFrom', 'open close clear')
-
-
 # A compiled query, ready for execution.
 #
 # Attributes:

@@ -14,7 +14,6 @@ from .query_compile import (
     EvalCoalesce,
     EvalColumn,
     EvalConstant,
-    EvalFrom,
     EvalGetItem,
     EvalGetter,
     EvalOr,
@@ -44,6 +43,7 @@ class CompilationError(Exception):
 class Compiler:
     def __init__(self, context):
         self.context = context
+        self.table = context.tables.get('postings')
 
     def compile(self, query):
         """Compile an AST into an executable statement."""
@@ -59,30 +59,7 @@ class Compiler:
     def _select(self, node: ast.Select):
 
         # Compile the FROM clause.
-        if node.from_clause is None:
-            # Implicit table reference.
-            self.table = self.context.tables.get('postings')
-            c_from_expr = None
-
-        elif isinstance(node.from_clause, ast.Select):
-            # Subquery.
-            self.table = SubqueryTable(self._compile(node.from_clause))
-            c_from_expr = None
-
-        elif isinstance(node.from_clause, ast.Table):
-            # Table reference.
-            self.table = self.context.tables.get(node.from_clause.name)
-            if self.table is None:
-                raise CompilationError(f'table "{node.from_clause.name}" does not exist', node.from_clause)
-            c_from_expr = None
-
-        else:
-            # FROM expression. FROM expressions filter transactions thus
-            # use the columns definitions for the ``entries`` table.
-            self.table = self.context.tables.get('postings')
-            c_from, c_from_expr = self._compile_from(node.from_clause, self.context.tables.get('entries'))
-            if c_from is not None:
-                self.table = self.table.update(**c_from._asdict())
+        c_from_expr = self._compile_from(node.from_clause)
 
         # Compile the targets.
         c_targets = self._compile_targets(node.targets)
@@ -138,32 +115,39 @@ class Compiler:
 
         return query
 
-    def _compile_from(self, from_clause, environ):
-        """Compiled a FROM clause as provided by the parser, in the given environment.
+    def _compile_from(self, node):
+        if node is None:
+            return None
 
-        Args:
-          from_clause: An instance of ast.From.
-          environ: Environment.
-        Returns:
-          An tuple of EvalFrom and EvalNode instances.
-        """
-        if from_clause is None:
-            return None, None
+        # Subquery.
+        if isinstance(node, ast.Select):
+            self.table = SubqueryTable(self._compile(node))
+            return None
 
-        c_expression = self._compile(from_clause.expression)
+        # Table reference.
+        if isinstance(node, ast.Table):
+            self.table = self.context.tables.get(node.name)
+            if self.table is None:
+                raise CompilationError(f'table "{node.name}" does not exist', node)
+            return None
 
-        # Check that the FROM clause does not contain aggregates.
-        if c_expression is not None and is_aggregate(c_expression):
-            raise CompilationError('aggregates are not allowed in FROM clause')
+        # FROM expression.
+        if isinstance(node, ast.From):
+            c_expression = self._compile(node.expression)
 
-        if (isinstance(from_clause.open, datetime.date) and
-            isinstance(from_clause.close, datetime.date) and
-            from_clause.open > from_clause.close):
-            raise CompilationError('CLOSE date must follow OPEN date')
+            # Check that the FROM clause does not contain aggregates.
+            if c_expression is not None and is_aggregate(c_expression):
+                raise CompilationError('aggregates are not allowed in FROM clause')
 
-        c_from = EvalFrom(from_clause.open, from_clause.close, from_clause.clear)
+            if node.open and node.close and node.open > node.close:
+                raise CompilationError('CLOSE date must follow OPEN date')
 
-        return c_from, c_expression
+            # Apply OPEN, CLOSE, and CLEAR clauses.
+            self.table = self.table.update(open=node.open, close=node.close, clear=node.clear)
+
+            return c_expression
+
+        raise NotImplementedError
 
     def _compile_targets(self, targets):
         """Compile the targets and check for their validity. Process wildcard.
@@ -582,9 +566,7 @@ class Compiler:
     @_compile.register
     def _print(self, node: ast.Print):
         self.table = self.context.tables.get('entries')
-        c_from, expr = self._compile_from(node.from_clause, self.table)
-        if c_from is not None:
-            self.table = self.table.update(**c_from._asdict())
+        expr = self._compile_from(node.from_clause)
         return EvalPrint(self.table, expr)
 
 
