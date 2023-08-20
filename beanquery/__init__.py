@@ -20,7 +20,7 @@ def connect(dsn=None):
 
 class Connection:
     def __init__(self, dsn=None):
-        self.tables = {None: tables.NullTable()}
+        self.tables = {'': tables.NullTable()}
         self.options = {}
         self.errors = []
         if dsn is not None:

@@ -1,6 +1,6 @@
 class Table:
     columns = {}
-    name = None
+    name = ''
 
     def __getitem__(self, name):
         return self.columns[name]
