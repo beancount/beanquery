@@ -293,9 +293,24 @@ class BQLParser(Parser):
     @tatsumasu('Table')
     def _table_(self):  # noqa
         self._token('#')
-        with self._optional():
-            self._identifier_()
-            self.name_last_node('name')
+        with self._group():
+            with self._choice():
+                with self._option():
+                    self._identifier_()
+                    self.name_last_node('name')
+                with self._option():
+                    self._empty_closure()
+                    self._constant('')
+                    self.name_last_node('name')
+
+                    self._define(
+                        ['name'],
+                        []
+                    )
+                self._error(
+                    'expecting one of: '
+                    '<identifier>'
+                )
 
         self._define(
             ['name'],

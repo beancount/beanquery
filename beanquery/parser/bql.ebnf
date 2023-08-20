@@ -42,7 +42,7 @@ from::From
     ;
 
 table::Table
-    = '#' [name:identifier]
+    = '#' (name:identifier | {} name:``)
     ;
 
 groupby::GroupBy
