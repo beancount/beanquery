@@ -48,7 +48,7 @@ class BQLSemantics:
 
     def from_(self, value, typename):
         if value['expression'] is None and value['open'] is None and value['close'] is None and value['clear_'] is None:
-            self._ctx._error('Empty FROM expression is not allowed')
+            self._ctx._error('empty FROM expression is not allowed')
         return self._default(value, typename)
 
     def _default(self, value, typename=None):
