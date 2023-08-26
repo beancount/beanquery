@@ -58,5 +58,5 @@ class BQLSemantics:
         return value
 
 
-def parse(text, default_close_date=None):
+def parse(text):
     return parser.BQLParser().parse(text, semantics=BQLSemantics())
