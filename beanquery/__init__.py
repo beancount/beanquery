@@ -5,10 +5,12 @@ from urllib.parse import urlparse
 from . import parser
 from . import compiler
 from . import tables
-from . import cursor
 
-from .parser import ParseError  # noqa: F401
-from .compiler import CompilationError  # noqa: F401
+from .compiler import CompilationError
+from .cursor import Cursor, Column
+from .errors import Warning, Error, InterfaceError, DatabaseError, DataError, OperationalError
+from .errors import IntegrityError, InternalError, ProgrammingError, NotSupportedError
+from .parser import ParseError
 
 
 __version__ = '0.1.dev0'
@@ -45,4 +47,24 @@ class Connection:
         return self.cursor().execute(query, params)
 
     def cursor(self):
-        return cursor.Cursor(self)
+        return Cursor(self)
+
+
+__all__ = [
+    'Column',
+    'CompilationError',
+    'Connection',
+    'Cursor',
+    'DataError',
+    'DatabaseError',
+    'Error',
+    'IntegrityError',
+    'InterfaceError',
+    'InternalError',
+    'NotSupportedError',
+    'OperationalError',
+    'ParseError',
+    'ProgrammingError',
+    'Warning',
+    'connet',
+]
