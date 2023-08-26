@@ -446,8 +446,7 @@ def render_rows(rows, renderers, ctx):
                     cell.extend([''] * (nlines - len(cell)))
 
             # Yield the obtained rows.
-            for x in zip(*cells):
-                yield x
+            yield from zip(*cells)
 
         # Add spacing row when needed.
         if ctx.spaced:
