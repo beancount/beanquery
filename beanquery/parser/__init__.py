@@ -3,12 +3,9 @@ import decimal
 
 import tatsu
 
+from ..errors import ProgrammingError
 from . import ast
 from . import parser
-
-
-# Convenience alias. Mostly to encapsulate the parser implementation.
-ParseError = tatsu.exceptions.ParseError
 
 
 class BQLSemantics:
@@ -58,5 +55,16 @@ class BQLSemantics:
         return value
 
 
+class ParseError(ProgrammingError):
+    def __init__(self, parseinfo):
+        super().__init__('syntax error')
+        self.parseinfo = parseinfo
+
+
 def parse(text):
-    return parser.BQLParser().parse(text, semantics=BQLSemantics())
+    try:
+        return parser.BQLParser().parse(text, semantics=BQLSemantics())
+    except tatsu.exceptions.ParseError as exc:
+        line = exc.tokenizer.line_info(exc.pos).line
+        parseinfo = tatsu.infos.ParseInfo(exc.tokenizer, exc.item, exc.pos, exc.pos + 1, line, [])
+        raise ParseError(parseinfo) from None
