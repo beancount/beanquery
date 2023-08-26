@@ -6,6 +6,7 @@ from typing import Optional
 
 from . import types
 from . import parser
+from .errors import ProgrammingError
 from .parser import ast
 
 from .query_compile import (
@@ -32,9 +33,7 @@ from .query_compile import (
 SUPPORT_IMPLICIT_GROUPBY = True
 
 
-class CompilationError(Exception):
-    """A compiler/interpreter error."""
-
+class CompilationError(ProgrammingError):
     def __init__(self, message, ast=None):
         super().__init__(message)
         self.parseinfo = ast.parseinfo if ast is not None else None
