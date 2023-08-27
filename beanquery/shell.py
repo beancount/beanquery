@@ -6,13 +6,13 @@ import cmd
 import enum
 import io
 import itertools
-import logging
 import os
 import re
 import shlex
 import sys
 import textwrap
 import traceback
+import warnings
 
 from contextlib import nullcontext, suppress
 from dataclasses import dataclass, asdict
@@ -57,23 +57,16 @@ def render_location(text, pos, endpos, lineno, indent, strip, out):
     out.append(indent + ' ' * pos + '^' * length)
 
 
-# FIXME: It makes sense to move this into the exception classes
-# themselves to make the error location reporting independent of the
-# execution in the shell. The best way to do that would be to make all
-# exceptions to have a common base class and to store location
-# information uniformly. This requires translating TatSu exceptions
-# into something else.
+# FIXME: move the error formatting into the exception classes themselves
 def render_exception(exc, indent='| ', strip=True):
     if isinstance(exc, (beanquery.CompilationError, beanquery.ParseError)) and exc.parseinfo:
-        out = []
+        out = [str(exc)]
         pos = exc.parseinfo.pos
         endpos = exc.parseinfo.endpos
         lineno = exc.parseinfo.line
         render_location(exc.parseinfo.tokenizer.text, pos, endpos, lineno, indent, strip, out)
-        out.append(f'error: {exc}')
         return '\n'.join(out)
-
-    return 'error:\n' + traceback.format_exc()
+    return '\n' + traceback.format_exc()
 
 
 class Format(enum.Enum):
@@ -146,7 +139,7 @@ class DispatchingShell(cmd.Cmd):
           settings: The shell settings.
         """
         super().__init__()
-
+        self.identchars += '.'
         self.outfile = outfile
         self.interactive = interactive
         self.settings = settings
@@ -168,11 +161,19 @@ class DispatchingShell(cmd.Cmd):
                 readline.set_history_length(2048)
             atexit.register(readline.write_history_file, history_filepath)
 
+        warnings.showwarning = self.warning
+
         if runinit:
             with suppress(FileNotFoundError):
                 with open(path.expanduser(INIT_FILENAME)) as f:
                     for line in f:
                         self.onecmd(line)
+
+    def error(self, message):
+        print(f'error: {message}', file=sys.stderr)
+
+    def warning(self, message, *args):
+        print(f'warning: {message}', file=sys.stderr)
 
     def add_help(self):
         "Attach help functions for each of the parsed token handlers."
@@ -220,27 +221,49 @@ class DispatchingShell(cmd.Cmd):
                 super().cmdloop(intro)
                 break
             except KeyboardInterrupt:
-                print('\n(interrupted)', file=self.outfile)
+                print('\n(interrupted)', file=self.stderr)
             except Exception as exc:
-                print(render_exception(exc), file=sys.stderr)
+                self.error(render_exception(exc))
 
     def parseline(self, line):
-        """Override command line parsing for case insensitive commands lookup."""
         cmd, arg, line = super().parseline(line)
-        if cmd and cmd != 'EOF':
-            cmd = cmd.lower()
+        if not cmd:
+            return cmd, arg, line
+        if cmd.startswith('.'):
+            cmd = cmd[1:]
+        if cmd == 'EOF':
+            line = '.EOF'
         return cmd, arg, line
+
+    def onecmd(self, line):
+        cmd, arg, line = self.parseline(line)
+        if not cmd:
+            return
+        if not line.startswith('.'):
+            cmd = cmd.lower()
+            if cmd not in {'clear', 'errors', 'exit', 'help', 'history', 'parse', 'quit', 'run', 'set'}:
+                return self.execute(line)
+            warnings.warn(f'commands without "." prefix are deprecated. use ".{cmd}" instead', stacklevel=0)
+        func = getattr(self, 'do_' + cmd, None)
+        if func is not None:
+            return func(arg)
+        self.error(f'unknown command "{cmd}"')
+
+    def completenames(self, text, *ignored):
+        if text.startswith('.'):
+            dotext = 'do_' + text[1:]
+            return ['.' + a[3:] for a in self.get_names() if a.startswith(dotext)]
 
     def do_help(self, arg):
         """List available commands with "help" or detailed help with "help cmd"."""
         super().do_help(arg.lower())
 
-    def do_history(self, line):
+    def do_history(self, arg):
         """Print the command-line history."""
         if readline is not None:
             num_entries = readline.get_current_history_length()
             try:
-                max_entries = int(line)
+                max_entries = int(arg)
                 start = max(0, num_entries - max_entries)
             except ValueError:
                 start = 0
@@ -248,94 +271,72 @@ class DispatchingShell(cmd.Cmd):
                 line = readline.get_history_item(index + 1)
                 print(line, file=self.outfile)
 
-    def do_clear(self, _):
+    def do_clear(self, arg):
         """Clear the command-line history."""
         if readline is not None:
             readline.clear_history()
 
-    def do_set(self, line):
+    def do_set(self, arg):
         """Set shell settings variables."""
-        if not line:
+        if not arg:
             for name in self.settings:
                 value = self.settings.getstr(name)
                 print(f'{name}: {value}', file=self.outfile)
         else:
-            components = shlex.split(line)
+            components = shlex.split(arg)
             name = components[0]
             if len(components) == 1:
                 try:
                     value = self.settings.getstr(name)
                     print(f'{name}: {value}', file=self.outfile)
                 except AttributeError:
-                    print(f'error: variable "{name}" does not exist', file=self.outfile)
+                    self.error(f'variable "{name}" does not exist')
             elif len(components) == 2:
                 value = components[1]
                 try:
                     self.settings.setstr(name, value)
                 except ValueError as ex:
-                    print(f'error: {ex!s}')
+                    self.error(str(ex))
                 except AttributeError:
-                    print(f'error: variable "{name}" does not exist', file=self.outfile)
+                    self.error(f'variable "{name}" does not exist')
             else:
-                print('error: invalid number of arguments', file=self.outfile)
+                self.error('invalid number of arguments')
 
     def complete_set(self, text, _line, _begidx, _endidx):
         return [name for name in self.settings if name.startswith(text)]
 
-    def do_parse(self, line):
+    def do_parse(self, arg):
         """Run the parser on the following command and print the output."""
-        print(self.parse(line).tosexp())
+        print(self.parse(arg).tosexp())
 
-    def parse(self, line, **kwargs):
+    def parse(self, query, **kwargs):
         raise NotImplementedError
 
-    def dispatch(self, statement):
-        """Dispatch the given statement to a suitable method.
+    def execute(self, query, **kwargs):
+        """Handle statements via our parser instance and dispatch to appropriate methods.
 
         Args:
-          statement: An instance provided by the parser.
-        Returns:
-          Whatever the invoked method happens to return.
+          query: The string to be parsed.
         """
+        statement = self.parse(query, **kwargs)
         name = type(statement).__name__
         method = getattr(self, f'on_{name}')
         return method(statement)
 
-    def default(self, line):
-        """Default handling of lines which aren't recognized as native shell commands.
-
-        Args:
-          line: The string to be parsed.
-        """
-        self.execute(line)
-
-    def execute(self, line, **kwargs):
-        """Handle statements via our parser instance and dispatch to appropriate methods.
-
-        Args:
-          line: The string to be parsed.
-        """
-        statement = self.parse(line, **kwargs)
-        self.dispatch(statement)
-
-    def emptyline(self):
-        """Do nothing on an empty line."""
-
-    def do_exit(self, _):
+    def do_exit(self, arg):
         """Exit the command interpreter."""
         return True
 
     do_quit = do_exit
 
-    def do_EOF(self, _):
+    def do_EOF(self, arg):
         """Exit the command interpreter."""
         print('exit', file=self.outfile)
-        return self.do_exit(_)
+        return self.do_exit(arg)
 
 
 class BQLShell(DispatchingShell):
-    """An interactive shell interpreter for the Beancount query language.
-    """
+    """An interactive shell interpreter for the Beancount query language."""
     prompt = 'beanquery> '
 
     def __init__(self, filename, outfile, interactive=False, runinit=False, format=Format.TEXT, numberify=False):
@@ -354,13 +355,15 @@ class BQLShell(DispatchingShell):
             statement.from_clause.close = default_close_date
         return statement
 
-    def do_reload(self, _line=None):
+    def do_reload(self, arg=None):
         "Reload the Beancount input file."
         if not self.filename:
             return
         self.context.attach('beancount:' + self.filename)
         table = self.context.tables['entries']
         self._extract_queries(table.entries)
+        if self.context.errors:
+            self.do_errors()
         if self.interactive:
             print_statistics(table.entries, table.options, self.outfile)
 
@@ -370,25 +373,26 @@ class BQLShell(DispatchingShell):
             if isinstance(entry, data.Query):
                 x = self.queries.setdefault(entry.name, entry)
                 if x is not entry:
-                    logging.warning("Duplicate query name '%s'", entry.name)
+                    warnings.warn(f'duplicate query name "{entry.name}"', stacklevel=0)
 
-    def do_errors(self, _line):
+    def do_errors(self, arg=None):
         "Print the errors that occurred during Beancount input file parsing."
         if self.context.errors:
             printer.print_errors(self.context.errors)
         else:
             print('(no errors)', file=self.outfile)
 
-    def do_run(self, line):
+    def do_run(self, arg):
         "Run a named query defined in the Beancount input file."
 
-        line = line.rstrip('; \t')
-        if not line:
+        arg = arg.rstrip('; \t')
+        if not arg:
             # List the available queries.
-            print('\n'.join(name for name in sorted(self.queries)))
+            if self.queries:
+                print('\n'.join(name for name in sorted(self.queries)))
             return
 
-        if line == "*":
+        if arg == "*":
             # Execute all.
             for name, query in sorted(self.queries.items()):
                 print(f'{name}:')
@@ -397,18 +401,18 @@ class BQLShell(DispatchingShell):
                 print()
             return
 
-        name, *args = shlex.split(line)
+        name, *args = shlex.split(arg)
         if args:
-            print("ERROR: Too many arguments for 'run' command.")
+            self.error('too many arguments for "run" command')
             return
 
         query = self.queries.get(name)
         if not query:
-            print(f"ERROR: Query '{name}' not found.")
+            self.error(f'query "{name}" not found')
             return
         self.execute(query.query_string, default_close_date=query.date)
 
-    def complete_run(self, text, _line, _begidx, _endidx):
+    def complete_run(self, text, line, begidx, endidx):
         return [name for name in self.queries if name.startswith(text)]
 
     def do_explain(self, line):
@@ -720,6 +724,7 @@ def main(filename, query, numberify, format, output, no_errors):
 
     # Run interactively if we're a TTY and no query is supplied.
     if interactive:
+        warnings.filterwarnings('always')
         shell.cmdloop()
     else:
         # Run in batch mode (Non-interactive).
