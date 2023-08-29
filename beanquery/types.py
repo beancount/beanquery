@@ -77,4 +77,4 @@ ALIASES = {}
 
 
 def name(datatype):
-    return getattr(datatype, 'name', datatype.__name__)
+    return getattr(datatype, 'name', datatype.__name__.lower())
