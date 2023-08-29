@@ -30,6 +30,7 @@ import beanquery
 
 from beanquery import parser
 from beanquery import query_compile
+from beanquery import types
 from beanquery.numberify import numberify_results
 from beanquery.query_execute import execute_print
 from beanquery.query_render import render_text, render_csv
@@ -415,33 +416,31 @@ class BQLShell(DispatchingShell):
     def complete_run(self, text, line, begidx, endidx):
         return [name for name in self.queries if name.startswith(text)]
 
-    def do_explain(self, line):
+    def do_explain(self, arg):
         """Compile and print a compiled statement for debugging."""
 
-        pr = lambda *args: print(*args, file=self.outfile)
+        p = lambda x: print(x, file=self.outfile)
 
-        try:
-            statement = self.parse(line)
-            pr("parsed statement:")
-            pr(textwrap.indent(statement.tosexp(), '  '))
+        statement = self.context.parse(arg)
+        p('parsed statement')
+        p('----------------')
+        p(textwrap.indent(statement.tosexp(), '  '))
+        p('')
 
-            query = self.context.compile(statement)
-            pr("compiled query:")
-            pr(f"  {query}")
-            pr()
+        query = self.context.compile(statement)
+        p('compiled query')
+        p('--------------')
+        p(f'  {query}')
+        p('')
 
-            pr("targets:")
-            for c_target in query.c_targets:
-                pr("  '{}'{}: {}".format(
-                    c_target.name or '(invisible)',
-                    ' (aggregate)' if query_compile.is_aggregate(c_target.c_expr) else '',
-                    c_target.c_expr.dtype.__name__))
-            pr()
-
-        except (parser.ParseError, query_compile.CompilationError) as exc:
-            print(render_exception(exc), file=sys.stderr)
-        except Exception:
-            traceback.print_exc(file=sys.stderr)
+        p('targets')
+        p('-------')
+        for target in query.c_targets:
+            name = target.name or ''
+            datatype = types.name(target.c_expr.dtype)
+            if target.is_aggregate:
+                datatype += ', aggregate'
+            p(f'  {name}: {datatype}')
 
     def on_Print(self, statement):
         """
