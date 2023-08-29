@@ -416,6 +416,25 @@ class BQLShell(DispatchingShell):
     def complete_run(self, text, line, begidx, endidx):
         return [name for name in self.queries if name.startswith(text)]
 
+    def do_tables(self, arg):
+        """List tables."""
+        print('\n'.join(name for name in self.context.tables.keys() if name), file=self.outfile)
+
+    def do_describe(self, arg):
+        """Describe table or structured type."""
+        def describe(obj):
+            return '\n'.join(f'  {name} ({types.name(column.dtype)})' for name, column in obj.columns.items())
+        names = shlex.split(arg)
+        for name in names:
+            table = self.context.tables.get(name)
+            if table:
+                print(f'table {name}:', file=self.outfile)
+                print(describe(table), file=self.outfile)
+            datatype = types.TYPES.get(name)
+            if datatype:
+                print(f'structured type {name}:', file=self.outfile)
+                print(describe(datatype), file=self.outfile)
+
     def do_explain(self, arg):
         """Compile and print a compiled statement for debugging."""
 
