@@ -45,6 +45,18 @@ HISTORY_FILENAME = '~/.config/beanquery/history'
 INIT_FILENAME = '~/.config/beanquery/init'
 
 
+class style:
+    ERROR = '\033[31;1m'
+    WARNING = '\033[31;1m'
+    RESET = '\033[0m'
+
+    ESCAPES = re.compile(r'\033\[[;?0-9]*[a-zA-Z]')
+
+    @classmethod
+    def strip(cls, x):
+        return cls.ESCAPES.sub('', x)
+
+
 def render_location(text, pos, endpos, lineno, indent, strip, out):
     length = endpos - pos
     lines = text.splitlines(True)
@@ -146,6 +158,7 @@ class DispatchingShell(cmd.Cmd):
         self.outfile = outfile
         self.interactive = interactive
         self.settings = settings
+        self.color = interactive and os.environ.get('TERM', 'dumb') != 'dumb'
         self.add_help()
 
         if interactive and readline is not None:
@@ -172,11 +185,16 @@ class DispatchingShell(cmd.Cmd):
                     for line in f:
                         self.onecmd(line)
 
+    def echo(self, message, file=sys.stdout):
+        if not self.color:
+            message = style.strip(message)
+        print(message, file=file)
+
     def error(self, message):
-        print(f'error: {message}', file=sys.stderr)
+        self.echo(f'{style.ERROR}error:{style.RESET} {message}', file=sys.stderr)
 
     def warning(self, message, *args):
-        print(f'warning: {message}', file=sys.stderr)
+        self.echo(f'{style.WARNING}warning:{style.RESET} {message}', file=sys.stderr)
 
     def add_help(self):
         "Attach help functions for each of the parsed token handlers."
