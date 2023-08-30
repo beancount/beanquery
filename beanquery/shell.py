@@ -106,8 +106,10 @@ class Settings:
 
     def getstr(self, name):
         value = getattr(self, name)
+        if isinstance(value, str):
+            return repr(value)
         if isinstance(value, bool):
-            value = 'true' if value else 'false'
+            return 'true' if value else 'false'
         return str(value)
 
     def setstr(self, name, value):
