@@ -52,17 +52,20 @@ class GetAttrColumn(query_compile.EvalColumn):
 def _typed_namedtuple_to_columns(cls):
     columns = {}
     for name, dtype in typing.get_type_hints(cls).items():
-        origin = typing.get_origin(dtype)
-        # Extract the underlying type from Optional[x] annotations,
-        # which are effectively Union[x, None] annotations.
-        if origin is typing.Union:
-            args = typing.get_args(dtype)
-            # Ensure that there is just one type other than None.
-            dtypes = [t for t in args if t is not type(None)]
-            assert len(dtypes) == 1
-            dtype = dtypes[0]
-        elif origin is not None:
-            dtype = origin
+        while True:
+            origin = typing.get_origin(dtype)
+            # Extract the underlying type from Optional[x] annotations,
+            # which are effectively Union[x, None] annotations.
+            if origin is typing.Union:
+                args = typing.get_args(dtype)
+                # Ensure that there is just one type other than None.
+                dtypes = [t for t in args if t is not type(None)]
+                assert len(dtypes) == 1
+                dtype = dtypes[0]
+            elif origin is not None:
+                dtype = origin
+            else:
+                break
         if name == 'meta' and dtype is dict:
             dtype = Metadata
         columns[name] = GetAttrColumn(name, dtype)
