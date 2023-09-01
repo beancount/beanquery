@@ -380,6 +380,8 @@ class BQLShell(DispatchingShell):
         "Reload the Beancount input file."
         if not self.filename:
             return
+        self.context.errors.clear()
+        self.context.options.clear()
         self.context.attach('beancount:' + self.filename)
         table = self.context.tables['entries']
         self._extract_queries(table.entries)
