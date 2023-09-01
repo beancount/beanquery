@@ -114,3 +114,28 @@ class PricesTable(Table):
     name = 'prices'
     datatype = data.Price
     columns = _typed_namedtuple_to_columns(datatype)
+
+
+class BalancesTable(Table):
+    name = 'balances'
+    datatype = data.Balance
+    columns = _typed_namedtuple_to_columns(datatype)
+    columns['discrepancy'] = columns.pop('diff_amount')
+
+
+class NotesTable(Table):
+    name = 'notes'
+    datatype = data.Note
+    columns = _typed_namedtuple_to_columns(datatype)
+
+
+class EventsTable(Table):
+    name = 'events'
+    datatype = data.Event
+    columns = _typed_namedtuple_to_columns(datatype)
+
+
+class DocumentsTable(Table):
+    name = 'documents'
+    datatype = data.Document
+    columns = _typed_namedtuple_to_columns(datatype)
