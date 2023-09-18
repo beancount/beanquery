@@ -16,6 +16,8 @@ import textwrap
 from functools import lru_cache as cache
 from decimal import Decimal
 
+import dateutil.parser
+
 from beancount.core.number import ZERO
 from beancount.core.compare import hash_entry
 from beancount.core import amount
@@ -29,7 +31,6 @@ from beancount.core import convert
 from beancount.core import prices
 from beancount.ops import summarize
 from beancount.parser import options as opts
-from beancount.utils.date_utils import parse_date_liberally
 
 from beanquery import query_compile
 from beanquery import tables
@@ -554,7 +555,7 @@ def possign(context, x, account):
 def parse_date(string, frmt=None):
     """Parse date from string."""
     if frmt is None:
-        return parse_date_liberally(string)
+        return dateutil.parser.parse(string).date()
     return datetime.datetime.strptime(string, frmt).date()
 
 
