@@ -31,8 +31,11 @@ class BQLSemantics:
     def boolean(self, value):
         return value == 'TRUE'
 
-    def identifier(self, value):
+    def unquoted_identifier(self, value):
         return value.lower()
+
+    def quoted_identifier(self, value):
+        return value.replace('""', '"')
 
     def asterisk(self, value):
         return ast.Asterisk()

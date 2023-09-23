@@ -321,9 +321,19 @@ list
     = '(' &( literal ',') @:','.{ (literal | ()) }+ ')'
     ;
 
-@name
 identifier
+    =
+    | unquoted_identifier
+    | quoted_identifier
+    ;
+
+@name
+unquoted_identifier
     = /[a-zA-Z_][a-zA-Z0-9_]*/
+    ;
+
+quoted_identifier
+    = /\"((?:[^\"]|\"\")+)\"/
     ;
 
 asterisk
