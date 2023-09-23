@@ -996,7 +996,8 @@ class BQLParser(Parser):
                 )
             self._error(
                 'expecting one of: '
-                '<identifier> [a-zA-Z_][a-zA-Z0-9_]*'
+                '<identifier> <quoted_identifier>'
+                '<unquoted_identifier>'
             )
 
     @tatsumasu('Column')
@@ -1074,9 +1075,27 @@ class BQLParser(Parser):
         self._token(')')
 
     @tatsumasu()
-    @isname
     def _identifier_(self):
+        with self._choice():
+            with self._option():
+                self._unquoted_identifier_()
+            with self._option():
+                self._quoted_identifier_()
+            self._error(
+                'expecting one of: '
+                '<quoted_identifier>'
+                '<unquoted_identifier> [a-zA-'
+                'Z_][a-zA-Z0-9_]* \\"((?:[^\\"]|\\"\\")+)\\"'
+            )
+
+    @tatsumasu()
+    @isname
+    def _unquoted_identifier_(self):
         self._pattern('[a-zA-Z_][a-zA-Z0-9_]*')
+
+    @tatsumasu()
+    def _quoted_identifier_(self):
+        self._pattern('\\"((?:[^\\"]|\\"\\")+)\\"')
 
     @tatsumasu()
     def _asterisk_(self):

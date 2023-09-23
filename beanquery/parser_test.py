@@ -642,3 +642,26 @@ class TestNodeText(unittest.TestCase):
     def test_synthetic(self):
         node = ast.And([ast.Constant(False), ast.Constant(True)])
         self.assertIsNone(node.text)
+
+
+class TestIdentifier(unittest.TestCase):
+
+    @staticmethod
+    def parse(string):
+        return parser.BQLParser().parse(string, start='identifier', semantics=parser.BQLSemantics())
+
+    def test_unquoted_identifer(self):
+        self.assertEqual(self.parse('foo'), 'foo')
+        # normalization to lower case
+        self.assertEqual(self.parse('Foo'), 'foo')
+
+    def test_quoted_identifier(self):
+        self.assertEqual(self.parse('"foo"'), 'foo')
+        self.assertEqual(self.parse('"foo bar"'), 'foo bar')
+        self.assertEqual(self.parse('"1 + 2"'), '1 + 2')
+        # no normalization to lower case
+        self.assertEqual(self.parse('"Foo"'), 'Foo')
+        # keywords allowed
+        self.assertEqual(self.parse('"select"'), 'select')
+        # quoted quotes
+        self.assertEqual(self.parse('"foo""bar"'), 'foo"bar')
