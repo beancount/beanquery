@@ -8,13 +8,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.8', '3.9', '3.10', '3.11']
-        beancount: ['2.3.4', '3.0']
+        python:
+          - '3.8'
+          - '3.9'
+          - '3.10'
+          - '3.11'
+          - '3.12'
+        beancount:
+          - '2.3.4'
+          - '3.0'
+        exclude:
+          # Beancount 2.3 does not work with Python 3.12
+          - python: '3.12'
+            beancount: '2.3.4'
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
+          allow-prereleases: true
       - run: pip install 'beancount~=${{ matrix.beancount }}'
         if: ${{ matrix.beancount != '3.0' }}
       - run: pip install 'git+https://github.com/beancount/beancount#egg=beancount'
