@@ -63,7 +63,7 @@ class EvalNode:
                     if isinstance(element, EvalNode):
                         yield element
 
-    def __call__(self, context):
+    def __call__(self, context, env):
         """Evaluate this node. This is designed to recurse on its children.
         All subclasses must override and implement this method.
 
@@ -85,7 +85,7 @@ class EvalConstant(EvalNode):
         super().__init__(type(value) if dtype is None else dtype)
         self.value = value
 
-    def __call__(self, _):
+    def __call__(self, context, env):
         return self.value
 
 
@@ -97,8 +97,8 @@ class EvalUnaryOp(EvalNode):
         self.operand = operand
         self.operator = operator
 
-    def __call__(self, context):
-        operand = self.operand(context)
+    def __call__(self, context, env):
+        operand = self.operand(context, env)
         return self.operator(operand)
 
     def __repr__(self):
@@ -107,8 +107,8 @@ class EvalUnaryOp(EvalNode):
 
 class EvalUnaryOpSafe(EvalUnaryOp):
 
-    def __call__(self, context):
-        operand = self.operand(context)
+    def __call__(self, context, env):
+        operand = self.operand(context, env)
         if operand is None:
             return None
         return self.operator(operand)
@@ -123,11 +123,11 @@ class EvalBinaryOp(EvalNode):
         self.left = left
         self.right = right
 
-    def __call__(self, context):
-        left = self.left(context)
+    def __call__(self, context, env):
+        left = self.left(context, env)
         if left is None:
             return None
-        right = self.right(context)
+        right = self.right(context, env)
         if right is None:
             return None
         return self.operator(left, right)
@@ -145,14 +145,14 @@ class EvalBetween(EvalNode):
         self.lower = lower
         self.upper = upper
 
-    def __call__(self, context):
-        operand = self.operand(context)
+    def __call__(self, context, env):
+        operand = self.operand(context, env)
         if operand is None:
             return None
-        lower = self.lower(context)
+        lower = self.lower(context, env)
         if lower is None:
             return None
-        upper = self.upper(context)
+        upper = self.upper(context, env)
         if upper is None:
             return None
         return lower <= operand <= upper
@@ -344,9 +344,9 @@ class EvalAnd(EvalNode):
         super().__init__(bool)
         self.args = args
 
-    def __call__(self, context):
+    def __call__(self, context, env):
         for arg in self.args:
-            value = arg(context)
+            value = arg(context, env)
             if value is None:
                 return None
             if not value:
@@ -361,10 +361,10 @@ class EvalOr(EvalNode):
         super().__init__(bool)
         self.args = args
 
-    def __call__(self, context):
+    def __call__(self, context, env):
         r = False
         for arg in self.args:
-            value = arg(context)
+            value = arg(context, env)
             if value is None:
                 r = None
             if value:
@@ -379,9 +379,9 @@ class EvalCoalesce(EvalNode):
         super().__init__(args[0].dtype)
         self.args = args
 
-    def __call__(self, context):
+    def __call__(self, context, env):
         for arg in self.args:
-            value = arg(context)
+            value = arg(context, env)
             if value is not None:
                 return value
         return None
@@ -406,8 +406,8 @@ class EvalGetItem(EvalNode):
         self.operand = operand
         self.key = key
 
-    def __call__(self, context):
-        operand = self.operand(context)
+    def __call__(self, context, env):
+        operand = self.operand(context, env)
         if operand is None:
             return None
         return operand.get(self.key)
@@ -421,11 +421,11 @@ class EvalGetter(EvalNode):
         self.operand = operand
         self.getter = getter
 
-    def __call__(self, context):
-        operand = self.operand(context)
+    def __call__(self, context, env):
+        operand = self.operand(context, env)
         if operand is None:
             return None
-        return self.getter(operand)
+        return self.getter(operand, env)
 
 
 class EvalColumn(EvalNode):
@@ -478,7 +478,7 @@ class EvalAggregator(EvalFunction):
         """
         self.value = store[self.handle]
 
-    def __call__(self, context):
+    def __call__(self, context, env):
         """Return the value on evaluation.
 
         Args:
@@ -502,7 +502,8 @@ class SubqueryTable(tables.Table):
         class Column(EvalColumn):
             def __init__(self):
                 super().__init__(dtype)
-            __call__ = staticmethod(operator.itemgetter(i))
+            def __call__(self, row, env):
+                return row[i]
         return Column
 
     def __iter__(self):
@@ -545,9 +546,18 @@ class EvalSubquery(EvalNode):
         self.query = query._replace(limit=1)
         super().__init__(query.c_targets[0].c_expr.dtype)
 
-    def __call__(self, row):
-        columns, rows = query_execute.execute_query(self.query)
+    def __call__(self, row, env):
+        columns, rows = query_execute.execute_query(self.query, row)
         return rows[0][0]
+
+
+class EvalEnv(EvalNode):
+    def __init__(self, table):
+        super().__init__(type(table))
+        self.columns = table.columns
+
+    def __call__(self, row, env):
+        return env
 
 
 # A compiled query with a PIVOT BY clause.

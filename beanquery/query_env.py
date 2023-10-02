@@ -44,8 +44,8 @@ def function(intypes, outtype, pass_context=False, name=None):
             pure = not pass_context
             def __init__(self, operands):
                 super().__init__(operands, outtype)
-            def __call__(self, context):
-                args = [operand(context) for operand in self.operands]
+            def __call__(self, context, env):
+                args = [operand(context, env) for operand in self.operands]
                 for arg in args:
                     if arg is None:
                         return None
@@ -587,7 +587,7 @@ class Count(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, int)
 
-    def update(self, store, context):
+    def update(self, store, context, env):
         store[self.handle] += 1
 
 
@@ -597,8 +597,8 @@ class CountArg(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, int)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle] += 1
 
@@ -609,8 +609,8 @@ class SumInt(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, operands[0].dtype)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle] += value
 
@@ -618,8 +618,8 @@ class SumInt(query_compile.EvalAggregator):
 @aggregator([Decimal], name='sum')
 class SumDecimal(query_compile.EvalAggregator):
     """Calculate the sum of the numerical argument."""
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle] += value
 
@@ -630,8 +630,8 @@ class SumAmount(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, inventory.Inventory)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle].add_amount(value)
 
@@ -642,8 +642,8 @@ class SumPosition(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, inventory.Inventory)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle].add_position(value)
 
@@ -654,8 +654,8 @@ class SumInventory(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, inventory.Inventory)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle].add_inventory(value)
 
@@ -666,9 +666,9 @@ class First(query_compile.EvalAggregator):
     def initialize(self, store):
         store[self.handle] = None
 
-    def update(self, store, context):
+    def update(self, store, context, env):
         if store[self.handle] is None:
-            value = self.operands[0](context)
+            value = self.operands[0](context, env)
             store[self.handle] = value
 
 
@@ -678,8 +678,8 @@ class Last(query_compile.EvalAggregator):
     def initialize(self, store):
         store[self.handle] = None
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         store[self.handle] = value
 
 
@@ -689,8 +689,8 @@ class Min(query_compile.EvalAggregator):
     def initialize(self, store):
         store[self.handle] = None
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             cur = store[self.handle]
             if cur is None or value < cur:
@@ -703,8 +703,8 @@ class Max(query_compile.EvalAggregator):
     def initialize(self, store):
         store[self.handle] = None
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             cur = store[self.handle]
             if cur is None or value > cur:
@@ -760,7 +760,9 @@ class BeanTable(tables.Table):
             class Col(query_compile.EvalColumn):
                 def __init__(self):
                     super().__init__(dtype)
-                __call__ = staticmethod(func)
+                    self.func = func
+                def __call__(self, context, env):
+                    return self.func(context)
             Col.__name__ = name or func.__name__
             Col.__doc__ = help or func.__doc__
             cls.columns[Col.__name__] = Col()

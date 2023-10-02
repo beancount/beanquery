@@ -4,6 +4,7 @@ from decimal import Decimal
 from functools import singledispatchmethod
 from typing import Optional, Sequence, Mapping
 
+from . import tables
 from . import types
 from . import parser
 from .errors import ProgrammingError
@@ -15,6 +16,7 @@ from .query_compile import (
     EvalCoalesce,
     EvalColumn,
     EvalConstant,
+    EvalEnv,
     EvalGetItem,
     EvalGetter,
     EvalOr,
@@ -489,6 +491,9 @@ class Compiler:
         column = self.env.table.columns.get(node.name)
         if column is not None:
             return column
+        var = self.env.get(node.name)
+        if var is not None:
+            return var
         raise CompilationError(f'column "{node.name}" does not exist', node)
 
     @_compile.register
@@ -518,7 +523,7 @@ class Compiler:
         function = function(operands)
         # Constants folding.
         if all(isinstance(operand, EvalConstant) for operand in operands) and function.pure:
-            return EvalConstant(function(None), function.dtype)
+            return EvalConstant(function(None, None), function.dtype)
         return function
 
     @_compile.register
@@ -554,7 +559,7 @@ class Compiler:
         function = function(operand)
         # Constants folding.
         if isinstance(operand, EvalConstant):
-            return EvalConstant(function(None), function.dtype)
+            return EvalConstant(function(None, None), function.dtype)
         return function
 
     @_compile.register
@@ -584,7 +589,7 @@ class Compiler:
                     function = op(left, right)
                     # Constants folding.
                     if isinstance(left, EvalConstant) and isinstance(right, EvalConstant):
-                        return EvalConstant(function(None), function.dtype)
+                        return EvalConstant(function(None, None), function.dtype)
                     return function
 
             # Implement type inference when one of the operands is not strongly typed.

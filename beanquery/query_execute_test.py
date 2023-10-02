@@ -339,7 +339,7 @@ class TestFilterEntries(CommonInputBase, QueryBase):
         context = qe.Row(entries, query.table.options)
         for entry in query.table.prepare():
             context.entry = entry
-            if expr is None or expr(context):
+            if expr is None or expr(context, None):
                 entries.append(entry)
         return entries
 
@@ -1402,7 +1402,7 @@ class SimpleColumn(qc.EvalColumn):
         self.name = name
         self.func = func
 
-    def __call__(self, row):
+    def __call__(self, row, env):
         return self.func(row)
 
 

@@ -34,7 +34,7 @@ def execute_print(c_print, file):
     entries = []
     expr = c_print.where
     for row in c_print.table:
-        if expr is None or expr(row):
+        if expr is None or expr(row, None):
             entries.append(row.entry)
 
     # Create a context that renders all numbers with their natural
@@ -118,7 +118,7 @@ def nullitemgetter(item, *items):
     return func
 
 
-def execute_query(query):
+def execute_query(query, env=None):
     """Given a compiled select statement, execute the query.
 
     Args:
@@ -133,7 +133,7 @@ def execute_query(query):
     """
 
     if isinstance(query, query_compile.EvalQuery):
-        return execute_select(query)
+        return execute_select(query, env)
 
     if isinstance(query, query_compile.EvalPivot):
         columns, rows = execute_select(query.query)
@@ -168,7 +168,7 @@ def execute_query(query):
     raise NotImplementedError(query)
 
 
-def execute_select(query):
+def execute_select(query, env=None):
     """Given a compiled select statement, execute the query.
 
     Args:
@@ -203,8 +203,8 @@ def execute_select(query):
 
         # Iterate over all the table rows.
         for row in query.table:
-            if where is None or where(row):
-                values = [expr(row) for expr in target_exprs]
+            if where is None or where(row, env):
+                values = [expr(row, env) for expr in target_exprs]
                 rows.append(values)
 
     else:
@@ -240,17 +240,17 @@ def execute_select(query):
 
         # Iterate over all the postings to evaluate the aggregates.
         for row in query.table:
-            if where is None or where(row):
+            if where is None or where(row, env):
 
                 # Compute the non-aggregate expressions.
-                key = tuple(expr(row) for expr in nonaggregate_exprs)
+                key = tuple(expr(row, env) for expr in nonaggregate_exprs)
 
                 # Get an appropriate store for the unique key of this row.
                 store = aggregates[key]
 
                 # Update the aggregate expressions.
                 for expr in aggregate_exprs:
-                    expr.update(store, row)
+                    expr.update(store, row, env)
 
         # Iterate over all the aggregations.
         for key, store in aggregates.items():
@@ -265,7 +265,7 @@ def execute_select(query):
                 if index in group_indexes:
                     value = next(key_iter)
                 else:
-                    value = expr(None)
+                    value = expr(None, None)
                 values.append(value)
 
             # Skip row if HAVING clause expression is false.

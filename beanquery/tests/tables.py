@@ -7,7 +7,7 @@ class TestColumn(query_compile.EvalColumn):
         super().__init__(datatype)
         self.func = func
 
-    def __call__(self, row):
+    def __call__(self, row, env):
         return self.func(row)
 
 
