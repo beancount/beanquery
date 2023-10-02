@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from beancount import loader
 from beancount.core import data
 from beancount.core import position
+from beancount.core.getters import get_account_open_close
 
 from beanquery import tables
 from beanquery import types
@@ -92,6 +93,16 @@ types.ALIASES[data.Cost] = Cost
 types.ALIASES[data.Amount] = Amount
 
 
+class Open(types.Structure):
+    name = 'open'
+    columns = _typed_namedtuple_to_columns(data.Open)
+
+
+class Close(types.Structure):
+    name = 'close'
+    columns = _typed_namedtuple_to_columns(data.Close)
+
+
 class Table(tables.Table):
     datatype = None
 
@@ -142,3 +153,29 @@ class DocumentsTable(Table):
     name = 'documents'
     datatype = data.Document
     columns = _typed_namedtuple_to_columns(datatype)
+
+
+class GetItemColumn(query_compile.EvalColumn):
+    def __init__(self, key, dtype):
+        super().__init__(dtype)
+        self.key = key
+
+    def __call__(self, row):
+        return row[self.key]
+
+
+class AccountsTable(tables.Table):
+    name = 'accounts'
+    columns = {
+        'account': GetItemColumn(0, str),
+        'open': GetItemColumn(1, Open),
+        'close': GetItemColumn(2, Close)
+    }
+
+    def __init__(self, entries, options):
+        self.accounts = [(name, value[0], value[1]) for name, value in get_account_open_close(entries).items()]
+
+    def __iter__(self):
+        return iter(self.accounts)
+
+TABLES.append(AccountsTable)
