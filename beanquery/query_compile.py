@@ -540,6 +540,16 @@ EvalQuery = collections.namedtuple('EvalQuery', ('table c_targets c_where '
                                                  'limit distinct'))
 
 
+class EvalSubquery(EvalNode):
+    def __init__(self, query):
+        self.query = query._replace(limit=1)
+        super().__init__(query.c_targets[0].c_expr.dtype)
+
+    def __call__(self, row):
+        columns, rows = query_execute.execute_query(self.query)
+        return rows[0][0]
+
+
 # A compiled query with a PIVOT BY clause.
 #
 # The PIVOT BY clause causes the structure of the returned table to be

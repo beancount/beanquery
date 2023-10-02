@@ -1390,6 +1390,11 @@ class TestExecuteSubquery(QueryBase):
             self.execute("""SELECT a + 2 AS b FROM (SELECT 3 AS a FROM #)"""),
             ([('b', int)], [(5, )]))
 
+    def test_subquery_target(self):
+        self.assertEqual(
+            self.execute("""SELECT 1 + (SELECT 1 FROM #) AS b FROM #"""),
+            ([('b', int)], [(2, )]))
+
 
 class SimpleColumn(qc.EvalColumn):
     def __init__(self, name, func, dtype):

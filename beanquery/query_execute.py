@@ -165,8 +165,7 @@ def execute_query(query):
 
         return columns, pivoted
 
-    # Not reached.
-    raise RuntimeError
+    raise NotImplementedError(query)
 
 
 def execute_select(query):

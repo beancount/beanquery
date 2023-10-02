@@ -30,10 +30,10 @@ class TestCompileExpression(unittest.TestCase):
     def setUpClass(cls):
         context = Connection()
         cls.compiler = compiler.Compiler(context)
-        cls.compiler.table = qe.PostingsEnvironment()
+        cls.compiler.env.table = qe.PostingsEnvironment()
 
     def compile(self, expr):
-        return self.compiler.compile(expr)
+        return self.compiler._compile(expr)
 
     def test_expr_invalid(self):
         with self.assertRaises(CompilationError):
@@ -760,7 +760,7 @@ class TestCompileParameters(unittest.TestCase):
 
     def compile(self, query, params):
         c = compiler.Compiler(self.context)
-        c.table = self.context.tables.get('')
+        c.default = self.context.tables.get('')
         return c.compile(parser.parse(query), params)
 
     def test_named_parameters(self):

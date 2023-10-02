@@ -21,6 +21,7 @@ from .query_compile import (
     EvalPivot,
     EvalPrint,
     EvalQuery,
+    EvalSubquery,
     EvalTarget,
     FUNCTIONS,
     OPERATORS,
@@ -39,10 +40,35 @@ class CompilationError(ProgrammingError):
         self.parseinfo = ast.parseinfo if ast is not None else None
 
 
+class Environment:
+    def __init__(self):
+        object.__setattr__(self, 'stack', [{}])
+
+    def push(self, table):
+        self.stack.append({'table': table})
+
+    def pop(self):
+        self.stack.pop()
+
+    def get(self, name):
+        for env in reversed(self.stack):
+            table = env.get('table')
+            if table is not None and table.name == name:
+                return EvalEnv(table)
+        return None
+
+    def __getattr__(self, name):
+        return self.stack[-1][name]
+
+    def __setattr__(self, name, value):
+        self.stack[-1][name] = value
+
+
 class Compiler:
     def __init__(self, context):
         self.context = context
-        self.table = context.tables.get('postings')
+        self.env = Environment()
+        self.default = context.tables.get('postings')
 
     def compile(self, query, parameters=None):
         """Compile an AST into an executable statement."""
@@ -68,16 +94,29 @@ class Compiler:
             else:
                 raise ProgrammingError('positional and named parameters cannot be mixed')
 
-        return self._compile(query)
+        return self._compile_statement(query)
 
     @singledispatchmethod
-    def _compile(self, node: Optional[ast.Node]):
-        if node is None:
-            return None
+    def _compile_statement(self, node: ast.Node):
         raise NotImplementedError
 
-    @_compile.register
-    def _select(self, node: ast.Select):
+    @_compile_statement.register
+    def _compile_balances(self, node: ast.Balances):
+        return self._compile_select(transform_balances(node))
+
+    @_compile_statement.register
+    def _compile_journal(self, node: ast.Journal):
+        return self._compile_select(transform_journal(node))
+
+    @_compile_statement.register
+    def _compile_print(self, node: ast.Print):
+        self.env.table = self.context.tables.get('entries')
+        expr = self._compile_from(node.from_clause)
+        return EvalPrint(self.env.table, expr)
+
+    @_compile_statement.register
+    def _compile_select(self, node: ast.Select):
+        self.env.push(self.default)
 
         # Compile the FROM clause.
         c_from_expr = self._compile_from(node.from_clause)
@@ -121,7 +160,7 @@ class Compiler:
                     'all non-aggregates must be covered by GROUP-BY clause in aggregate query: '
                     'the following targets are missing: {}'.format(','.join(missing_names)))
 
-        query = EvalQuery(self.table,
+        query = EvalQuery(self.env.table,
                           c_targets,
                           c_where,
                           group_indexes,
@@ -134,6 +173,7 @@ class Compiler:
         if pivots:
             return EvalPivot(query, pivots)
 
+        self.env.pop()
         return query
 
     def _compile_from(self, node):
@@ -142,13 +182,14 @@ class Compiler:
 
         # Subquery.
         if isinstance(node, ast.Select):
-            self.table = SubqueryTable(self._compile(node))
+            query = self._compile_statement(node)
+            self.env.table = SubqueryTable(query)
             return None
 
         # Table reference.
         if isinstance(node, ast.Table):
-            self.table = self.context.tables.get(node.name)
-            if self.table is None:
+            self.env.table = self.context.tables.get(node.name)
+            if self.env.table is None:
                 raise CompilationError(f'table "{node.name}" does not exist', node)
             return None
 
@@ -164,7 +205,7 @@ class Compiler:
                 raise CompilationError('CLOSE date must follow OPEN date')
 
             # Apply OPEN, CLOSE, and CLEAR clauses.
-            self.table = self.table.update(open=node.open, close=node.close, clear=node.clear)
+            self.env.table = self.env.table.update(open=node.open, close=node.close, clear=node.clear)
 
             return c_expression
 
@@ -182,7 +223,7 @@ class Compiler:
         if isinstance(targets, ast.Asterisk):
             # Insert the full list of available columns.
             targets = [ast.Target(ast.Column(name), None)
-                       for name in self.table.wildcard_columns]
+                       for name in self.env.table.wildcard_columns]
 
         # Compile targets.
         c_targets = []
@@ -437,9 +478,15 @@ class Compiler:
 
         return new_targets[len(c_targets):], group_indexes, having_index
 
+    @singledispatchmethod
+    def _compile(self, node: Optional[ast.Node]):
+        if node is None:
+            return None
+        raise NotImplementedError(node)
+
     @_compile.register
     def _column(self, node: ast.Column):
-        column = self.table.columns.get(node.name)
+        column = self.env.table.columns.get(node.name)
         if column is not None:
             return column
         raise CompilationError(f'column "{node.name}" does not exist', node)
@@ -490,6 +537,11 @@ class Compiler:
             if getter is None:
                 raise CompilationError(f'structured type has no attribute "{node.name}"', node)
             return EvalGetter(operand, getter, getter.dtype)
+        if issubclass(dtype, tables.Table):
+            column = operand.columns.get(node.name)
+            if column is None:
+                raise CompilationError(f'column "{node.name}" does not exist', node)
+            return EvalGetter(operand, column, column.dtype)
         raise CompilationError('column type is not structured', node)
 
     @_compile.register
@@ -581,18 +633,9 @@ class Compiler:
         return EvalConstant(None, dtype=types.Asterisk)
 
     @_compile.register
-    def _balances(self, node: ast.Balances):
-        return self._compile(transform_balances(node))
-
-    @_compile.register
-    def _journal(self, node: ast.Journal):
-        return self._compile(transform_journal(node))
-
-    @_compile.register
-    def _print(self, node: ast.Print):
-        self.table = self.context.tables.get('entries')
-        expr = self._compile_from(node.from_clause)
-        return EvalPrint(self.table, expr)
+    def _subquery(self, node: ast.Select):
+        query = self._compile_statement(node)
+        return EvalSubquery(query)
 
 
 def transform_journal(journal):
