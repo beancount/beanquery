@@ -2,6 +2,7 @@ __copyright__ = "Copyright (C) 2014-2016  Martin Blais"
 __license__ = "GNU GPLv2"
 
 import datetime
+import enum
 import io
 import textwrap
 import unittest
@@ -43,6 +44,11 @@ class RendererTestBase(unittest.TestCase):
         rows = [(x, ) for x in values]
         query_render.render_text([Column('', dtype)], rows, self.dcontext, out, **kwargs)
         return out.getvalue().splitlines()[2:]
+
+
+class Foo(enum.Enum):
+    SHORT = 1
+    LONG = 2
 
 
 class TestRenderer(RendererTestBase):
@@ -163,6 +169,12 @@ class TestRenderer(RendererTestBase):
             '      1.2 ',
             '      1.23',
             '-1.2E+3   ',
+        ])
+
+    def test_enum(self):
+        self.assertEqual(self.render(Foo, [Foo.SHORT, Foo.LONG]), [
+            'SHORT',
+            'LONG ',
         ])
 
 

@@ -161,6 +161,13 @@ class IntRenderer(ObjectRenderer):
     align = Align.RIGHT
 
 
+class EnumRenderer(ObjectRenderer):
+    dtype = enum.Enum
+
+    def format(self, value):
+        return value.name
+
+
 class DecimalRenderer(ColumnRenderer):
     """Renderer for Decimal numbers.
 
@@ -453,6 +460,13 @@ def render_rows(rows, renderers, ctx):
             yield spacerow
 
 
+def _get_renderer(datatype, ctx):
+    for d in datatype.__mro__:  # pragma: no branch
+        renderer = RENDERERS.get(d)
+        if renderer:
+            return renderer(ctx)
+
+
 def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
                 spaced=False, listsep='  ', nullvalue='', narrow=True, unicode=False, **kwargs):
     """Render the result of executing a query in text format.
@@ -472,7 +486,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
 
     """
     ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=listsep, null=nullvalue)
-    renderers = [RENDERERS[c.datatype](ctx) for c in columns]
+    renderers = [_get_renderer(column.datatype, ctx) for column in columns]
     headers = [c.name for c in columns]
     alignment = [renderer.align for renderer in renderers]
 
