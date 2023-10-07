@@ -108,7 +108,7 @@ class ObjectRenderer(ColumnRenderer):
     dtype = object
 
     def update(self, value):
-        self.maxwidth = max(self.maxwidth, len(str(value)))
+        self.maxwidth = max(self.maxwidth, len(self.format(value)))
 
     def format(self, value):
         return str(value)
