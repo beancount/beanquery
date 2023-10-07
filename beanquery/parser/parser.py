@@ -43,11 +43,7 @@ KEYWORDS = {
     'TRUE',
     'WHERE',
     'BALANCES',
-    'CLEAR',
-    'CLOSE',
     'JOURNAL',
-    'ON',
-    'OPEN',
     'PRINT',
 }  # type: ignore
 
@@ -231,64 +227,172 @@ class BQLParser(Parser):
     @tatsumasu('From')
     @nomemo
     def _from_(self):  # noqa
-        with self._optional():
-            self._expression_()
-        self.name_last_node('expression')
-        with self._optional():
-            self._token('OPEN')
-            self._token('ON')
-            self._date_()
-            self.name_last_node('open')
+        with self._choice():
+            with self._option():
+                self._token('OPEN')
+                self._cut()
+                self._token('ON')
+                self._date_()
+                self.name_last_node('open')
+                with self._optional():
+                    self._token('CLOSE')
+                    with self._group():
+                        with self._choice():
+                            with self._option():
+                                self._token('ON')
+                                self._date_()
+                                self.name_last_node('close')
 
-            self._define(
-                ['open'],
-                []
-            )
-        with self._optional():
-            self._token('CLOSE')
-            with self._group():
-                with self._choice():
-                    with self._option():
-                        self._token('ON')
-                        self._date_()
-                        self.name_last_node('close')
+                                self._define(
+                                    ['close'],
+                                    []
+                                )
+                            with self._option():
+                                self._empty_closure()
+                                self._constant(True)
+                                self.name_last_node('close')
 
-                        self._define(
-                            ['close'],
-                            []
-                        )
-                    with self._option():
-                        self._empty_closure()
-                        self._constant(True)
-                        self.name_last_node('close')
+                                self._define(
+                                    ['close'],
+                                    []
+                                )
+                            self._error(
+                                'expecting one of: '
+                                "'ON'"
+                            )
 
-                        self._define(
-                            ['close'],
-                            []
-                        )
-                    self._error(
-                        'expecting one of: '
-                        "'ON'"
+                    self._define(
+                        ['close'],
+                        []
+                    )
+                with self._optional():
+                    self._token('CLEAR')
+                    self._constant(True)
+                    self.name_last_node('clear')
+
+                    self._define(
+                        ['clear'],
+                        []
                     )
 
-            self._define(
-                ['close'],
-                []
-            )
-        with self._optional():
-            self._token('CLEAR')
-            self._constant(True)
-            self.name_last_node('clear')
+                self._define(
+                    ['clear', 'close', 'open'],
+                    []
+                )
+            with self._option():
+                self._token('CLOSE')
+                self._cut()
+                with self._group():
+                    with self._choice():
+                        with self._option():
+                            self._token('ON')
+                            self._date_()
+                            self.name_last_node('close')
 
-            self._define(
-                ['clear'],
-                []
-            )
+                            self._define(
+                                ['close'],
+                                []
+                            )
+                        with self._option():
+                            self._empty_closure()
+                            self._constant(True)
+                            self.name_last_node('close')
 
-        self._define(
-            ['clear', 'close', 'expression', 'open'],
-            []
-        )
+                            self._define(
+                                ['close'],
+                                []
+                            )
+                        self._error(
+                            'expecting one of: '
+                            "'ON'"
+                        )
+                with self._optional():
+                    self._token('CLEAR')
+                    self._constant(True)
+                    self.name_last_node('clear')
+
+                    self._define(
+                        ['clear'],
+                        []
+                    )
+
+                self._define(
+                    ['clear', 'close'],
+                    []
+                )
+            with self._option():
+                self._token('CLEAR')
+                self._cut()
+                self._constant(True)
+                self.name_last_node('clear')
+
+                self._define(
+                    ['clear'],
+                    []
+                )
+            with self._option():
+                self._expression_()
+                self.name_last_node('expression')
+                with self._optional():
+                    self._token('OPEN')
+                    self._token('ON')
+                    self._date_()
+                    self.name_last_node('open')
+
+                    self._define(
+                        ['open'],
+                        []
+                    )
+                with self._optional():
+                    self._token('CLOSE')
+                    with self._group():
+                        with self._choice():
+                            with self._option():
+                                self._token('ON')
+                                self._date_()
+                                self.name_last_node('close')
+
+                                self._define(
+                                    ['close'],
+                                    []
+                                )
+                            with self._option():
+                                self._empty_closure()
+                                self._constant(True)
+                                self.name_last_node('close')
+
+                                self._define(
+                                    ['close'],
+                                    []
+                                )
+                            self._error(
+                                'expecting one of: '
+                                "'ON'"
+                            )
+
+                    self._define(
+                        ['close'],
+                        []
+                    )
+                with self._optional():
+                    self._token('CLEAR')
+                    self._constant(True)
+                    self.name_last_node('clear')
+
+                    self._define(
+                        ['clear'],
+                        []
+                    )
+
+                self._define(
+                    ['clear', 'close', 'expression', 'open'],
+                    []
+                )
+            self._error(
+                'expecting one of: '
+                "'CLEAR' 'CLOSE' 'OPEN' <conjunction>"
+                '<disjunction> <expression>'
+            )
 
     @tatsumasu('Table')
     def _table_(self):  # noqa

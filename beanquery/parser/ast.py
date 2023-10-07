@@ -1,7 +1,15 @@
+from __future__ import annotations
+
 import dataclasses
+import datetime
 import enum
 import sys
 import textwrap
+import typing
+
+
+if typing.TYPE_CHECKING:
+    from typing import Any, Optional, Union
 
 
 def _indent(text):
@@ -129,7 +137,13 @@ Asterisk = node('Asterisk', '')
 #   close: A CLOSE clause, either None if absent, a boolean if the clause
 #     was present by no date was provided, or a datetime.date instance if
 #     a date was provided.
-From = node('From', 'expression open close clear')
+@dataclasses.dataclass(**({'slots': True} if sys.version_info[:2] >= (3, 10) else {}))
+class From(Node):
+    expression: Optional[Node] = None
+    open: Optional[datetime.date] = None
+    close: Optional[Union[datetime.date, bool]] = None
+    clear: Optional[bool] = None
+    parseinfo: Any = dataclasses.field(default=None, compare=False, repr=False)
 
 # A GROUP BY clause.
 #
