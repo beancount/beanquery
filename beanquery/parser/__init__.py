@@ -67,4 +67,4 @@ def parse(text):
     except tatsu.exceptions.ParseError as exc:
         line = exc.tokenizer.line_info(exc.pos).line
         parseinfo = tatsu.infos.ParseInfo(exc.tokenizer, exc.item, exc.pos, exc.pos + 1, line, [])
-        raise ParseError(parseinfo) from None
+        raise ParseError(parseinfo) from exc
