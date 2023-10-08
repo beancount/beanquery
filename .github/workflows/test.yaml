@@ -4,7 +4,7 @@ on:
   - pull_request
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -15,21 +15,14 @@ jobs:
           - '3.11'
           - '3.12'
         beancount:
-          - '2.3.4'
-          - '3.0'
-        exclude:
-          # Beancount 2.3 does not work with Python 3.12
-          - python: '3.12'
-            beancount: '2.3.4'
+          - '~= 2.3.6'
+          - '@ git+https://github.com/beancount/beancount.git'
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
           allow-prereleases: true
-      - run: pip install 'beancount~=${{ matrix.beancount }}'
-        if: ${{ matrix.beancount != '3.0' }}
-      - run: pip install 'git+https://github.com/beancount/beancount#egg=beancount'
-        if: ${{ matrix.beancount == '3.0' }}
+      - run: pip install 'beancount ${{ matrix.beancount }}'
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -p '*_test.py'
