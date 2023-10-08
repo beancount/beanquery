@@ -20,8 +20,6 @@ from beanquery import query_env as qe
 from beanquery import query_execute as qx
 from beanquery import tables
 
-from beanquery import compat  # noqa: F401
-
 from beanquery import Connection
 from beanquery.sources.beancount import add_beancount_tables
 
@@ -421,7 +419,7 @@ class TestFilterEntries(CommonInputBase, QueryBase):
 
         self.assertEqualEntries(self.INPUT + textwrap.dedent("""
 
-          2014-04-04 'C "Conversion for (-50.00 USD, -60.00 CAD)"
+          2014-04-04 C "Conversion for (-50.00 USD, -60.00 CAD)"
             Equity:Conversions:Current  50.00 USD @ 0 NOTHING
             Equity:Conversions:Current  60.00 CAD @ 0 NOTHING
 
@@ -469,11 +467,11 @@ class TestFilterEntries(CommonInputBase, QueryBase):
           2010-01-01 open Expenses:Restaurant
           2010-01-01 open Assets:ForeignBank:Checking
 
-          2012-12-31 'S "Opening balance for 'Assets:Bank:Checking' (Summarization)"
+          2012-12-31 S "Opening balance for 'Assets:Bank:Checking' (Summarization)"
             Assets:Bank:Checking          303.00 USD
             Equity:Opening-Balances      -303.00 USD
 
-          2012-12-31 'S "Opening balance for 'Equity:Earnings:Previous' (Summarization)"
+          2012-12-31 S "Opening balance for 'Equity:Earnings:Previous' (Summarization)"
             Equity:Earnings:Previous     -303.00 USD
             Equity:Opening-Balances       303.00 USD
 
@@ -498,7 +496,7 @@ class TestFilterEntries(CommonInputBase, QueryBase):
 
         self.assertEqualEntries(self.INPUT + textwrap.dedent("""
 
-          2014-04-04 'T "Transfer balance for 'Expenses:Restaurant' (Transfer balance)"
+          2014-04-04 T "Transfer balance for 'Expenses:Restaurant' (Transfer balance)"
             Expenses:Restaurant                                 510.00 USD
             Equity:Earnings:Current                            -510.00 USD
 
