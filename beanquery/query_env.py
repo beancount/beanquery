@@ -1107,13 +1107,9 @@ def meta(context):
     return context.posting.meta
 
 
-class Entry(EntriesTable, types.Structure):
-    name = 'entry'
-
-
-@column(Entry)
+@column(data.Transaction)
 def entry(context):
-    return context
+    return context.entry
 
 
 # Backward compatibility definitions for use in tests. These work

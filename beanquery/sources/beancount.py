@@ -88,9 +88,16 @@ class Amount(types.Structure):
     columns = _typed_namedtuple_to_columns(data.Amount)
 
 
+class Transaction(types.Structure):
+    name = 'transaction'
+    columns = _typed_namedtuple_to_columns(data.Transaction)
+    del columns['postings']
+
+
 types.ALIASES[position.Position] = Position
 types.ALIASES[data.Cost] = Cost
 types.ALIASES[data.Amount] = Amount
+types.ALIASES[data.Transaction] = Transaction
 
 
 class Open(types.Structure):
@@ -122,6 +129,15 @@ class Table(tables.Table):
     @property
     def wildcard_columns(self):
         return tuple(col for col in self.columns.keys() if col != 'meta')
+
+
+class TransactionsTable(Table):
+    name = 'transactions'
+    datatype = data.Transaction
+    # There is not a way to inherit the __init_subclass__() and
+    # __iter__() methods while inheriting the columns attribute
+    # definition from the Transaction class.
+    columns = Transaction.columns
 
 
 class PricesTable(Table):
