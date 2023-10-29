@@ -472,7 +472,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
     """Render the result of executing a query in text format.
 
     Args:
-      columns: A list of (name, dtype) tuples descrining the table columns.
+      columns: A list of beanquery.Column descrining the table columns.
       rows: Data to render.
       dcontext: A DisplayContext object prepared for rendering numbers.
       file: A file object to render the results to.
@@ -487,7 +487,7 @@ def render_text(columns, rows, dcontext, file, expand=False, boxed=False,
     """
     ctx = RenderContext(dcontext, expand=expand, spaced=spaced, listsep=listsep, null=nullvalue)
     renderers = [_get_renderer(column.datatype, ctx) for column in columns]
-    headers = [c.name for c in columns]
+    headers = [column.name for column in columns]
     alignment = [renderer.align for renderer in renderers]
 
     # Prime the renderers.
@@ -537,7 +537,7 @@ def render_csv(columns, rows, dcontext, file, expand=False, nullvalue='', **kwar
     """Render the result of executing a query in text format.
 
     Args:
-      columns: A list of (name, dtype) tuples descrining the table columns.
+      columns: A list of beanquery.Column describing the table columns.
       rows: Data to render.
       dcontext: A DisplayContext object prepared for rendering numbers.
       file: A file object to render the results to.
@@ -545,8 +545,8 @@ def render_csv(columns, rows, dcontext, file, expand=False, nullvalue='', **kwar
       nullvalue: String to use to represent NULL values.
     """
     ctx = RenderContext(dcontext, expand=expand, spaced=False, listsep=',', null=nullvalue)
-    renderers = [RENDERERS[dtype](ctx) for name, dtype in columns]
-    headers = [name for name, dtype in columns]
+    renderers = [_get_renderer(column.datatype, ctx) for column in columns]
+    headers = [column.name for column in columns]
 
     # Prime the renderers.
     for row in rows:

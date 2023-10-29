@@ -508,7 +508,7 @@ class TestQueryRenderCSV(unittest.TestCase):
 
     def test_render_simple(self):
         self.assertEqual(self.render(
-            [('x', int), ('y', int), ('z', int)],
+            [Column('x', int), Column('y', int), Column('z', int)],
             [(1, 2, 3), (4, 5, 6)]), textwrap.dedent(
                 """\
                 x,y,z
@@ -518,7 +518,7 @@ class TestQueryRenderCSV(unittest.TestCase):
 
     def test_render_missing(self):
         self.assertEqual(self.render(
-            [('x', int), ('y', int), ('z', int)],
+            [Column('x', int), Column('y', int), Column('z', int)],
             [(None, 2, 3), (4, None, 6)]), textwrap.dedent(
                 """\
                 x,y,z
@@ -528,7 +528,7 @@ class TestQueryRenderCSV(unittest.TestCase):
 
     def test_render_expand(self):
         self.assertEqual(self.render(
-            [('x', int), ('inv', Inventory), ('q', int)],
+            [Column('x', int), Column('inv', Inventory), Column('q', int)],
             [(11, I('1.00 USD, 1.00 EUR, 1 TESTS'), 2),
              (33, I('2.00 EUR, 42 TESTS'), 4)], expand=True), "\n".join([
                  "x,inv,q",
