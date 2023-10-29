@@ -38,7 +38,7 @@ class MetadataRenderer(query_render.ObjectRenderer):
     dtype = Metadata
 
     def format(self, value):
-        return str({k: v for k, v in value.items() if k not in {'filename', 'lineno'}})
+        return str({k: v for k, v in value.items() if k not in {'filename', 'lineno'} and not k.startswith('__')})
 
 
 class GetAttrColumn(query_compile.EvalColumn):
