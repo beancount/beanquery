@@ -401,7 +401,7 @@ class BQLShell(DispatchingShell):
     def do_errors(self, arg=None):
         "Print the errors that occurred during Beancount input file parsing."
         if self.context.errors:
-            printer.print_errors(self.context.errors)
+            printer.print_errors(self.context.errors, file=sys.stderr)
         else:
             print('(no errors)', file=self.outfile)
 
