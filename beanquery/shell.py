@@ -440,7 +440,7 @@ class BQLShell(DispatchingShell):
 
     def do_tables(self, arg):
         """List tables."""
-        print('\n'.join(name for name in self.context.tables.keys() if name), file=self.outfile)
+        print('\n'.join(name for name in sorted(self.context.tables.keys()) if name), file=self.outfile)
 
     def do_describe(self, arg):
         """Describe table or structured type."""
