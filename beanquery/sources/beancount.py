@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 from beancount import loader
 from beancount.core import data
 from beancount.core import position
-from beancount.core.getters import get_account_open_close
+from beancount.core.getters import get_account_open_close, get_commodity_directives
 
 from beanquery import tables
 from beanquery import types
@@ -50,7 +50,7 @@ class GetAttrColumn(query_compile.EvalColumn):
         return getattr(context, self.name)
 
 
-def _typed_namedtuple_to_columns(cls):
+def _typed_namedtuple_to_columns(cls, renames=None):
     columns = {}
     for name, dtype in typing.get_type_hints(cls).items():
         while True:
@@ -69,7 +69,8 @@ def _typed_namedtuple_to_columns(cls):
                 break
         if name == 'meta' and dtype is dict:
             dtype = Metadata
-        columns[name] = GetAttrColumn(name, dtype)
+        colname = renames.get(name, name) if renames is not None else name
+        columns[colname] = GetAttrColumn(name, dtype)
     return columns
 
 
@@ -149,8 +150,7 @@ class PricesTable(Table):
 class BalancesTable(Table):
     name = 'balances'
     datatype = data.Balance
-    columns = _typed_namedtuple_to_columns(datatype)
-    columns['discrepancy'] = columns.pop('diff_amount')
+    columns = _typed_namedtuple_to_columns(datatype, {'diff_amount': 'discrepancy'})
 
 
 class NotesTable(Table):
@@ -185,7 +185,7 @@ class AccountsTable(tables.Table):
     columns = {
         'account': GetItemColumn(0, str),
         'open': GetItemColumn(1, Open),
-        'close': GetItemColumn(2, Close)
+        'close': GetItemColumn(2, Close),
     }
 
     def __init__(self, entries, options):
@@ -195,3 +195,16 @@ class AccountsTable(tables.Table):
         return iter(self.accounts)
 
 TABLES.append(AccountsTable)
+
+
+class CommoditiesTable(tables.Table):
+    name = 'commodities'
+    columns = _typed_namedtuple_to_columns(data.Commodity, {'currency': 'name'})
+
+    def __init__(self, entries, options):
+        self.commodities = get_commodity_directives(entries)
+
+    def __iter__(self):
+        return iter(self.commodities.values())
+
+TABLES.append(CommoditiesTable)
