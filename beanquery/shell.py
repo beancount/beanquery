@@ -457,6 +457,10 @@ class BQLShell(DispatchingShell):
                 print(f'structured type {name}:', file=self.outfile)
                 print(describe(datatype), file=self.outfile)
 
+    def complete_describe(self, text, line, begidx, endidx):
+        names = itertools.chain(self.context.tables.keys(), types.TYPES.keys())
+        return [name for name in names if name and name.startswith(text)]
+
     def do_explain(self, arg):
         """Compile and print a compiled statement for debugging."""
 
