@@ -386,7 +386,7 @@ class BQLShell(DispatchingShell):
         table = self.context.tables['entries']
         self._extract_queries(table.entries)
         if self.context.errors:
-            self.do_errors()
+            printer.print_errors(self.context.errors, file=sys.stderr)
         if self.interactive:
             print_statistics(table.entries, table.options, self.outfile)
 
