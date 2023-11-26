@@ -1,0 +1,83 @@
+[build-system]
+requires = ['setuptools']
+build-backend = 'setuptools.build_meta'
+
+[project]
+name = 'beanquery'
+version = '0.1.dev0'
+description = 'Beancount Query Language'
+license = { file = 'LICENSE' }
+readme = 'README.md'
+authors = [
+    { name = 'Martin Blais', email = 'blais@furius.ca' },
+    { name = 'Daniele Nicolodi', email = 'daniele@grinta.net' },
+]
+maintainers = [
+    { name = 'Daniele Nicolodi', email = 'daniele@grinta.net' },
+]
+keywords = [
+    'accounting', 'ledger', 'beancount', 'SQL', 'BQL'
+]
+classifiers = [
+    'License :: OSI Approved :: GNU General Public License v2 (GPLv2)',
+    'Programming Language :: Python :: 3 :: Only',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Programming Language :: Python :: 3.12',  
+    'Programming Language :: SQL',
+    'Topic :: Office/Business :: Financial :: Accounting',
+]
+requires-python = '>= 3.8'
+dependencies = [
+    'beancount >= 2.3.4',
+    'click > 7.0',
+    'python-dateutil >= 2.6.0',
+    'tatsu >= 5.7.4, < 5.8.0',
+]
+
+[project.scripts]
+bean-query = 'beanquery.shell:main'
+
+[project.urls]
+homepage = 'https://github.com/beancount/beanquery'
+issues = 'https://github.com/beancount/beanquery/issues'
+
+[tool.setuptools.packages]
+find = {}
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    'if typing.TYPE_CHECKING:',
+]
+
+[tool.ruff]
+select = ['E', 'F', 'W', 'UP', 'B', 'C4', 'PL', 'RUF']
+ignore = [
+    'B007',
+    'B905',
+    'C408',
+    'E731',
+    'PLR0911',
+    'PLR0912',
+    'PLR0913',
+    'PLR0915',
+    'PLR2004',
+    'PLW2901',
+    'RUF012',
+    'UP007',
+    'UP032',
+]
+exclude = [
+    'beanquery/parser/parser.py'
+]
+line-length = 128
+target-version = 'py38'
+
+[tool.ruff.per-file-ignores]
+'beanquery/query_env.py' = ['F811']
