@@ -25,9 +25,6 @@ class BQLSemantics:
     def date(self, value):
         return datetime.datetime.strptime(value, '%Y-%m-%d').date()
 
-    def string(self, value):
-        return value[1:-1]
-
     def boolean(self, value):
         return value == 'TRUE'
 

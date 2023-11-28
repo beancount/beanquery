@@ -83,6 +83,25 @@ class TestParseSelect(QueryParserTestBase):
                 ast.Target(ast.Column('position'), 'y')
             ]))
 
+    def test_quoted_identifier(self):
+        self.assertParse(
+            """SELECT 1 AS "foo";""",
+            Select([
+                ast.Target(ast.Constant(1), 'foo'),
+            ]))
+
+        self.assertParse(
+            """SELECT 1 AS "foo bar";""",
+            Select([
+                ast.Target(ast.Constant(1), 'foo bar'),
+            ]))
+
+        self.assertParse(
+            """SELECT 2 AS "1 + 1";""",
+            Select([
+                ast.Target(ast.Constant(2), '1 + 1'),
+            ]))
+
     def test_literals(self):
         # null
         self.assertParseTarget("SELECT NULL;", ast.Constant(None))

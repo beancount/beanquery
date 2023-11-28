@@ -53,19 +53,19 @@ class TestEnv(unittest.TestCase):
             empty:
         """
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT ANY_META("name") as m')
+                                        """SELECT ANY_META('name') as m""")
         self.assertEqual([('TheName',)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT ANY_META("color") as m')
+                                        """SELECT ANY_META('color') as m""")
         self.assertEqual([('Green',)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT ANY_META("address") as m')
+                                        """SELECT ANY_META('address') as m""")
         self.assertEqual([('1 Right Way',)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT ANY_META("empty") as m')
+                                        """SELECT ANY_META('empty') as m""")
         self.assertEqual([(None,)], rrows)
 
     @parser.parse_doc()
@@ -74,24 +74,24 @@ class TestEnv(unittest.TestCase):
         2016-11-20 * "prev match in context next"
           Assets:Banking          1 USD
         """
-        rtypes, rrows = query.run_query(entries, options_map, '''
-          SELECT GREPN("in", narration, 0) as m
-        ''')
+        rtypes, rrows = query.run_query(entries, options_map, """
+          SELECT GREPN('in', narration, 0) as m
+        """)
         self.assertEqual([('in',)], rrows)
 
-        rtypes, rrows = query.run_query(entries, options_map, '''
-          SELECT GREPN("match (.*) context", narration, 1) as m
-        ''')
+        rtypes, rrows = query.run_query(entries, options_map, """
+          SELECT GREPN('match (.*) context', narration, 1) as m
+        """)
         self.assertEqual([('in',)], rrows)
 
-        rtypes, rrows = query.run_query(entries, options_map, '''
-          SELECT GREPN("(.*) in (.*)", narration, 2) as m
-        ''')
+        rtypes, rrows = query.run_query(entries, options_map, """
+          SELECT GREPN('(.*) in (.*)', narration, 2) as m
+        """)
         self.assertEqual([('context next',)], rrows)
 
-        rtypes, rrows = query.run_query(entries, options_map, '''
-          SELECT GREPN("ab(at)hing", "abathing", 1) as m
-        ''')
+        rtypes, rrows = query.run_query(entries, options_map, """
+          SELECT GREPN('ab(at)hing', 'abathing', 1) as m
+        """)
         self.assertEqual([('at',)], rrows)
 
     @parser.parse_doc()
@@ -103,29 +103,29 @@ class TestEnv(unittest.TestCase):
         2016-11-21 * "Buy thing thing"
           Assets:Cash          -1 USD
         """
-        rtypes, rrows = query.run_query(entries, options_map, '''
-          SELECT SUBST("[Cc]andy", "carrots", narration) as m where date = 2016-11-20
-        ''')
+        rtypes, rrows = query.run_query(entries, options_map, """
+          SELECT SUBST('[Cc]andy', 'carrots', narration) as m where date = 2016-11-20
+        """)
         self.assertEqual([('I love carrots',)], rrows)
 
-        rtypes, rrows = query.run_query(entries, options_map, '''
-          SELECT SUBST("thing", "t", narration) as m where date = 2016-11-21
-        ''')
+        rtypes, rrows = query.run_query(entries, options_map, """
+          SELECT SUBST('thing', 't', narration) as m where date = 2016-11-21
+        """)
         self.assertEqual([('Buy t t',)], rrows)
 
-        rtypes, rrows = query.run_query(entries, options_map, '''
-          SELECT SUBST("random", "t", narration) as m where date = 2016-11-21
-        ''')
+        rtypes, rrows = query.run_query(entries, options_map, """
+          SELECT SUBST('random', 't', narration) as m where date = 2016-11-21
+        """)
         self.assertEqual([('Buy thing thing',)], rrows)
 
-        rtypes, rrows = query.run_query(entries, options_map, '''
-          SELECT SUBST("(love)", "\\1 \\1", narration) as m where date = 2016-11-20
-        ''')
+        rtypes, rrows = query.run_query(entries, options_map, r"""
+          SELECT SUBST('(love)', '\1 \1', narration) as m where date = 2016-11-20
+        """)
         self.assertEqual([('I love love candy',)], rrows)
 
-        rtypes, rrows = query.run_query(entries, options_map, '''
-          SELECT SUBST("Assets:.*", "Savings", account) as a, str(sum(position)) as p
-        ''')
+        rtypes, rrows = query.run_query(entries, options_map, """
+          SELECT SUBST('Assets:.*', 'Savings', account) as a, str(sum(position)) as p
+        """)
         self.assertEqual([('Savings', '(-2 USD)')], rrows)
 
     @parser.parse_doc()
@@ -157,27 +157,27 @@ class TestEnv(unittest.TestCase):
           Assets:Banking          1 USD
         """
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT date(2020, 1, 2) as m')
+                                        """SELECT date(2020, 1, 2) as m""")
         self.assertEqual([(datetime.date(2020, 1, 2),)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT date(year, month, 1) as m')
+                                        """SELECT date(year, month, 1) as m""")
         self.assertEqual([(datetime.date(2016, 11, 1),)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT date(2020, 2, 32) as m')
+                                        """SELECT date(2020, 2, 32) as m""")
         self.assertEqual([(None,)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT date("2020-01-02") as m')
+                                        """SELECT date('2020-01-02') as m""")
         self.assertEqual([(datetime.date(2020, 1, 2),)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT parse_date("2016/11/1") as m')
+                                        """SELECT parse_date('2016/11/1') as m""")
         self.assertEqual([(datetime.date(2016, 11, 1),)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
-                                        'SELECT parse_date("2016/11/1", "%Y/%d/%m") as m')
+                                        """SELECT parse_date('2016/11/1', '%Y/%d/%m') as m""")
         self.assertEqual([(datetime.date(2016, 1, 11),)], rrows)
 
     @parser.parse_doc()
