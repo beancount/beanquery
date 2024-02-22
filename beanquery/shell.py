@@ -554,21 +554,21 @@ class BQLShell(DispatchingShell):
 
         """
         cursor = self.context.execute(statement)
-        rtypes = cursor.description
-        rrows = cursor.fetchall()
+        desc = cursor.description
+        rows = cursor.fetchall()
+        dcontext = self.context.options['dcontext']
 
-        if not rrows:
-            print("(empty)", file=self.outfile)
-        elif self.settings.format == Format.TEXT:
-            with self.output as out:
-                render_text(rtypes, rrows, self.context.options['dcontext'], out, **self.settings.todict())
-        elif self.settings.format == Format.CSV:
-            if self.settings.numberify:
-                dformat = self.context.options['dcontext'].build()
-                rtypes, rrows = numberify_results(rtypes, rrows, dformat)
-            render_csv(rtypes, rrows, self.context.options['dcontext'], self.outfile, **self.settings.todict())
-        else:
-            raise NotImplementedError
+        if not rows:
+            return print("(empty)", file=self.outfile)
+
+        if self.settings.numberify:
+            desc, rows = numberify_results(desc, rows, dcontext.build())
+
+        with self.output as out:
+            if self.settings.format == Format.TEXT:
+                render_text(desc, rows, dcontext, out, **self.settings.todict())
+            elif self.settings.format == Format.CSV:
+                render_csv(desc, rows, dcontext, out, **self.settings.todict())
 
     def on_Journal(self, journal):
         """
