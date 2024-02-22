@@ -3,10 +3,11 @@ __license__ = "GNU GPLv2"
 
 import atexit
 import cmd
-import enum
+import importlib
 import io
 import itertools
 import os
+import pkgutil
 import re
 import shlex
 import sys
@@ -30,10 +31,10 @@ import beanquery
 
 from beanquery import parser
 from beanquery import query_compile
+from beanquery import render
 from beanquery import types
 from beanquery.numberify import numberify_results
 from beanquery.query_execute import execute_print
-from beanquery.query_render import render_text, render_csv
 
 try:
     import readline
@@ -82,23 +83,18 @@ def render_exception(exc, indent='| ', strip=True):
     return '\n' + traceback.format_exc()
 
 
-class Format(enum.Enum):
-    CSV = 'csv'
-    TEXT = 'text'
-
-    def __str__(self):
-        return self.value
-
-    @classmethod
-    def _missing_(cls, value):
-        raise ValueError(f'"{value}" is not a valid format') from None
+FORMATS = {
+    name: importlib.import_module('beanquery.render.' + name).render
+    for finder, name, ispkg
+    in pkgutil.iter_modules(render.__path__)
+}
 
 
 @dataclass
 class Settings:
     boxed: bool = False
     expand: bool = False
-    format: Format = Format.TEXT
+    format: str = 'text'
     narrow: bool = True
     nullvalue: str = ''
     numberify: bool = False
@@ -106,7 +102,7 @@ class Settings:
     spaced: bool = False
     unicode: bool = False
 
-    def bool(self, value):
+    def _parse_bool(self, value):
         if value in {True, False}:
             return value
         norm = value.strip().lower()
@@ -115,6 +111,11 @@ class Settings:
         if norm in {"0", "false", "f", "no", "n", "off"}:
             return False
         raise ValueError(f'"{value}" is not a valid boolean')
+
+    def _parse_format(self, value):
+        if value not in FORMATS:
+            raise ValueError(f'"{value}" is not a valid format')
+        return value
 
     def getstr(self, name):
         value = getattr(self, name)
@@ -126,9 +127,8 @@ class Settings:
 
     def setstr(self, name, value):
         vtype = type(getattr(self, name))
-        parse = getattr(self, vtype.__name__, vtype)
-        value = parse(value)
-        setattr(self, name, value)
+        parse = getattr(self, f'_parse_{name}', getattr(self, f'_parse_{vtype.__name__}', vtype))
+        setattr(self, name, parse(value))
 
     def todict(self):
         return asdict(self)
@@ -360,7 +360,7 @@ class BQLShell(DispatchingShell):
     """An interactive shell interpreter for the Beancount query language."""
     prompt = 'beanquery> '
 
-    def __init__(self, filename, outfile, interactive=False, runinit=False, format=Format.TEXT, numberify=False):
+    def __init__(self, filename, outfile, interactive=False, runinit=False, format='text', numberify=False):
         settings = Settings(format=format, numberify=numberify)
         super().__init__(outfile, interactive, runinit, settings)
         self.context = beanquery.connect(None)
@@ -558,17 +558,14 @@ class BQLShell(DispatchingShell):
         rows = cursor.fetchall()
         dcontext = self.context.options['dcontext']
 
-        if not rows:
-            return print("(empty)", file=self.outfile)
-
         if self.settings.numberify:
             desc, rows = numberify_results(desc, rows, dcontext.build())
 
         with self.output as out:
-            if self.settings.format == Format.TEXT:
-                render_text(desc, rows, dcontext, out, **self.settings.todict())
-            elif self.settings.format == Format.CSV:
-                render_csv(desc, rows, dcontext, out, **self.settings.todict())
+            render = FORMATS.get(self.settings.format)
+            if render is not None:
+                return render(desc, rows, out, dcontext=dcontext, **self.settings.todict())
+            raise NotImplementedError
 
     def on_Journal(self, journal):
         """
@@ -746,7 +743,7 @@ def print_statistics(entries, options, outfile):
 @click.argument('query', nargs=-1)
 @click.option('--numberify', '-m', is_flag=True,
               help="Numberify the output, removing the currencies.")
-@click.option('--format', '-f', type=click.Choice([x.value for x in Format]), default='text',
+@click.option('--format', '-f', type=click.Choice(FORMATS.keys()), default='text',
               help="Output format.")
 @click.option('--output', '-o', type=click.File('w'), default='-',
               help="Output filename.")
@@ -764,7 +761,7 @@ def main(filename, query, numberify, format, output, no_errors):
     """
     # Create the shell.
     interactive = sys.stdin.isatty() and not query
-    shell = BQLShell(filename, output, interactive, True, Format(format), numberify)
+    shell = BQLShell(filename, output, interactive, True, format, numberify)
 
     # Run interactively if we're a TTY and no query is supplied.
     if interactive:
