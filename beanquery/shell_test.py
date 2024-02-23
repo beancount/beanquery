@@ -305,11 +305,19 @@ class TestHelp(unittest.TestCase):
 class ClickTestCase(unittest.TestCase):
     """Base class for command-line program test cases."""
 
-    def run_with_args(self, function, *args):
-        runner = click.testing.CliRunner()
-        result = runner.invoke(function, args, catch_exceptions=False)
-        self.assertEqual(result.exit_code, 0)
-        return result
+    def main(self, *args):
+        init_filename = shell.INIT_FILENAME
+        history_filename = shell.HISTORY_FILENAME
+        try:
+            shell.INIT_FILENAME = ''
+            shell.HISTORY_FILENAME = ''
+            runner = click.testing.CliRunner()
+            result = runner.invoke(shell.main, args, catch_exceptions=False)
+            self.assertEqual(result.exit_code, 0)
+            return result
+        finally:
+            shell.INIT_FILENAME = init_filename
+            shell.HISTORY_FILENAME = history_filename
 
 
 class TestShell(ClickTestCase):
@@ -334,8 +342,29 @@ class TestShell(ClickTestCase):
           Assets:Account1     -1000 USD
           Assets:Account3       800 EUR @ 1.25 USD
         """
-        result = self.run_with_args(shell.main, filename, "SELECT 1;")
+        result = self.main(filename, "SELECT 1;")
         self.assertTrue(result.stdout)
+
+    @test_utils.docfile
+    def test_format_csv(self, filename):
+        """
+        """
+        r = self.main(filename, '--format=csv', "SELECT 111 AS one, 222 AS two FROM #")
+        self.assertEqual(r.stdout, textwrap.dedent('''\
+            one,two
+            111,222
+        '''))
+
+    @test_utils.docfile
+    def test_format_text(self, filename):
+        """
+        """
+        r = self.main(filename, '--format=text', "SELECT 111 AS one, 222 AS two FROM #")
+        self.assertEqual(r.stdout, textwrap.dedent('''\
+            one  two
+            ---  ---
+            111  222
+        '''))
 
 
 if __name__ == '__main__':
