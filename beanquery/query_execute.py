@@ -34,7 +34,7 @@ def execute_print(c_print, file):
     entries = []
     expr = c_print.where
     for row in c_print.table:
-        if expr is None or expr(row):
+        if expr is None or expr(row, None):
             entries.append(row.entry)
 
     # Create a context that renders all numbers with their natural
@@ -118,7 +118,7 @@ def nullitemgetter(item, *items):
     return func
 
 
-def execute_query(query):
+def execute_query(query, env=None):
     """Given a compiled select statement, execute the query.
 
     Args:
@@ -133,7 +133,7 @@ def execute_query(query):
     """
 
     if isinstance(query, query_compile.EvalQuery):
-        return execute_select(query)
+        return execute_select(query, env)
 
     if isinstance(query, query_compile.EvalPivot):
         columns, rows = execute_select(query.query)
@@ -165,11 +165,10 @@ def execute_query(query):
 
         return columns, pivoted
 
-    # Not reached.
-    raise RuntimeError
+    raise NotImplementedError(query)
 
 
-def execute_select(query):
+def execute_select(query, env=None):
     """Given a compiled select statement, execute the query.
 
     Args:
@@ -183,35 +182,29 @@ def execute_select(query):
           'result_types'.
     """
     # Figure out the result types that describe what we return.
-    result_types = tuple(Column(target.name, target.c_expr.dtype)
-                         for target in query.c_targets
-                         if target.name is not None)
+    columns = tuple(Column(target.name, target.c_expr.dtype) for target in query.c_targets if target.name is not None)
 
     # Pre-compute lists of the expressions to evaluate.
-    group_indexes = (set(query.group_indexes)
-                     if query.group_indexes is not None
-                     else query.group_indexes)
+    group_indexes = set(query.group_indexes) if query.group_indexes is not None else None
 
     # Indexes of the columns for result rows and order rows.
-    result_indexes = [index
-                      for index, c_target in enumerate(query.c_targets)
-                      if c_target.name]
-    order_spec = query.order_spec
-
-    # Dispatch between the non-aggregated queries and aggregated queries.
-    c_where = query.c_where
-    rows = []
+    result_indexes = [index for index, target in enumerate(query.c_targets) if target.name]
 
     # Precompute a list of expressions to be evaluated.
-    c_target_exprs = [c_target.c_expr for c_target in query.c_targets]
+    target_exprs = [target.c_expr for target in query.c_targets]
 
+    order_spec = query.order_spec
+    where = query.c_where
+    rows = []
+
+    # Dispatch between the non-aggregated queries and aggregated queries.
     if query.group_indexes is None:
         # This is a non-aggregated query.
 
-        # Iterate over all the postings once.
-        for context in query.table:
-            if c_where is None or c_where(context):
-                values = [c_expr(context) for c_expr in c_target_exprs]
+        # Iterate over all the table rows.
+        for row in query.table:
+            if where is None or where(row, env):
+                values = [expr(row, env) for expr in target_exprs]
                 rows.append(values)
 
     else:
@@ -220,45 +213,44 @@ def execute_select(query):
         # Precompute lists of non-aggregate and aggregate expressions to
         # evaluate. For aggregate targets, we hunt down the aggregate
         # sub-expressions to evaluate, to avoid recursion during iteration.
-        c_nonaggregate_exprs = []
-        c_aggregate_exprs = []
-        for index, c_expr in enumerate(c_target_exprs):
+        nonaggregate_exprs = []
+        aggregate_exprs = []
+        for index, expr in enumerate(target_exprs):
             if index in group_indexes:
-                c_nonaggregate_exprs.append(c_expr)
+                nonaggregate_exprs.append(expr)
             else:
-                _, aggregate_exprs = compiler.get_columns_and_aggregates(c_expr)
-                c_aggregate_exprs.extend(aggregate_exprs)
+                _, aggregates = compiler.get_columns_and_aggregates(expr)
+                aggregate_exprs.extend(aggregates)
         # Note: it is possible that there are no aggregates to compute here. You could
         # have all columns be non-aggregates and group-by the entire list of columns.
 
         # Pre-allocate handles in aggregation nodes.
         allocator = Allocator()
-        for c_expr in c_aggregate_exprs:
-            c_expr.allocate(allocator)
+        for expr in aggregate_exprs:
+            expr.allocate(allocator)
 
         def create():
             # Create a new row in the aggregates store.
             store = allocator.create_store()
-            for c_expr in c_aggregate_exprs:
-                c_expr.initialize(store)
+            for expr in aggregate_exprs:
+                expr.initialize(store)
             return store
 
-        context = None
         aggregates = collections.defaultdict(create)
 
         # Iterate over all the postings to evaluate the aggregates.
-        for context in query.table:
-            if c_where is None or c_where(context):
+        for row in query.table:
+            if where is None or where(row, env):
 
                 # Compute the non-aggregate expressions.
-                key = tuple(c_expr(context) for c_expr in c_nonaggregate_exprs)
+                key = tuple(expr(row, env) for expr in nonaggregate_exprs)
 
                 # Get an appropriate store for the unique key of this row.
                 store = aggregates[key]
 
                 # Update the aggregate expressions.
-                for c_expr in c_aggregate_exprs:
-                    c_expr.update(store, context)
+                for expr in aggregate_exprs:
+                    expr.update(store, row, env)
 
         # Iterate over all the aggregations.
         for key, store in aggregates.items():
@@ -266,14 +258,14 @@ def execute_select(query):
             values = []
 
             # Finalize the store.
-            for c_expr in c_aggregate_exprs:
-                c_expr.finalize(store)
+            for expr in aggregate_exprs:
+                expr.finalize(store)
 
-            for index, c_expr in enumerate(c_target_exprs):
+            for index, expr in enumerate(target_exprs):
                 if index in group_indexes:
                     value = next(key_iter)
                 else:
-                    value = c_expr(context)
+                    value = expr(None, None)
                 values.append(value)
 
             # Skip row if HAVING clause expression is false.
@@ -304,4 +296,4 @@ def execute_select(query):
     if query.limit is not None:
         rows = itertools.islice(rows, query.limit)
 
-    return result_types, list(rows)
+    return columns, list(rows)
