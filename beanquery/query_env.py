@@ -17,6 +17,7 @@ from functools import lru_cache as cache
 from decimal import Decimal
 
 import dateutil.parser
+from dateutil.relativedelta import relativedelta, weekday
 
 from beancount.core.number import ZERO
 from beancount.core.compare import hash_entry
@@ -234,8 +235,8 @@ def quarter(x):
     return '{:04d}-Q{:1d}'.format(x.year, (x.month - 1) // 3 + 1)
 
 
-@function([datetime.date], str)
-def weekday(x):
+@function([datetime.date], str, name='weekday')
+def weekday_(x):
     """Extract a 3-letter weekday from a date."""
     return x.strftime('%a')
 
@@ -569,6 +570,43 @@ def date_diff(x, y):
 def date_add(x, y):
     """Adds/subtracts number of days from the given date."""
     return x + datetime.timedelta(days=y)
+
+
+@function([str, datetime.date], datetime.date)
+def date_trunc(field, x):
+    """Truncates the specified field of a given date."""
+    if field == 'week':
+        return x - relativedelta(weekday=weekday(0, -1))
+    if field == 'month':
+        return datetime.date(x.year, x.month, 1)
+    if field == 'quarter':
+        return datetime.date(x.year, x.month - (x.month - 1) % 3, 1)
+    if field == 'year':
+        return datetime.date(x.year, 1, 1)
+    if field == 'decade':
+        return datetime.date(x.year - x.year % 10, 1, 1)
+    if field == 'century':
+        return datetime.date(x.year - (x.year - 1) % 100, 1, 1)
+    if field == 'millennium':
+        return datetime.date(x.year - (x.year - 1) % 1000, 1, 1)
+    return None
+
+
+@function([str], relativedelta)
+def interval(x):
+    """Returns a relative time interval."""
+    m = re.fullmatch(r'([-+]?[0-9]+)\s+(day|month|year)s?', x)
+    if not m:
+        return None
+    number = int(m.group(1))
+    unit = m.group(2)
+    if unit == 'day':
+        return relativedelta(days=number)
+    if unit == 'month':
+        return relativedelta(months=number)
+    if unit == 'year':
+        return relativedelta(years=number)
+    return None
 
 
 def aggregator(intypes, name=None):

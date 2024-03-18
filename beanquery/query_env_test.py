@@ -202,6 +202,51 @@ class TestEnv(unittest.TestCase):
                                         'SELECT date_add(date, -1) as m')
         self.assertEqual([(datetime.date(2016, 11, 19),)], rrows)
 
+    def assertResult(self, expr, result):
+            columns, rows = query.run_query([], {}, f'SELECT {expr} FROM #')
+            self.assertEqual(rows[0][0], result)
+
+    def test_date_trunc(self):
+        self.assertResult('date_trunc("week", 2016-11-14)', datetime.date(2016, 11, 14)) # monday
+        self.assertResult('date_trunc("week", 2016-11-15)', datetime.date(2016, 11, 14)) # tuesday
+        self.assertResult('date_trunc("week", 2016-11-20)', datetime.date(2016, 11, 14)) # sunday
+
+        self.assertResult('date_trunc("month", 2016-11-20)', datetime.date(2016, 11, 1))
+
+        self.assertResult('date_trunc("quarter", 2016-09-30)', datetime.date(2016, 7, 1))
+        self.assertResult('date_trunc("quarter", 2016-10-01)', datetime.date(2016, 10, 1))
+        self.assertResult('date_trunc("quarter", 2016-11-20)', datetime.date(2016, 10, 1))
+
+        self.assertResult('date_trunc("year", 2016-11-20)', datetime.date(2016, 1, 1))
+
+        self.assertResult('date_trunc("decade", 2016-11-20)', datetime.date(2010, 1, 1))
+        self.assertResult('date_trunc("decade", 2020-11-20)', datetime.date(2020, 1, 1))
+        self.assertResult('date_trunc("decade", 2029-11-20)', datetime.date(2020, 1, 1))
+
+        self.assertResult('date_trunc("century", 1999-11-20)', datetime.date(1901, 1, 1))
+        self.assertResult('date_trunc("century", 2000-11-20)', datetime.date(1901, 1, 1))
+        self.assertResult('date_trunc("century", 2001-11-20)', datetime.date(2001, 1, 1))
+        self.assertResult('date_trunc("century", 2016-11-20)', datetime.date(2001, 1, 1))
+
+        self.assertResult('date_trunc("millennium", 1991-11-20)', datetime.date(1001, 1, 1))
+        self.assertResult('date_trunc("millennium", 2000-11-20)', datetime.date(1001, 1, 1))
+        self.assertResult('date_trunc("millennium", 2001-11-20)', datetime.date(2001, 1, 1))
+        self.assertResult('date_trunc("millennium", 2016-11-20)', datetime.date(2001, 1, 1))
+        self.assertResult('date_trunc("millennium", 3456-11-20)', datetime.date(3001, 1, 1))
+
+        self.assertResult('date_trunc("foo", 2024-05-24)', None)
+
+    def test_interval(self):
+        self.assertResult('2016-11-20 + interval("1 months")', datetime.date(2016, 12, 20))
+        self.assertResult('2016-11-01 + interval("1 months") - interval("1 days")', datetime.date(2016, 11, 30))
+        self.assertResult('2024-02-01 + interval("1 month") + interval("-1 day")', datetime.date(2024, 2, 29))
+        self.assertResult('2024-02-05 + interval("-1 days")', datetime.date(2024, 2, 4))
+        self.assertResult('2024-02-05 + interval("1 day") + interval("2 days")', datetime.date(2024, 2, 8))
+        self.assertResult('2024-05-24 + interval("1 year")', datetime.date(2025, 5, 24))
+        self.assertResult('2024-05-24 + interval("-2 years")', datetime.date(2022, 5, 24))
+        self.assertResult('interval("1 baz")', None)
+        self.assertResult('interval("A days")', None)
+
     def test_func_meta(self):
         # use the loader to have the pad transaction inserted
         entries, _, options = loader.load_string('''
