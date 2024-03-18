@@ -173,6 +173,14 @@ class TestEnv(unittest.TestCase):
         self.assertEqual([(datetime.date(2020, 1, 2),)], rrows)
 
         rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT last_day(date) as m')
+        self.assertEqual([(datetime.date(2016, 11, 30),)], rrows)
+
+        rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT last_day(date(2024, 2, 5)) as m')
+        self.assertEqual([(datetime.date(2024, 2, 29),)], rrows)
+
+        rtypes, rrows = query.run_query(entries, options_map,
                                         'SELECT parse_date("2016/11/1") as m')
         self.assertEqual([(datetime.date(2016, 11, 1),)], rrows)
 

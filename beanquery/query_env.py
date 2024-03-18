@@ -9,6 +9,7 @@ __license__ = "GNU GPLv2"
 
 import copy
 import datetime
+import calendar
 import decimal
 import re
 import textwrap
@@ -226,6 +227,13 @@ def day(x):
 def yearmonth(x):
     """Extract the year and month from a date."""
     return datetime.date(x.year, x.month, 1)
+
+
+@function([datetime.date], datetime.date)
+def last_day(x):
+    """Calculates the last day of the month from a given date."""
+    _, ndays = calendar.monthrange(x.year, x.month)
+    return datetime.date(x.year, x.month, ndays)
 
 
 @function([datetime.date], str)
