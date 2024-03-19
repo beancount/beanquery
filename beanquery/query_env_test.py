@@ -202,6 +202,30 @@ class TestEnv(unittest.TestCase):
                                         'SELECT date_add(date, -1) as m')
         self.assertEqual([(datetime.date(2016, 11, 19),)], rrows)
 
+        rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT date_trunc("month", date) as m')
+        self.assertEqual([(datetime.date(2016, 11, 1),)], rrows)
+
+        rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT date_trunc("year", date(2024, 2, 5)) as m')
+        self.assertEqual([(datetime.date(2024, 1, 1),)], rrows)
+
+        rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT date + interval("1 months")')
+        self.assertEqual([(datetime.date(2016, 12, 20),)], rrows)
+
+        rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT date_trunc("month", date) + interval("1 months") - interval("1 days")')
+        self.assertEqual([(datetime.date(2016, 11, 30),)], rrows)
+
+        rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT date_trunc("month", date(2024, 2, 5)) + interval("1 month -1 day")')
+        self.assertEqual([(datetime.date(2024, 2, 29),)], rrows)
+
+        rtypes, rrows = query.run_query(entries, options_map,
+                                        'SELECT date_trunc("month", date(2024, 2, 5)) + interval("1 month - 1 day")')
+        self.assertEqual([(datetime.date(2024, 2, 29),)], rrows)
+
     def test_func_meta(self):
         # use the loader to have the pad transaction inserted
         entries, _, options = loader.load_string('''
