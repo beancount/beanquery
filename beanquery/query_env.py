@@ -9,7 +9,6 @@ __license__ = "GNU GPLv2"
 
 import copy
 import datetime
-import calendar
 import decimal
 import re
 import textwrap
@@ -18,6 +17,7 @@ from functools import lru_cache as cache
 from decimal import Decimal
 
 import dateutil.parser
+from dateutil.relativedelta import relativedelta
 
 from beancount.core.number import ZERO
 from beancount.core.compare import hash_entry
@@ -227,13 +227,6 @@ def day(x):
 def yearmonth(x):
     """Extract the year and month from a date."""
     return datetime.date(x.year, x.month, 1)
-
-
-@function([datetime.date], datetime.date)
-def last_day(x):
-    """Calculates the last day of the month from a given date."""
-    _, ndays = calendar.monthrange(x.year, x.month)
-    return datetime.date(x.year, x.month, ndays)
 
 
 @function([datetime.date], str)
@@ -577,6 +570,34 @@ def date_diff(x, y):
 def date_add(x, y):
     """Adds/subtracts number of days from the given date."""
     return x + datetime.timedelta(days=y)
+
+
+@function([str, datetime.date], datetime.date)
+def date_trunc(field, x):
+    """Truncates the specified field of a given date."""
+    if field == "month":
+        return datetime.date(x.year, x.month, 1)
+    elif field == "year":
+        return datetime.date(x.year, 1, 1)
+    else:
+        return None
+
+
+@function([str], relativedelta)
+def interval(x):
+    """Returns a relative time interval."""
+    parts = x.replace("- ", "-").split()
+    kwargs = {}
+    for val, unit in zip(parts[0::2], parts[1::2]):
+        if unit in ["year", "years"]:
+            kwargs["years"] = int(val)
+        elif unit in ["month", "months"]:
+            kwargs["months"] = int(val)
+        elif unit in ["day", "days"]:
+            kwargs["days"] = int(val)
+        else:
+            return None
+    return relativedelta(**kwargs)
 
 
 def aggregator(intypes, name=None):
