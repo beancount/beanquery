@@ -592,6 +592,36 @@ def date_trunc(field, x):
     return None
 
 
+@function([str, datetime.date], int)
+def date_part(field, x):
+    """Extract the specified field from a date."""
+    if field == 'weekday' or field == 'dow':
+        return x.weekday()
+    if field == 'isoweekday' or field == 'isodow':
+        return x.isoweekday()
+    if field == 'week':
+        # isocalendar() returns a named tuple only in Python >= 3.9.
+        return x.isocalendar()[1]
+    if field == 'month':
+        return x.month
+    if field == 'quarter':
+        return (x.month - 1) // 3 + 1
+    if field == 'year':
+        return x.year
+    if field == 'isoyear':
+        # isocalendar() returns a named tuple only in Python >= 3.9.
+        return x.isocalendar()[0]
+    if field == 'decade':
+        return x.year // 10
+    if field == 'century':
+        return (x.year - 1) // 100 + 1
+    if field == 'millennium':
+        return (x.year - 1) // 1000 + 1
+    if field == 'epoch':
+        return int((x - datetime.date(1970, 1, 1)).total_seconds())
+    return None
+
+
 @function([str], relativedelta)
 def interval(x):
     """Construct a relative time interval."""
