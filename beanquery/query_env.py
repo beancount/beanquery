@@ -574,7 +574,7 @@ def date_add(x, y):
 
 @function([str, datetime.date], datetime.date)
 def date_trunc(field, x):
-    """Truncates the specified field of a given date."""
+    """Truncate a date to the specified precision."""
     if field == 'week':
         return x - relativedelta(weekday=weekday(0, -1))
     if field == 'month':
@@ -594,7 +594,7 @@ def date_trunc(field, x):
 
 @function([str], relativedelta)
 def interval(x):
-    """Returns a relative time interval."""
+    """Construct a relative time interval."""
     m = re.fullmatch(r'([-+]?[0-9]+)\s+(day|month|year)s?', x)
     if not m:
         return None
