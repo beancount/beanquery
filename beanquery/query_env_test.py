@@ -206,6 +206,22 @@ class TestEnv(unittest.TestCase):
             columns, rows = query.run_query([], {}, f'SELECT {expr} FROM #')
             self.assertEqual(rows[0][0], result)
 
+    def test_date_part(self):
+        self.assertResult('date_part("weekday", 2024-06-09)', 6)
+        self.assertResult('date_part("dow", 2024-06-09)', 6)
+        self.assertResult('date_part("isoweekday", 2024-06-09)', 7)
+        self.assertResult('date_part("isodow", 2024-06-09)', 7)
+        self.assertResult('date_part("week", 2024-06-09)', 23)
+        self.assertResult('date_part("month", 2024-06-09)', 6)
+        self.assertResult('date_part("quarter", 2024-06-09)', 2)
+        self.assertResult('date_part("year", 2024-06-09)', 2024)
+        self.assertResult('date_part("isoyear", 2024-06-09)', 2024)
+        self.assertResult('date_part("decade", 2024-06-09)', 202)
+        self.assertResult('date_part("century", 2024-06-09)', 21)
+        self.assertResult('date_part("millennium", 2024-06-09)', 3)
+        self.assertResult('date_part("epoch", 2024-06-09)', 1717891200)
+        self.assertResult('date_part("baz", 2024-06-09)', None)
+
     def test_date_trunc(self):
         self.assertResult('date_trunc("week", 2016-11-14)', datetime.date(2016, 11, 14)) # monday
         self.assertResult('date_trunc("week", 2016-11-15)', datetime.date(2016, 11, 14)) # tuesday
