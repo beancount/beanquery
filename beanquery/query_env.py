@@ -249,8 +249,9 @@ def today():
 
 # Operations on accounts.
 
+@function([str], str)
 @function([str, int], str)
-def root(acc, n):
+def root(acc, n=1):
     """Get the root name(s) of the account."""
     return account.root(n, acc)
 
