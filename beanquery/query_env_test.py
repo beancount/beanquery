@@ -263,6 +263,11 @@ class TestEnv(unittest.TestCase):
         self.assertResult('interval("1 baz")', None)
         self.assertResult('interval("A days")', None)
 
+    def test_root(self):
+        self.assertResult('root("Assets:Foo:Bar", 2)', 'Assets:Foo')
+        self.assertResult('root("Assets:Foo:Bar", 1)', 'Assets')
+        self.assertResult('root("Assets:Foo:Bar")', 'Assets')
+
     def test_func_meta(self):
         # use the loader to have the pad transaction inserted
         entries, _, options = loader.load_string('''
