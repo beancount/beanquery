@@ -5,9 +5,9 @@ build-backend = 'setuptools.build_meta'
 [project]
 name = 'beanquery'
 version = '0.1.dev1'
-description = 'Beancount Query Language'
+description = 'Customizable lightweight SQL query tool'
 license = { file = 'LICENSE' }
-readme = 'README.md'
+readme = 'README.rst'
 authors = [
     { name = 'Martin Blais', email = 'blais@furius.ca' },
     { name = 'Daniele Nicolodi', email = 'daniele@grinta.net' },
