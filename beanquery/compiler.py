@@ -219,10 +219,6 @@ class Compiler:
         if not order_by:
             return [], None
 
-        new_targets = c_targets[:]
-        c_target_expressions = [c_target.c_expr for c_target in c_targets]
-        order_spec = []
-
         # Compile order-by expressions and resolve them to their targets if
         # possible. A ORDER-BY column may be one of the following:
         #
@@ -232,7 +228,16 @@ class Compiler:
         #
         # References by name are converted to indexes. New expressions are
         # inserted into the list of targets as invisible targets.
-        targets_name_map = {target.name: index for index, target in enumerate(c_targets)}
+
+        new_targets = c_targets[:]
+        c_target_expressions = [c_target.c_expr for c_target in c_targets]
+        targets_name_map = {target.name: idx for idx, target in enumerate(c_targets) if target.name is not None}
+        # Only targets appearing in the SELECT targets list can be
+        # referenced by index. These are guaranteed to have a valid name.
+        n_targets = len(targets_name_map)
+
+        order_spec = []
+
         for spec in order_by:
             column = spec.column
             descending = spec.ordering
@@ -241,7 +246,7 @@ class Compiler:
             # Process target references by index.
             if isinstance(column, int):
                 index = column - 1
-                if not 0 <= index < len(c_targets):
+                if not 0 <= index < n_targets:
                     raise CompilationError(f'invalid ORDER-BY column index {column}')
 
             else:
