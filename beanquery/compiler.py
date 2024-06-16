@@ -603,8 +603,10 @@ def transform_journal(journal):
     Returns:
       An instance of an uncompiled Select object.
     """
-    cooked_select = parser.parse("""
+    where = """WHERE account ~ '{}'""".format(journal.account) if journal.account else ''
+    summary_func = journal.summary_func or ''
 
+    cooked_select = parser.parse(f"""
         SELECT
            date,
            flag,
@@ -614,16 +616,9 @@ def transform_journal(journal):
            {summary_func}(position),
            {summary_func}(balance)
         {where}
+    """)
 
-    """.format(where=('WHERE account ~ "{}"'.format(journal.account)
-                      if journal.account
-                      else ''),
-               summary_func=journal.summary_func or ''))
-
-    return ast.Select(cooked_select.targets,
-                      journal.from_clause,
-                      cooked_select.where_clause,
-                      None, None, None, None, None)
+    return ast.Select(cooked_select.targets, journal.from_clause, cooked_select.where_clause, None, None, None, None, None)
 
 
 def transform_balances(balances):
