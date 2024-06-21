@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'beanquery'
-version = '0.1.dev0'
+version = '0.1.dev1'
 description = 'Beancount Query Language'
 license = { file = 'LICENSE' }
 readme = 'README.md'
