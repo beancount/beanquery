@@ -45,8 +45,8 @@ def function(intypes, outtype, pass_context=False, name=None):
             pure = not pass_context
             def __init__(self, operands):
                 super().__init__(operands, outtype)
-            def __call__(self, context):
-                args = [operand(context) for operand in self.operands]
+            def __call__(self, context, env):
+                args = [operand(context, env) for operand in self.operands]
                 for arg in args:
                     if arg is None:
                         return None
@@ -656,7 +656,7 @@ class Count(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, int)
 
-    def update(self, store, context):
+    def update(self, store, context, env):
         store[self.handle] += 1
 
 
@@ -666,8 +666,8 @@ class CountArg(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, int)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle] += 1
 
@@ -678,8 +678,8 @@ class SumInt(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, operands[0].dtype)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle] += value
 
@@ -687,8 +687,8 @@ class SumInt(query_compile.EvalAggregator):
 @aggregator([Decimal], name='sum')
 class SumDecimal(query_compile.EvalAggregator):
     """Calculate the sum of the numerical argument."""
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle] += value
 
@@ -699,8 +699,8 @@ class SumAmount(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, inventory.Inventory)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle].add_amount(value)
 
@@ -711,8 +711,8 @@ class SumPosition(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, inventory.Inventory)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle].add_position(value)
 
@@ -723,8 +723,8 @@ class SumInventory(query_compile.EvalAggregator):
     def __init__(self, operands):
         super().__init__(operands, inventory.Inventory)
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             store[self.handle].add_inventory(value)
 
@@ -735,9 +735,9 @@ class First(query_compile.EvalAggregator):
     def initialize(self, store):
         store[self.handle] = None
 
-    def update(self, store, context):
+    def update(self, store, context, env):
         if store[self.handle] is None:
-            value = self.operands[0](context)
+            value = self.operands[0](context, env)
             store[self.handle] = value
 
 
@@ -747,8 +747,8 @@ class Last(query_compile.EvalAggregator):
     def initialize(self, store):
         store[self.handle] = None
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         store[self.handle] = value
 
 
@@ -758,8 +758,8 @@ class Min(query_compile.EvalAggregator):
     def initialize(self, store):
         store[self.handle] = None
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             cur = store[self.handle]
             if cur is None or value < cur:
@@ -772,8 +772,8 @@ class Max(query_compile.EvalAggregator):
     def initialize(self, store):
         store[self.handle] = None
 
-    def update(self, store, context):
-        value = self.operands[0](context)
+    def update(self, store, context, env):
+        value = self.operands[0](context, env)
         if value is not None:
             cur = store[self.handle]
             if cur is None or value > cur:
@@ -783,35 +783,6 @@ class Max(query_compile.EvalAggregator):
 class Row:
     """A dumb container for information used by a row expression."""
 
-    rowid = None
-
-    # The current posting being evaluated.
-    posting = None
-
-    # The current transaction of the posting being evaluated.
-    entry = None
-
-    # The current running balance *after* applying the posting.
-    balance = None
-
-    # The parser's options_map.
-    options_map = None
-
-    # An AccountTypes tuple of the account types.
-    account_types = None
-
-    # A dict of account name strings to (open, close) entries for those accounts.
-    open_close_map = None
-
-    # A dict of currency name strings to the corresponding Commodity entry.
-    commodity_map = None
-
-    # A price dict as computed by build_price_map()
-    price_map = None
-
-    # A storage area for computing aggregate expression.
-    store = None
-
     # The context hash is used in caching column accessor functions.
     # Instead than hashing the row context content, use the rowid as
     # hash.
@@ -820,13 +791,26 @@ class Row:
 
     def __init__(self, entries, options):
         self.rowid = 0
+
+        # The current transaction of the posting being evaluated.
+        self.entry = None
+
+        # The current posting being evaluated.
+        self.posting = None
+
+        # The current running balance.
         self.balance = inventory.Inventory()
-        self.balance_update_rowid = -1
-        # Global properties used by some of the accessors.
-        self.options = options
+
+        # An AccountTypes tuple of the account types.
         self.account_types = opts.get_account_types(options)
+
+        # A dict of account name strings to (open, close) entries for those accounts.
         self.open_close_map = getters.get_account_open_close(entries)
+
+        # A dict of currency name strings to the corresponding Commodity entry.
         self.commodity_map = getters.get_commodity_directives(entries)
+
+        # A price dict.
         self.price_map = prices.build_price_map(entries)
 
 
@@ -845,7 +829,9 @@ class BeanTable(tables.Table):
             class Col(query_compile.EvalColumn):
                 def __init__(self):
                     super().__init__(dtype)
-                __call__ = staticmethod(func)
+                    self.func = func
+                def __call__(self, context, env):
+                    return self.func(context)
             Col.__name__ = name or func.__name__
             Col.__doc__ = help or func.__doc__
             cls.columns[Col.__name__] = Col()

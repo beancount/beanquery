@@ -46,7 +46,7 @@ class GetAttrColumn(query_compile.EvalColumn):
         super().__init__(dtype)
         self.name = name
 
-    def __call__(self, context):
+    def __call__(self, context, env):
         return getattr(context, self.name)
 
 
@@ -176,7 +176,7 @@ class GetItemColumn(query_compile.EvalColumn):
         super().__init__(dtype)
         self.key = key
 
-    def __call__(self, row):
+    def __call__(self, row, env):
         return row[self.key]
 
 

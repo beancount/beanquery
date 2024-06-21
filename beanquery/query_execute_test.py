@@ -337,7 +337,7 @@ class TestFilterEntries(CommonInputBase, QueryBase):
         context = qe.Row(entries, query.table.options)
         for entry in query.table.prepare():
             context.entry = entry
-            if expr is None or expr(context):
+            if expr is None or expr(context, None):
                 entries.append(entry)
         return entries
 
@@ -1388,6 +1388,11 @@ class TestExecuteSubquery(QueryBase):
             self.execute("""SELECT a + 2 AS b FROM (SELECT 3 AS a FROM #)"""),
             ([('b', int)], [(5, )]))
 
+    def test_subquery_target(self):
+        self.assertEqual(
+            self.execute("""SELECT 1 + (SELECT 1 FROM #) AS b FROM #"""),
+            ([('b', int)], [(2, )]))
+
 
 class SimpleColumn(qc.EvalColumn):
     def __init__(self, name, func, dtype):
@@ -1395,7 +1400,7 @@ class SimpleColumn(qc.EvalColumn):
         self.name = name
         self.func = func
 
-    def __call__(self, row):
+    def __call__(self, row, env):
         return self.func(row)
 
 
