@@ -13,7 +13,7 @@ from .errors import IntegrityError, InternalError, ProgrammingError, NotSupporte
 from .parser import ParseError
 
 
-__version__ = '0.1.dev0'
+__version__ = '0.1.dev1'
 
 
 def connect(dsn=None):
