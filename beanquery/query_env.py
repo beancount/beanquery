@@ -1022,20 +1022,34 @@ column = PostingsTable.column
 @column(str)
 def filename(context):
     """The ledger where the posting is defined."""
-    return context.posting.meta["filename"]
+    meta = context.posting.meta
+    # Postings for pad transactions have their meta fields set to
+    # None. See https://github.com/beancount/beancount/issues/767
+    if meta is None:
+        return None
+    return meta["filename"]
 
 
 # redefine EntriesTable's column definition to return posting information
 @column(int)
 def lineno(context):
     """The line number in the ledger file where the posting is defined."""
-    return context.posting.meta["lineno"]
+    meta = context.posting.meta
+    # Postings for pad transactions have their meta fields set to
+    # None. See https://github.com/beancount/beancount/issues/767
+    if meta is None:
+        return None
+    return meta["lineno"]
 
 
 @column(str)
 def location(context):
     """The filename:lineno location where the posting is defined."""
     meta = context.posting.meta
+    # Postings for pad transactions have their meta fields set to
+    # None. See https://github.com/beancount/beancount/issues/767
+    if meta is None:
+        return None
     return '{:s}:{:d}:'.format(meta['filename'], meta['lineno'])
 
 
