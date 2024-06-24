@@ -401,8 +401,9 @@ class EvalFunction(EvalNode):
     # Type constraints on the input arguments.
     __intypes__ = []
 
-    def __init__(self, operands, dtype):
+    def __init__(self, context, operands, dtype):
         super().__init__(dtype)
+        self.context = context
         self.operands = operands
 
 
@@ -443,8 +444,8 @@ class EvalColumn(EvalNode):
 class EvalAggregator(EvalFunction):
     pure = False
 
-    def __init__(self, operands, dtype=None):
-        super().__init__(operands, dtype or operands[0].dtype)
+    def __init__(self, context, operands, dtype=None):
+        super().__init__(context, operands, dtype or operands[0].dtype)
         self.value = None
 
     def allocate(self, allocator):

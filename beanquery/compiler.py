@@ -460,6 +460,7 @@ class Compiler:
     @_compile.register
     def _function(self, node: ast.Function):
         operands = [self._compile(operand) for operand in node.operands]
+
         if node.fname == 'coalesce':
             # coalesce() is parsed like a function call but it does
             # not really fit our model for function evaluation,
@@ -469,11 +470,12 @@ class Compiler:
                     dtypes = ', '.join(operand.dtype.__name__ for operand in operands)
                     raise CompilationError(f'coalesce() function arguments must have uniform type, found: {dtypes}', node)
             return EvalCoalesce(operands)
+
         function = types.function_lookup(FUNCTIONS, node.fname, operands)
         if function is None:
             sig = '{}({})'.format(node.fname, ', '.join(f'{operand.dtype.__name__.lower()}' for operand in operands))
             raise CompilationError(f'no function matches "{sig}" name and argument types', node)
-        function = function(operands)
+        function = function(self.context, operands)
         # Constants folding.
         if all(isinstance(operand, EvalConstant) for operand in operands) and function.pure:
             return EvalConstant(function(None), function.dtype)
@@ -551,7 +553,7 @@ class Compiler:
                 name = types.MAP.get(target)
                 if name is None:
                     break
-                left = types.function_lookup(FUNCTIONS, name, [left])([left])
+                left = types.function_lookup(FUNCTIONS, name, [left])(self.context, [left])
                 continue
             if right.dtype is object and left.dtype is not object:
                 target = left.dtype
@@ -563,7 +565,7 @@ class Compiler:
                 name = types.MAP.get(target)
                 if name is None:
                     break
-                right = types.function_lookup(FUNCTIONS, name, [right])([right])
+                right = types.function_lookup(FUNCTIONS, name, [right])(self.context, [right])
                 continue
 
             # Failure.
