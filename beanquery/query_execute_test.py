@@ -7,7 +7,9 @@ import unittest
 import textwrap
 
 from decimal import Decimal
+from dateutil.relativedelta import relativedelta
 
+from beancount.core.amount import from_string as A
 from beancount.core.number import D
 from beancount.core import inventory
 from beancount.core.inventory import from_string as I
@@ -163,6 +165,7 @@ class TestFundamentals(QueryBase):
 
         # str
         self.assertResult("SELECT str(TRUE)", 'TRUE')
+        self.assertResult("SELECT str(FALSE)", 'FALSE')
         self.assertResult("SELECT str(1)", '1')
         self.assertResult("SELECT str(1.1)", '1.1')
         self.assertResult("SELECT str('foo')", 'foo')
@@ -296,10 +299,25 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT round(12)", 12)
         self.assertResult("SELECT round(12, -1)", 10)
 
-        # commodity_meta
-        self.assertResult("SELECT commodity_meta('MISSING')", None, dict)
-        self.assertResult("SELECT commodity_meta('TEST')", {'filename': '<string>', 'lineno': 2, 'rate': Decimal('42')})
-        self.assertResult("SELECT commodity_meta('TEST', 'rate')", Decimal('42'), object)
+        # neg
+        self.assertResult("SELECT neg(1.0)", Decimal('-1.0'))
+
+        # abs
+        self.assertResult("SELECT abs(-1.0)", Decimal('1.0'))
+
+        # safediv
+        self.assertResult("SELECT safediv(1.0, 2.0)", Decimal('0.5'))
+        self.assertResult("SELECT safediv(1.0, 0.0)", Decimal('0'))
+        self.assertResult("SELECT safediv(0.0, 0.0)", Decimal('0'))
+
+        # repr
+        self.assertResult("SELECT repr(1.0)", 'Decimal(\'1.0\')')
+
+        # lower
+        self.assertResult('''SELECT lower('AaBbCcDdEe')''', 'aabbccddee')
+
+        # upper
+        self.assertResult('''SELECT upper('AaBbCcDdEe')''', 'AABBCCDDEE')
 
     def test_coalesce(self):
         # coalesce
@@ -326,19 +344,86 @@ class TestFundamentals(QueryBase):
         self.assertError ("SELECT entry.foo")
         self.assertError ("SELECT position.foo")
 
+    def test_parse_date(self):
+        self.assertResult('''SELECT parse_date('2016/11/1')''', datetime.date(2016, 11, 1))
+        self.assertResult('''SELECT parse_date('2016/11/1', '%Y/%d/%m')''', datetime.date(2016, 1, 11))
 
-class TestFunctions(QueryBase):
+    def test_date_part(self):
+        self.assertResult('''SELECT date_part('weekday', 2024-06-09)''', 6)
+        self.assertResult('''SELECT date_part('dow', 2024-06-09)''', 6)
+        self.assertResult('''SELECT date_part('isoweekday', 2024-06-09)''', 7)
+        self.assertResult('''SELECT date_part('isodow', 2024-06-09)''', 7)
+        self.assertResult('''SELECT date_part('week', 2024-06-09)''', 23)
+        self.assertResult('''SELECT date_part('month', 2024-06-09)''', 6)
+        self.assertResult('''SELECT date_part('quarter', 2024-06-09)''', 2)
+        self.assertResult('''SELECT date_part('year', 2024-06-09)''', 2024)
+        self.assertResult('''SELECT date_part('isoyear', 2024-06-09)''', 2024)
+        self.assertResult('''SELECT date_part('decade', 2024-06-09)''', 202)
+        self.assertResult('''SELECT date_part('century', 2024-06-09)''', 21)
+        self.assertResult('''SELECT date_part('millennium', 2024-06-09)''', 3)
+        self.assertResult('''SELECT date_part('epoch', 2024-06-09)''', 1717891200)
+        self.assertResult('''SELECT date_part('baz', 2024-06-09)''', None, int)
+
+    def test_date_trunc(self):
+        self.assertResult('''SELECT date_trunc('week', 2016-11-14)''', datetime.date(2016, 11, 14)) # monday
+        self.assertResult('''SELECT date_trunc('week', 2016-11-15)''', datetime.date(2016, 11, 14)) # tuesday
+        self.assertResult('''SELECT date_trunc('week', 2016-11-20)''', datetime.date(2016, 11, 14)) # sunday
+
+        self.assertResult('''SELECT date_trunc('month', 2016-11-20)''', datetime.date(2016, 11, 1))
+
+        self.assertResult('''SELECT date_trunc('quarter', 2016-09-30)''', datetime.date(2016, 7, 1))
+        self.assertResult('''SELECT date_trunc('quarter', 2016-10-01)''', datetime.date(2016, 10, 1))
+        self.assertResult('''SELECT date_trunc('quarter', 2016-11-20)''', datetime.date(2016, 10, 1))
+
+        self.assertResult('''SELECT date_trunc('year', 2016-11-20)''', datetime.date(2016, 1, 1))
+
+        self.assertResult('''SELECT date_trunc('decade', 2016-11-20)''', datetime.date(2010, 1, 1))
+        self.assertResult('''SELECT date_trunc('decade', 2020-11-20)''', datetime.date(2020, 1, 1))
+        self.assertResult('''SELECT date_trunc('decade', 2029-11-20)''', datetime.date(2020, 1, 1))
+
+        self.assertResult('''SELECT date_trunc('century', 1999-11-20)''', datetime.date(1901, 1, 1))
+        self.assertResult('''SELECT date_trunc('century', 2000-11-20)''', datetime.date(1901, 1, 1))
+        self.assertResult('''SELECT date_trunc('century', 2001-11-20)''', datetime.date(2001, 1, 1))
+        self.assertResult('''SELECT date_trunc('century', 2016-11-20)''', datetime.date(2001, 1, 1))
+
+        self.assertResult('''SELECT date_trunc('millennium', 1991-11-20)''', datetime.date(1001, 1, 1))
+        self.assertResult('''SELECT date_trunc('millennium', 2000-11-20)''', datetime.date(1001, 1, 1))
+        self.assertResult('''SELECT date_trunc('millennium', 2001-11-20)''', datetime.date(2001, 1, 1))
+        self.assertResult('''SELECT date_trunc('millennium', 2016-11-20)''', datetime.date(2001, 1, 1))
+        self.assertResult('''SELECT date_trunc('millennium', 3456-11-20)''', datetime.date(3001, 1, 1))
+
+        self.assertResult('''SELECT date_trunc('foo', 2024-05-24)''', None, datetime.date)
+
+    def test_interval_ops(self):
+        self.assertResult('''SELECT 2016-11-20 + interval("1 months")''', datetime.date(2016, 12, 20))
+        self.assertResult('''SELECT 2016-11-01 + interval("1 months") - interval("1 days")''', datetime.date(2016, 11, 30))
+        self.assertResult('''SELECT 2024-02-01 + interval("1 month") + interval("-1 day")''', datetime.date(2024, 2, 29))
+        self.assertResult('''SELECT 2024-02-05 + interval("-1 days")''', datetime.date(2024, 2, 4))
+        self.assertResult('''SELECT 2024-02-05 + interval("1 day") + interval("2 days")''', datetime.date(2024, 2, 8))
+        self.assertResult('''SELECT 2024-05-24 + interval("1 year")''', datetime.date(2025, 5, 24))
+        self.assertResult('''SELECT 2024-05-24 + interval("-2 years")''', datetime.date(2022, 5, 24))
+        self.assertResult('''SELECT interval("1 baz")''', None, relativedelta)
+        self.assertResult('''SELECT interval("A days")''', None, relativedelta)
+
+
+class TestBeancountFunctions(QueryBase):
     INPUT = textwrap.dedent("""
           2024-06-23 commodity TEST
             answer: "42"
           2024-06-23 open Assets:Tests
             key: "value"
           2024-06-23 open Expenses:Tests
-          2024-06-05 * "Test"
-            Assets:Tests  1.000 TEST
+          2024-06-23 price USD 2.0 TEST
+          2024-06-23 * "Test"
+            Assets:Tests  10.000 TEST
             Expenses:Tests
           2024-06-24 close Expenses:Tests
         """)
+
+    def test_root(self):
+        self.assertResult('''SELECT root('Assets:Foo:Bar', 2) FROM #''', 'Assets:Foo')
+        self.assertResult('''SELECT root('Assets:Foo:Bar', 1) FROM #''', 'Assets')
+        self.assertResult('''SELECT root('Assets:Foo:Bar') FROM #''', 'Assets')
 
     def test_open_date(self):
         self.assertResult('''SELECT open_date('Expenses:Tests') FROM #''', datetime.date(2024, 6, 23))
@@ -359,6 +444,52 @@ class TestFunctions(QueryBase):
         self.assertResult('''SELECT commodity_meta('TEST', 'answer') FROM #''', '42', object)
         self.assertResult('''SELECT commodity_meta('TEST') FROM #''', {'filename': '<string>', 'lineno': 2, 'answer': '42'})
         self.assertResult('''SELECT commodity_meta('X') FROM #''', None, dict)
+
+    def test_account_sortkey(self):
+        self.assertResult('''SELECT account_sortkey('Assets:Foo') LIMIT 1''', '0-Assets:Foo')
+
+    def test_has_account(self):
+        self.assertResult('''SELECT has_account('Assets:Tests') LIMIT 1''', True)
+        self.assertResult('''SELECT has_account('Assets:Foo') LIMIT 1''', False)
+
+    def test_convert(self):
+        self.assertResult('''SELECT convert(position, 'USD') LIMIT 1''', A('5.0 USD'))
+        self.assertResult('''SELECT convert(sum(position), 'USD')''', I('0.0 USD'))
+        self.assertResult('''SELECT convert(only('TEST', sum(position)), 'USD')''', A('0.0 USD'))
+
+
+class TestBeancountMetadataFunctions(QueryBase):
+    INPUT = """
+        2016-11-20 * "Test"
+          name: "The Name"
+          address: "1 Wrong Way"
+          empty: "Not Empty"
+          Assets:Banking          1 USD
+            color: "Green"
+            address: "1 Right Way"
+            empty:
+        """
+
+    def test_meta(self):
+        self.assertResult('''SELECT meta('address')''', '1 Right Way', object)
+        self.assertResult('''SELECT meta('baz')''', None, object)
+        self.assertResult('''SELECT meta('color')''', 'Green', object)
+        self.assertResult('''SELECT meta('empty')''', None, object)
+        self.assertResult('''SELECT meta('name')''', None, object)
+
+    def test_entry_meta(self):
+        self.assertResult('''SELECT entry_meta('address')''', '1 Wrong Way', object)
+        self.assertResult('''SELECT entry_meta('baz')''', None, object)
+        self.assertResult('''SELECT entry_meta('color')''', None, object)
+        self.assertResult('''SELECT entry_meta('empty')''', 'Not Empty', object)
+        self.assertResult('''SELECT entry_meta('name')''', 'The Name', object)
+
+    def test_any_meta(self):
+        self.assertResult('''SELECT any_meta('address')''', '1 Right Way', object)
+        self.assertResult('''SELECT any_meta('baz')''', None, object)
+        self.assertResult('''SELECT any_meta('color')''', 'Green', object)
+        self.assertResult('''SELECT any_meta('empty')''', None, object)
+        self.assertResult('''SELECT any_meta('name')''', 'The Name', object)
 
 
 class TestFilterEntries(CommonInputBase, QueryBase):
@@ -1260,30 +1391,6 @@ class TestArithmeticFunctions(QueryBase):
             """,
             [('result', Decimal)],
             [(None,)])
-
-    def test_safe_div(self):
-        self.check_query(
-            """
-              2010-02-23 *
-                Assets:Something       5.00 USD
-            """,
-            """
-              SELECT SAFEDIV(number, 0) as result;
-            """,
-            [('result', Decimal)],
-            [(D("0"),)])
-
-    def test_safe_div_zerobyzero(self):
-        self.check_query(
-            """
-              2010-02-23 *
-                Assets:Something       5.00 USD
-            """,
-            """
-              SELECT SAFEDIV(0.0, 0) as result;
-            """,
-            [('result', Decimal)],
-            [(D("0"),)])
 
 
 class TestExecutePivot(QueryBase):
