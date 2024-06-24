@@ -400,7 +400,7 @@ def account_sortkey(context, acc):
     return '{}-{}'.format(index, name)
 
 
-@function([str], str, pass_row=True)
+@function([str], bool, pass_row=True)
 def has_account(context, pattern):
     """True if the transaction has at least one posting matching the regular expression argument."""
     search = re.compile(pattern, re.IGNORECASE).search
