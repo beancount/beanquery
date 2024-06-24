@@ -203,8 +203,8 @@ class TestEnv(unittest.TestCase):
         self.assertEqual([(datetime.date(2016, 11, 19),)], rrows)
 
     def assertResult(self, expr, result):
-            columns, rows = query.run_query([], {}, f'SELECT {expr} FROM #')
-            self.assertEqual(rows[0][0], result)
+        columns, rows = query.run_query([], {}, f'SELECT {expr} FROM #')
+        self.assertEqual(rows[0][0], result)
 
     def test_date_part(self):
         self.assertResult('date_part("weekday", 2024-06-09)', 6)
