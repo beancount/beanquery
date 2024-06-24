@@ -43,8 +43,8 @@ def function(intypes, outtype, pass_row=False, name=None):
         class Func(query_compile.EvalFunction):
             __intypes__ = intypes
             pure = not pass_row
-            def __init__(self, operands):
-                super().__init__(operands, outtype)
+            def __init__(self, context, operands):
+                super().__init__(context, operands, outtype)
             def __call__(self, row):
                 args = [operand(row) for operand in self.operands]
                 for arg in args:
@@ -63,7 +63,7 @@ def function(intypes, outtype, pass_row=False, name=None):
 def Function(name, args):
     func = types.function_lookup(query_compile.FUNCTIONS, name, args)
     if func is not None:
-        return func(args)
+        return func(None, args)
     raise KeyError
 
 
@@ -653,8 +653,8 @@ def aggregator(intypes, name=None):
 @aggregator([types.Asterisk], name='count')
 class Count(query_compile.EvalAggregator):
     """Count the number of input rows."""
-    def __init__(self, operands):
-        super().__init__(operands, int)
+    def __init__(self, context, operands):
+        super().__init__(context, operands, int)
 
     def update(self, store, context):
         store[self.handle] += 1
@@ -663,8 +663,8 @@ class Count(query_compile.EvalAggregator):
 @aggregator([types.Any], name='count')
 class CountArg(query_compile.EvalAggregator):
     """Count the number of non-NULL occurrences of the argument."""
-    def __init__(self, operands):
-        super().__init__(operands, int)
+    def __init__(self, context, operands):
+        super().__init__(context, operands, int)
 
     def update(self, store, context):
         value = self.operands[0](context)
@@ -675,8 +675,8 @@ class CountArg(query_compile.EvalAggregator):
 @aggregator([int], name='sum')
 class SumInt(query_compile.EvalAggregator):
     """Calculate the sum of the numerical argument."""
-    def __init__(self, operands):
-        super().__init__(operands, operands[0].dtype)
+    def __init__(self, context, operands):
+        super().__init__(context, operands, operands[0].dtype)
 
     def update(self, store, context):
         value = self.operands[0](context)
@@ -696,8 +696,8 @@ class SumDecimal(query_compile.EvalAggregator):
 @aggregator([amount.Amount], name='sum')
 class SumAmount(query_compile.EvalAggregator):
     """Calculate the sum of the amount. The result is an Inventory."""
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
+    def __init__(self, context, operands):
+        super().__init__(context, operands, inventory.Inventory)
 
     def update(self, store, context):
         value = self.operands[0](context)
@@ -708,8 +708,8 @@ class SumAmount(query_compile.EvalAggregator):
 @aggregator([position.Position], name='sum')
 class SumPosition(query_compile.EvalAggregator):
     """Calculate the sum of the position. The result is an Inventory."""
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
+    def __init__(self, context, operands):
+        super().__init__(context, operands, inventory.Inventory)
 
     def update(self, store, context):
         value = self.operands[0](context)
@@ -720,8 +720,8 @@ class SumPosition(query_compile.EvalAggregator):
 @aggregator([inventory.Inventory], name='sum')
 class SumInventory(query_compile.EvalAggregator):
     """Calculate the sum of the inventories. The result is an Inventory."""
-    def __init__(self, operands):
-        super().__init__(operands, inventory.Inventory)
+    def __init__(self, context, operands):
+        super().__init__(context, operands, inventory.Inventory)
 
     def update(self, store, context):
         value = self.operands[0](context)

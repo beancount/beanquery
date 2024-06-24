@@ -46,7 +46,7 @@ class TestCompileExpression(unittest.TestCase):
 
     def test_expr_function(self):
         self.assertEqual(
-            qe.SumPosition([qe.Column('position')]),
+            qe.SumPosition(None, [qe.Column('position')]),
             self.compile(ast.Function('sum', [ast.Column('position')])))
 
     def test_expr_unaryop(self):
@@ -127,7 +127,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
                         ]),
                     ]),
                     # Aggregation node deep in the tree.
-                    qe.SumInt([qc.EvalConstant(1)]),
+                    qe.SumInt(None, [qc.EvalConstant(1)]),
                 ]),
             ]))
         self.assertEqual((2, 1), (len(columns), len(aggregates)))
@@ -146,13 +146,13 @@ class TestCompileAggregateChecks(unittest.TestCase):
         self.assertFalse(compiler.is_aggregate(c_query))
 
         # Simple aggregate.
-        c_query = qe.SumPosition([qe.Column('position')])
+        c_query = qe.SumPosition(None, [qe.Column('position')])
         columns, aggregates = compiler.get_columns_and_aggregates(c_query)
         self.assertEqual((0, 1), (len(columns), len(aggregates)))
         self.assertTrue(compiler.is_aggregate(c_query))
 
         # Multiple aggregates.
-        c_query = qc.EvalAnd([qe.First([qe.Column('date')]), qe.Last([qe.Column('flag')])])
+        c_query = qc.EvalAnd([qe.First(None, [qe.Column('date')]), qe.Last(None, [qe.Column('flag')])])
         columns, aggregates = compiler.get_columns_and_aggregates(c_query)
         self.assertEqual((0, 2), (len(columns), len(aggregates)))
         self.assertTrue(compiler.is_aggregate(c_query))
@@ -166,7 +166,7 @@ class TestCompileAggregateChecks(unittest.TestCase):
         # Mix of column and aggregates (this is used to detect this illegal case).
         c_query = qc.EvalAnd([
             qe.Function('length', [qe.Column('account')]),
-            qe.SumPosition([qe.Column('position')]),
+            qe.SumPosition(None, [qe.Column('position')]),
         ])
         columns, aggregates = compiler.get_columns_and_aggregates(c_query)
         self.assertEqual((1, 1), (len(columns), len(aggregates)))
