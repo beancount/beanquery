@@ -3,8 +3,10 @@ import typing
 from urllib.parse import urlparse
 
 from beancount import loader
+from beancount import parser
 from beancount.core import data
 from beancount.core import position
+from beancount.core import prices
 from beancount.core.getters import get_account_open_close, get_commodity_directives
 
 from beanquery import tables
@@ -146,6 +148,10 @@ class PricesTable(Table):
     datatype = data.Price
     columns = _typed_namedtuple_to_columns(datatype)
 
+    def __init__(self, entries, options):
+        super().__init__(entries, options)
+        self.price_map = prices.build_price_map(entries)
+
 
 class BalancesTable(Table):
     name = 'balances'
@@ -189,10 +195,11 @@ class AccountsTable(tables.Table):
     }
 
     def __init__(self, entries, options):
-        self.accounts = [(name, value[0], value[1]) for name, value in get_account_open_close(entries).items()]
+        self.accounts = get_account_open_close(entries)
+        self.types = parser.options.get_account_types(options)
 
     def __iter__(self):
-        return iter(self.accounts)
+        return ((name, value[0], value[1]) for name, value in self.accounts.items())
 
 TABLES.append(AccountsTable)
 
