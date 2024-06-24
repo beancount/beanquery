@@ -46,6 +46,15 @@ class QueryBase(cmptest.TestCase):
         result_rows = curs.fetchall()
         self.assertEqual(expected_rows, result_rows)
 
+    def assertResult(self, query, result, datatype=None):
+        curs = self.ctx.execute(query)
+        self.assertEqual([c.datatype for c in curs.description], [datatype or type(result)])
+        self.assertEqual(curs.fetchall(), [(result, )])
+
+    def assertError(self, query):
+        with self.assertRaises(CompilationError):
+            dtypes, rows = self.ctx.execute(query)
+
 
 class CommonInputBase(unittest.TestCase):
     INPUT = textwrap.dedent("""
@@ -99,15 +108,6 @@ class TestFundamentals(QueryBase):
               date: 2022-04-05
               null: NULL
         """)
-
-    def assertResult(self, query, result, datatype=None):
-        curs = self.ctx.execute(query)
-        self.assertEqual([c.datatype for c in curs.description], [datatype or type(result)])
-        self.assertEqual(curs.fetchall(), [(result, )])
-
-    def assertError(self, query):
-        with self.assertRaises(CompilationError):
-            dtypes, rows = self.ctx.execute(query)
 
     def test_type_casting(self):
         # bool
@@ -298,8 +298,7 @@ class TestFundamentals(QueryBase):
 
         # commodity_meta
         self.assertResult("SELECT commodity_meta('MISSING')", None, dict)
-        self.assertResult("SELECT commodity_meta('TEST')",
-                          {'filename': '<string>', 'lineno': 2, 'rate': Decimal('42')})
+        self.assertResult("SELECT commodity_meta('TEST')", {'filename': '<string>', 'lineno': 2, 'rate': Decimal('42')})
         self.assertResult("SELECT commodity_meta('TEST', 'rate')", Decimal('42'), object)
 
     def test_coalesce(self):
@@ -326,6 +325,40 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT int(entry.meta['lineno'])", 5)
         self.assertError ("SELECT entry.foo")
         self.assertError ("SELECT position.foo")
+
+
+class TestFunctions(QueryBase):
+    INPUT = textwrap.dedent("""
+          2024-06-23 commodity TEST
+            answer: "42"
+          2024-06-23 open Assets:Tests
+            key: "value"
+          2024-06-23 open Expenses:Tests
+          2024-06-05 * "Test"
+            Assets:Tests  1.000 TEST
+            Expenses:Tests
+          2024-06-24 close Expenses:Tests
+        """)
+
+    def test_open_date(self):
+        self.assertResult('''SELECT open_date('Expenses:Tests') FROM #''', datetime.date(2024, 6, 23))
+        self.assertResult('''SELECT open_date('Expenses:Foo') FROM #''', None, datetime.date)
+
+    def test_close_date(self):
+        self.assertResult('''SELECT close_date('Expenses:Tests') FROM #''', datetime.date(2024, 6, 24))
+        self.assertResult('''SELECT close_date('Expenses:Foo') FROM #''', None, datetime.date)
+        self.assertResult('''SELECT close_date('Assets:Tests') FROM #''', None, datetime.date)
+
+    def test_open_meta(self):
+        self.assertResult('''SELECT open_meta('Assets:Tests') FROM #''', {'filename': '<string>', 'lineno': 4, 'key': 'value'})
+        self.assertResult('''SELECT open_meta('Assets:Tests', 'key') FROM #''', 'value', object)
+        self.assertResult('''SELECT open_meta('Expenses:Tests', 'baz') FROM #''', None, object)
+        self.assertResult('''SELECT open_meta('Expenses:Foo', 'key') FROM #''', None, object)
+
+    def test_commodity_meta(self):
+        self.assertResult('''SELECT commodity_meta('TEST', 'answer') FROM #''', '42', object)
+        self.assertResult('''SELECT commodity_meta('TEST') FROM #''', {'filename': '<string>', 'lineno': 2, 'answer': '42'})
+        self.assertResult('''SELECT commodity_meta('X') FROM #''', None, dict)
 
 
 class TestFilterEntries(CommonInputBase, QueryBase):
