@@ -38,20 +38,20 @@ from beanquery import tables
 from beanquery import types
 
 
-def function(intypes, outtype, pass_context=False, name=None):
+def function(intypes, outtype, pass_row=False, name=None):
     def decorator(func):
         class Func(query_compile.EvalFunction):
             __intypes__ = intypes
-            pure = not pass_context
+            pure = not pass_row
             def __init__(self, operands):
                 super().__init__(operands, outtype)
-            def __call__(self, context):
-                args = [operand(context) for operand in self.operands]
+            def __call__(self, row):
+                args = [operand(row) for operand in self.operands]
                 for arg in args:
                     if arg is None:
                         return None
-                if pass_context:
-                    return func(context, *args)
+                if pass_row:
+                    return func(row, *args)
                 return func(*args)
         Func.__name__ = name if name is not None else func.__name__
         Func.__doc__ = func.__doc__
@@ -304,21 +304,21 @@ def lower(string):
     return string.lower()
 
 
-@function([str], datetime.date, pass_context=True)
+@function([str], datetime.date, pass_row=True)
 def open_date(context, acc):
     """Get the date of the open directive of the account."""
     open_entry, _ = context.open_close_map[acc]
     return open_entry.date if open_entry else None
 
 
-@function([str], datetime.date, pass_context=True)
+@function([str], datetime.date, pass_row=True)
 def close_date(context, acc):
     """Get the date of the close directive of the account."""
     _, close_entry = context.open_close_map[acc]
     return close_entry.date if close_entry else None
 
 
-@function([str], object, pass_context=True)
+@function([str], object, pass_row=True)
 def meta(context, key):
     """Get some metadata key of the Posting."""
     try:
@@ -330,7 +330,7 @@ def meta(context, key):
     return None
 
 
-@function([str], object, pass_context=True)
+@function([str], object, pass_row=True)
 def entry_meta(context, key):
     """Get some metadata key of the parent directive (Transaction)."""
     try:
@@ -340,7 +340,7 @@ def entry_meta(context, key):
     return None
 
 
-@function([str], object, pass_context=True)
+@function([str], object, pass_row=True)
 def any_meta(context, key):
     """Get metadata from the posting or its parent transaction's metadata if not present."""
     try:
@@ -356,8 +356,8 @@ def any_meta(context, key):
     return None
 
 
-@function([str], dict, pass_context=True)
-@function([str, str], object, pass_context=True)
+@function([str], dict, pass_row=True)
+@function([str, str], object, pass_row=True)
 def open_meta(context, account, key=None):
     """Get the metadata dict of the open directive of the account."""
     entry, _ = context.open_close_map[account]
@@ -368,10 +368,10 @@ def open_meta(context, account, key=None):
     return entry.meta.get(key)
 
 
-@function([str], dict, pass_context=True)
-@function([str, str], object, pass_context=True)
-@function([str], dict, pass_context=True, name='commodity_meta')
-@function([str, str], object, pass_context=True, name='commodity_meta')
+@function([str], dict, pass_row=True)
+@function([str, str], object, pass_row=True)
+@function([str], dict, pass_row=True, name='commodity_meta')
+@function([str, str], object, pass_row=True, name='commodity_meta')
 def currency_meta(context, commodity, key=None):
     """Get the metadata dict of the commodity directive of the currency."""
     entry = context.commodity_map.get(commodity)
@@ -382,14 +382,14 @@ def currency_meta(context, commodity, key=None):
     return entry.meta.get(key)
 
 
-@function([str], str, pass_context=True)
+@function([str], str, pass_row=True)
 def account_sortkey(context, acc):
     """Get a string to sort accounts in order taking into account the types."""
     index, name = account_types.get_account_sort_key(context.account_types, acc)
     return '{}-{}'.format(index, name)
 
 
-@function([str], str, pass_context=True)
+@function([str], str, pass_row=True)
 def has_account(context, pattern):
     """True if the transaction has at least one posting matching the regular expression argument."""
     search = re.compile(pattern, re.IGNORECASE).search
@@ -437,43 +437,43 @@ def inventory_cost(inv):
     return inv.reduce(convert.get_cost)
 
 
-@function([amount.Amount, str], amount.Amount, pass_context=True, name='convert')
-@function([amount.Amount, str, datetime.date], amount.Amount, pass_context=True, name='convert')
+@function([amount.Amount, str], amount.Amount, pass_row=True, name='convert')
+@function([amount.Amount, str, datetime.date], amount.Amount, pass_row=True, name='convert')
 def convert_amount(context, amount_, currency, date=None):
     """Coerce an amount to a particular currency."""
     return convert.convert_amount(amount_, currency, context.price_map, date)
 
 
-@function([position.Position, str], amount.Amount, pass_context=True, name='convert')
-@function([position.Position, str, datetime.date], amount.Amount, pass_context=True, name='convert')
+@function([position.Position, str], amount.Amount, pass_row=True, name='convert')
+@function([position.Position, str, datetime.date], amount.Amount, pass_row=True, name='convert')
 def convert_position(context, pos, currency, date=None):
     """Coerce an amount to a particular currency."""
     return convert.convert_position(pos, currency, context.price_map, date)
 
 
-@function([inventory.Inventory, str], inventory.Inventory, pass_context=True, name='convert')
-@function([inventory.Inventory, str, datetime.date], inventory.Inventory, pass_context=True, name='convert')
+@function([inventory.Inventory, str], inventory.Inventory, pass_row=True, name='convert')
+@function([inventory.Inventory, str, datetime.date], inventory.Inventory, pass_row=True, name='convert')
 def convert_inventory(context, inv, currency, date=None):
     """Coerce an inventory to a particular currency."""
     return inv.reduce(convert.convert_position, currency, context.price_map, date)
 
 
-@function([position.Position], amount.Amount, pass_context=True, name='value')
-@function([position.Position, datetime.date], amount.Amount, pass_context=True, name='value')
+@function([position.Position], amount.Amount, pass_row=True, name='value')
+@function([position.Position, datetime.date], amount.Amount, pass_row=True, name='value')
 def position_value(context, pos, date=None):
     """Convert a position to its cost currency at the market value."""
     return convert.get_value(pos, context.price_map, date)
 
 
-@function([inventory.Inventory], inventory.Inventory, pass_context=True, name='value')
-@function([inventory.Inventory, datetime.date], inventory.Inventory, pass_context=True, name='value')
+@function([inventory.Inventory], inventory.Inventory, pass_row=True, name='value')
+@function([inventory.Inventory, datetime.date], inventory.Inventory, pass_row=True, name='value')
 def inventory_value(context, inv, date=None):
     """Coerce an inventory to its market value."""
     return inv.reduce(convert.get_value, context.price_map, date)
 
 
-@function([str, str], Decimal, pass_context=True)
-@function([str, str, datetime.date], Decimal, pass_context=True, name='getprice')
+@function([str, str], Decimal, pass_row=True)
+@function([str, str, datetime.date], Decimal, pass_row=True, name='getprice')
 def getprice(context, base, quote, date=None):
     """Fetch a price."""
     pair = (base.upper(), quote.upper())
@@ -542,10 +542,10 @@ def filter_currency_inventory(inv, currency):
     return inventory.Inventory(pos for pos in inv if pos.units.currency == currency)
 
 
-@function([Decimal, str], Decimal, pass_context=True)
-@function([amount.Amount, str], amount.Amount, pass_context=True)
-@function([position.Position, str], position.Position, pass_context=True)
-@function([inventory.Inventory, str], inventory.Inventory, pass_context=True)
+@function([Decimal, str], Decimal, pass_row=True)
+@function([amount.Amount, str], amount.Amount, pass_row=True)
+@function([position.Position, str], position.Position, pass_row=True)
+@function([inventory.Inventory, str], inventory.Inventory, pass_row=True)
 def possign(context, x, account):
     """Correct sign of an Amount based on the usual balance of associated account."""
     sign = account_types.get_account_sign(account, context.account_types)
