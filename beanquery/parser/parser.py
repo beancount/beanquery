@@ -497,10 +497,10 @@ class BQLParser(Parser):
                 self._comparison_()
             self._error(
                 'expecting one of: '
-                "'NOT' <between> <comparison> <eq> <gt>"
-                '<gte> <in> <isnotnull> <isnull> <lt>'
-                '<lte> <match> <neq> <not> <notin>'
-                '<notmatch> <sum>'
+                "'NOT' <all> <any> <between> <comparison>"
+                '<eq> <gt> <gte> <in> <isnotnull>'
+                '<isnull> <lt> <lte> <match> <neq> <not>'
+                '<notin> <notmatch> <sum>'
             )
 
     @tatsumasu('Not')
@@ -514,6 +514,10 @@ class BQLParser(Parser):
     @nomemo
     def _comparison_(self):
         with self._choice():
+            with self._option():
+                self._any_()
+            with self._option():
+                self._all_()
             with self._option():
                 self._lt_()
             with self._option():
@@ -544,14 +548,64 @@ class BQLParser(Parser):
                 self._sum_()
             self._error(
                 'expecting one of: '
-                '<add> <between> <eq> <gt> <gte> <in>'
-                '<isnotnull> <isnull> <lt> <lte> <match>'
-                '<neq> <notin> <notmatch> <sub> <sum>'
-                '<term>'
+                '<add> <all> <any> <between> <eq> <gt>'
+                '<gte> <in> <isnotnull> <isnull> <lt>'
+                '<lte> <match> <neq> <notin> <notmatch>'
+                '<sub> <sum> <term>'
+            )
+
+    @tatsumasu('Any')
+    @nomemo
+    def _any_(self):
+        self._sum_()
+        self.name_last_node('left')
+        self._op_()
+        self.name_last_node('op')
+        self._token('any')
+        self._token('(')
+        self._expression_()
+        self.name_last_node('right')
+        self._token(')')
+        self._define(['left', 'op', 'right'], [])
+
+    @tatsumasu('All')
+    def _all_(self):
+        self._sum_()
+        self.name_last_node('left')
+        self._op_()
+        self.name_last_node('op')
+        self._token('all')
+        self._token('(')
+        self._expression_()
+        self.name_last_node('right')
+        self._token(')')
+        self._define(['left', 'op', 'right'], [])
+
+    @tatsumasu()
+    def _op_(self):
+        with self._choice():
+            with self._option():
+                self._token('<')
+            with self._option():
+                self._token('<=')
+            with self._option():
+                self._token('>')
+            with self._option():
+                self._token('>=')
+            with self._option():
+                self._token('=')
+            with self._option():
+                self._token('!=')
+            with self._option():
+                self._token('~')
+            with self._option():
+                self._token('!~')
+            self._error(
+                'expecting one of: '
+                "'!=' '!~' '<' '<=' '=' '>' '>=' '~'"
             )
 
     @tatsumasu('Less')
-    @nomemo
     def _lt_(self):
         self._sum_()
         self.name_last_node('left')

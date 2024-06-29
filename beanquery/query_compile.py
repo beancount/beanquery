@@ -18,6 +18,7 @@ import operator
 
 from decimal import Decimal
 from itertools import product
+from typing import List
 
 from dateutil.relativedelta import relativedelta
 
@@ -439,6 +440,44 @@ class EvalGetter(EvalNode):
         return self.getter(operand)
 
 
+class EvalAny(EvalNode):
+    __slots__ = ('op', 'left', 'right')
+
+    def __init__(self, op, left, right):
+        super().__init__(bool)
+        self.op = op
+        self.left = left
+        self.right = right
+
+    def __call__(self, row):
+        left = self.left(row)
+        if left is None:
+            return None
+        right = self.right(row)
+        if right is None:
+            return None
+        return any(self.op(left, x) for x in right)
+
+
+class EvalAll(EvalNode):
+    __slots__ = ('op', 'left', 'right')
+
+    def __init__(self, op, left, right):
+        super().__init__(bool)
+        self.op = op
+        self.left = left
+        self.right = right
+
+    def __call__(self, row):
+        left = self.left(row)
+        if left is None:
+            return None
+        right = self.right(row)
+        if right is None:
+            return None
+        return all(self.op(left, x) for x in right)
+
+
 class EvalColumn(EvalNode):
     pass
 
@@ -523,10 +562,7 @@ class SubqueryTable(tables.Table):
 
 class EvalConstantSubquery1D(EvalNode):
     def __init__(self, subquery):
-        # There is no support yet for list specialization, thus the
-        # type of the columns returned by the subquery cannot be taken
-        # into account.
-        self.dtype = list
+        self.dtype = List[subquery.columns[0].c_expr.dtype]
         self.subquery = subquery
         self.value = MARKER
 

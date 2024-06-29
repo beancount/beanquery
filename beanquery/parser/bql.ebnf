@@ -104,6 +104,8 @@ not::Not::UnaryOp
 
 comparison
     =
+    | any
+    | all
     | lt
     | lte
     | gt
@@ -118,6 +120,26 @@ comparison
     | isnotnull
     | between
     | sum
+    ;
+
+any::Any
+    = left:sum op:op 'any' '(' right:expression ')'
+    ;
+
+all::All
+    = left:sum op:op 'all' '(' right:expression ')'
+    ;
+
+op
+    =
+    | '<'
+    | '<='
+    | '>'
+    | '>='
+    | '='
+    | '!='
+    | '~'
+    | '!~'
     ;
 
 lt::Less::BinaryOp

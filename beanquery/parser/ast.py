@@ -308,3 +308,7 @@ class Add(BinaryOp):
 
 class Sub(BinaryOp):
     __slots__ = ()
+
+
+Any = node('Any', 'left op right')
+All = node('All', 'left op right')
