@@ -62,6 +62,45 @@ def function(intypes, outtype, pass_row=False, pass_context=None, name=None):
     return decorator
 
 
+def register(name=None):
+    def decorator(cls):
+        if name is not None:
+            cls.__name__ = name
+        query_compile.FUNCTIONS[cls.__name__].append(cls)
+        return cls
+    return decorator
+
+
+@register('getitem')
+class GetItem2(query_compile.EvalFunction):
+    __intypes__ = [dict, str]
+
+    def __init__(self, context, operands):
+        super().__init__(context, operands, object)
+
+    def __call__(self, row):
+        obj, key = self.operands
+        obj = obj(row)
+        if obj is None:
+            return None
+        return obj.get(key(row))
+
+
+@register('getitem')
+class GetItem3(query_compile.EvalFunction):
+    __intypes__ = [dict, str, types.Any]
+
+    def __init__(self, context, operands):
+        super().__init__(context, operands, object)
+
+    def __call__(self, row):
+        obj, key, default = self.operands
+        obj = obj(row)
+        if obj is None:
+            return None
+        return obj.get(key(row), default(row))
+
+
 def Function(name, args):
     func = types.function_lookup(query_compile.FUNCTIONS, name, args)
     if func is not None:
@@ -509,13 +548,6 @@ def number(x):
 def currency(x):
     """Extract the currency from an Amount."""
     return x.currency
-
-
-@function([dict, str], object, name='getitem')
-@function([dict, str, types.Any], object, name='getitem')
-def getitem_(x, key, default=None):
-    """Get value for the given key from a dict."""
-    return x.get(key, default)
 
 
 @function([str, set], str)
