@@ -1,4 +1,5 @@
 import collections.abc
+import typing
 
 from decimal import Decimal
 from functools import singledispatchmethod
@@ -12,6 +13,8 @@ from .parser import ast
 from .query_compile import (
     EvalAggregator,
     EvalAnd,
+    EvalAll,
+    EvalAny,
     EvalCoalesce,
     EvalColumn,
     EvalConstant,
@@ -467,6 +470,56 @@ class Compiler:
     @_compile.register
     def _and(self, node: ast.And):
         return EvalAnd([self._compile(arg) for arg in node.args])
+
+    _OPERATORS = {
+        '<': ast.Less,
+        '<=': ast.LessEq,
+        '>': ast.Greater,
+        '>=': ast.GreaterEq,
+        '=': ast.Equal,
+        '!=': ast.NotEqual,
+        '~': ast.Match,
+        '!~': ast.NotMatch,
+    }
+
+    # dispatching on an Union is supported only starting with Python 3.11
+    @_compile.register(ast.All)
+    @_compile.register(ast.Any)
+    def _all(self, node):
+        right = self._compile(node.right)
+
+        if isinstance(right, EvalQuery):
+            if len(right.columns) != 1:
+                raise CompilationError('subquery has too many columns', node.right)
+            right = EvalConstantSubquery1D(right)
+
+        right_dtype = typing.get_origin(right.dtype) or right.dtype
+        if right_dtype not in {list, set}:
+            raise CompilationError(f'not a list or set but {right_dtype}', node.right)
+        args = typing.get_args(right.dtype)
+        if args:
+            assert len(args) == 1
+            right_element_dtype = args[0]
+        else:
+            right_element_dtype = object
+
+        left = self._compile(node.left)
+
+        # lookup operator implementaton and check typing
+        op = self._OPERATORS[node.op]
+        for func in OPERATORS[op]:
+            if func.__intypes__ == [right_element_dtype, left.dtype]:
+                break
+        else:
+            raise CompilationError(
+                f'operator "{op.__name__.lower()}('
+                f'{left.dtype.__name__}, {right_element_dtype.__name__})" not supported', node)
+
+        # need to instantiate the operaotr implementation to get to the underlying function
+        operator = func(None, None).operator
+
+        cls = EvalAll if type(node) is ast.All else EvalAny
+        return cls(operator, left, right)
 
     @_compile.register
     def _function(self, node: ast.Function):

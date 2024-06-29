@@ -1713,3 +1713,43 @@ class TestArrayOpsSubquery(unittest.TestCase):
             (False,),
             ]
         )
+
+    def test_any_subquery(self):
+        self.check_query(
+            """
+            SELECT 1 = ANY (SELECT x FROM #test) AS y FROM #
+            """,
+            (('y', bool),),
+            [
+            (True,),
+            ]
+        )
+        self.check_query(
+            """
+            SELECT 1 = ANY (SELECT x FROM #test WHERE x % 2 = 0) AS y FROM #
+            """,
+            (('y', bool),),
+            [
+            (False,),
+            ]
+        )
+
+    def test_all_subquery(self):
+        self.check_query(
+            """
+            SELECT 1 = ALL (SELECT x FROM #test) AS y FROM #
+            """,
+            (('y', bool),),
+            [
+            (False,),
+            ]
+        )
+        self.check_query(
+            """
+            SELECT 1 = ALL (SELECT x FROM #test WHERE x = 1) AS y FROM #
+            """,
+            (('y', bool),),
+            [
+            (True,),
+            ]
+        )
