@@ -379,42 +379,25 @@ def open_meta(context, account, key=None):
     return open_entry.meta.get(key)
 
 
-@function([str], object, pass_row=True)
+# Stub kept only for function type checking and for generating documentation.
+@function([str], object)
 def meta(context, key):
-    """Get some metadata key of the Posting."""
-    try:
-        return context.posting.meta[key]
-    # Postings for pad transactions have their meta fields set to
-    # None. See https://github.com/beancount/beancount/issues/767
-    except (AttributeError, KeyError, TypeError):
-        pass
-    return None
+    """Get some metadata key of the posting."""
+    raise NotImplementedError
 
 
-@function([str], object, pass_row=True)
+# Stub kept only for function type checking and for generating documentation.
+@function([str], object)
 def entry_meta(context, key):
-    """Get some metadata key of the parent directive (Transaction)."""
-    try:
-        return context.entry.meta[key]
-    except (AttributeError, KeyError):
-        pass
-    return None
+    """Get some metadata key of the transaction."""
+    raise NotImplementedError
 
 
+# Stub kept only for function type checking and for generating documentation.
 @function([str], object, pass_row=True)
 def any_meta(context, key):
-    """Get metadata from the posting or its parent transaction's metadata if not present."""
-    try:
-        return context.posting.meta[key]
-    # Postings for pad transactions have their meta fields set to
-    # None. See https://github.com/beancount/beancount/issues/767
-    except (AttributeError, KeyError, TypeError):
-        pass
-    try:
-        return context.entry.meta[key]
-    except (AttributeError, KeyError):
-        pass
-    return None
+    """Get metadata from the posting or its parent transaction if not present."""
+    raise NotImplementedError
 
 
 @function([str], dict, pass_context=True)

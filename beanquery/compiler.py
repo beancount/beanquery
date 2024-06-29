@@ -461,10 +461,10 @@ class Compiler:
     def _function(self, node: ast.Function):
         operands = [self._compile(operand) for operand in node.operands]
 
+        # ``coalesce()`` is parsed like a function call but it does
+        # not really fit our model for function evaluation, therefore
+        # it gets special threatment here.
         if node.fname == 'coalesce':
-            # coalesce() is parsed like a function call but it does
-            # not really fit our model for function evaluation,
-            # therefore it gets special threatment here.
             for operand in operands:
                 if operand.dtype != operands[0].dtype:
                     dtypes = ', '.join(operand.dtype.__name__ for operand in operands)
@@ -475,6 +475,26 @@ class Compiler:
         if function is None:
             sig = '{}({})'.format(node.fname, ', '.join(f'{operand.dtype.__name__.lower()}' for operand in operands))
             raise CompilationError(f'no function matches "{sig}" name and argument types', node)
+
+        # Replace ``meta(key)`` with ``meta[key]``.
+        if node.fname == 'meta':
+            key = node.operands[0]
+            node = ast.Function('getitem', [ast.Column('meta', parseinfo=node.parseinfo), key])
+            return self._compile(node)
+
+        # Replace ``entry_meta(key)`` with ``entry.meta[key]``.
+        if node.fname == 'entry_meta':
+            key = node.operands[0]
+            node = ast.Function('getitem', [ast.Attribute(ast.Column('entry', parseinfo=node.parseinfo), 'meta'), key])
+            return self._compile(node)
+
+        # Replace ``any_meta(key)`` with ``getitem(meta, key, entry.meta[key])``.
+        if node.fname == 'any_meta':
+            key = node.operands[0]
+            node = ast.Function('getitem', [ast.Column('meta', parseinfo=node.parseinfo), key, ast.Function('getitem', [
+                ast.Attribute(ast.Column('entry', parseinfo=node.parseinfo), 'meta'), key])])
+            return self._compile(node)
+
         function = function(self.context, operands)
         # Constants folding.
         if all(isinstance(operand, EvalConstant) for operand in operands) and function.pure:
