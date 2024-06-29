@@ -283,15 +283,13 @@ class TestCompileFundamentals(CompileSelectBase):
             qc.EvalTarget(qc.EvalConstant(2), 'expr', False)
         ], None, None, None, None, None, None))
 
-        expr = self.compile("SELECT 1 + meta('int') AS expr")
+        expr = self.compile("SELECT 1 + meta['int'] AS expr")
         self.assertEqual(expr, qc.EvalQuery(Table('postings'), [
             qc.EvalTarget(
                 qc.Operator(ast.Add, [
                     qc.EvalConstant(1),
                     qe.Function('decimal', [
-                        qe.Function('meta', [
-                            qc.EvalConstant('int'),
-                        ]),
+                        qc.EvalGetItem(qe.Column('meta'), 'int')
                     ]),
                 ]), 'expr', False)
         ], None, None, None, None, None, None))
