@@ -1,5 +1,10 @@
 import datetime
 import decimal
+import itertools
+
+
+# Only Python >= 3.10 exposes NoneType in the types module.
+NoneType = type(None)
 
 
 class AnyType:
@@ -42,6 +47,20 @@ class Structure:
             TYPES[cls.name] = cls
 
 
+def _bases(t):
+    if t is NoneType:
+        return (object,)
+    bases = t.__mro__
+    if len(bases) > 1 and bases[-1] is object:
+        # All types that are not ``object`` have more than one class
+        # in their ``__mro__``. BQL uses ``object`` for untypes
+        # values. Do not return ``object`` as base for strict types,
+        # to avoid functions taking untyped onjects to accept all
+        # values.
+        return bases[:-1]
+    return bases
+
+
 def function_lookup(functions, name, operands):
     """Lookup a BQL function implementation.
 
@@ -53,10 +72,10 @@ def function_lookup(functions, name, operands):
     Returns:
       A EvalNode (or subclass) instance or None if the function was not found.
     """
-    intypes = [operand.dtype for operand in operands]
-    for func in functions[name]:
-        if func.__intypes__ == intypes:
-            return func
+    for signature in itertools.product(*(_bases(operand.dtype) for operand in operands)):
+        for func in functions[name]:
+            if func.__intypes__ == list(signature):
+                return func
     return None
 
 
