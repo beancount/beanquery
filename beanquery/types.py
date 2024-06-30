@@ -90,4 +90,6 @@ ALIASES = {}
 
 
 def name(datatype):
+    if datatype is NoneType:
+        return 'NULL'
     return getattr(datatype, 'name', datatype.__name__.lower())
