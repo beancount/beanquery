@@ -1,6 +1,7 @@
 import datetime
 import decimal
 import itertools
+import typing
 
 
 # Only Python >= 3.10 exposes NoneType in the types module.
@@ -21,16 +22,9 @@ class AnyType:
 Any = AnyType()
 
 
-class AsteriskType:
-    __slots__ = ()
-    __name__ = '*'
-
-    def __eq__(self, other):
-        return isinstance(other, self.__class__)
-
-
 # Used for COUNT(*)
-Asterisk = AsteriskType()
+Asterisk = typing.NewType('*', object)  # noqa: PLC0132
+Asterisk.__mro__ = Asterisk,
 
 
 # Keep track of the defined structured types to allow introspection.
