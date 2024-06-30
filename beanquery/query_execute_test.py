@@ -55,7 +55,7 @@ class QueryBase(cmptest.TestCase):
 
     def assertError(self, query):
         with self.assertRaises(CompilationError):
-            dtypes, rows = self.ctx.execute(query)
+            self.ctx.execute(query)
 
 
 class CommonInputBase(unittest.TestCase):
