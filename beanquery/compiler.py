@@ -560,6 +560,11 @@ class Compiler:
                 ast.Attribute(ast.Column('entry', parseinfo=node.parseinfo), 'meta'), key])])
             return self._compile(node)
 
+        # Replace ``has_account(regexp)`` with ``('(?i)' + regexp) ~? any (accounts)``.
+        if node.fname == 'has_account':
+            node = ast.Any(ast.Add(ast.Constant('(?i)'), node.operands[0]), '?~', ast.Column('accounts'))
+            return self._compile(node)
+
         function = function(self.context, operands)
         # Constants folding.
         if all(isinstance(operand, EvalConstant) for operand in operands) and function.pure:

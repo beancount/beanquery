@@ -38,12 +38,11 @@ from beanquery import tables
 from beanquery import types
 
 
-def function(intypes, outtype, pass_row=False, pass_context=None, name=None):
-    assert not (pass_row and pass_context)
+def function(intypes, outtype, pass_context=None, name=None):
     def decorator(func):
         class Func(query_compile.EvalFunction):
             __intypes__ = intypes
-            pure = not pass_row and not pass_context
+            pure = not pass_context
             def __init__(self, context, operands):
                 super().__init__(context, operands, outtype)
             def __call__(self, row):
@@ -51,8 +50,6 @@ def function(intypes, outtype, pass_row=False, pass_context=None, name=None):
                 for arg in args:
                     if arg is None:
                         return None
-                if pass_row:
-                    return func(row, *args)
                 if pass_context:
                     return func(self.context, *args)
                 return func(*args)
@@ -395,7 +392,7 @@ def entry_meta(context, key):
 
 
 # Stub kept only for function type checking and for generating documentation.
-@function([str], object, pass_row=True)
+@function([str], object)
 def any_meta(context, key):
     """Get metadata from the posting or its parent transaction if not present."""
     raise NotImplementedError
@@ -423,11 +420,11 @@ def account_sortkey(context, acc):
     return '{}-{}'.format(index, name)
 
 
-@function([str], bool, pass_row=True)
+# Stub kept only for function type checking and for generating documentation.
+@function([str], bool)
 def has_account(context, pattern):
     """True if the transaction has at least one posting matching the regular expression argument."""
-    search = re.compile(pattern, re.IGNORECASE).search
-    return any(search(account) for account in getters.get_entry_accounts(context.entry))
+    raise NotImplementedError
 
 
 # Note: Don't provide this, because polymorphic multiplication on Amount,
