@@ -525,7 +525,7 @@ class Compiler:
         function = types.function_lookup(OPERATORS, type(node), [operand])
         if function is None:
             raise CompilationError(
-                f'operator "{type(node).__name__.lower()}({operand.dtype.__name__})" not supported', node)
+                f'operator "{type(node).__name__.lower()}({types.name(operand.dtype)})" not supported', node)
         function = function(operand)
         # Constants folding.
         if isinstance(operand, EvalConstant):
@@ -593,7 +593,7 @@ class Compiler:
 
         raise CompilationError(
             f'operator "{type(node).__name__.lower()}('
-            f'{left.dtype.__name__}, {right.dtype.__name__})" not supported', node)
+            f'{types.name(left.dtype)}, {types.name(right.dtype)})" not supported', node)
 
     @_compile.register
     def _constant(self, node: ast.Constant):
