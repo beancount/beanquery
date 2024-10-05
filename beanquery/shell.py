@@ -98,7 +98,7 @@ class Settings:
     narrow: bool = True
     nullvalue: str = ''
     numberify: bool = False
-    pager: str = ''
+    pager: bool = True
     spaced: bool = False
     unicode: bool = False
 
@@ -207,17 +207,6 @@ class DispatchingShell(cmd.Cmd):
                     lambda _, fun=func: print(textwrap.dedent(fun.__doc__).strip(),
                                               file=self.outfile))
 
-    def get_pager(self):
-        """Create and return a context manager to write to, a pager subprocess if required.
-
-        Returns:
-          A context manager.
-
-        """
-        if self.interactive:
-            return pager.ConditionalPager(self.settings.pager, minlines=get_screen_height())
-        return pager.flush_only(sys.stdout)
-
     @property
     def output(self):
         """Where to direct command output.
@@ -232,7 +221,9 @@ class DispatchingShell(cmd.Cmd):
 
         """
         if self.outfile is sys.stdout:
-            return self.get_pager()
+            if self.interactive and self.settings.pager:
+                return pager.ConditionalPager(None, minlines=get_screen_height())
+            return pager.flush_only(sys.stdout)
         return nullcontext(self.outfile)
 
     def cmdloop(self, intro=None):
