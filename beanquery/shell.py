@@ -242,7 +242,7 @@ class DispatchingShell(cmd.Cmd):
                 super().cmdloop(intro)
                 break
             except KeyboardInterrupt:
-                print('\n(interrupted)', file=self.stderr)
+                print('\n(interrupted)', file=sys.stderr)
             except Exception as exc:
                 self.error(render_exception(exc))
 
