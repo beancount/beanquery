@@ -19,17 +19,14 @@ from beanquery import query_render
 TABLES = [query_env.EntriesTable, query_env.PostingsTable]
 
 
-def add_beancount_tables(context, entries, errors, options):
+def attach(context, dsn, entries=None, errors=None, options=None):
+    filename = urlparse(dsn).path
+    if filename:
+        entries, errors, options = loader.load_file(filename)
     for table in TABLES:
         context.tables[table.name] = table(entries, options)
     context.options.update(options)
     context.errors.extend(errors)
-
-
-def attach(context, dsn):
-    filename = urlparse(dsn).path
-    entries, errors, options = loader.load_file(filename)
-    add_beancount_tables(context, entries, errors, options)
 
 
 class Metadata(dict):

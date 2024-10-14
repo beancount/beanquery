@@ -13,7 +13,6 @@ from beancount import loader
 from beancount.utils import test_utils
 
 from beanquery import shell
-from beanquery.sources.beancount import add_beancount_tables
 
 
 @functools.lru_cache(None)
@@ -124,7 +123,7 @@ def run_shell_command(cmd):
     with test_utils.capture('stdout') as stdout, test_utils.capture('stderr') as stderr:
         shell_obj = shell.BQLShell(None, sys.stdout)
         entries, errors, options = load()
-        add_beancount_tables(shell_obj.context, entries, errors, options)
+        shell_obj.context.attach('beancount:', entries=entries, errors=errors, options=options)
         shell_obj._extract_queries(entries)  # pylint: disable=protected-access
         shell_obj.onecmd(cmd)
     return stdout.getvalue(), stderr.getvalue()
