@@ -16,14 +16,13 @@ from beancount.core.inventory import from_string as I
 from beancount.parser import cmptest
 from beancount import loader
 
+import beanquery
+
 from beanquery import CompilationError
 from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import query_execute as qx
 from beanquery import tables
-
-from beanquery import Connection
-from beanquery.sources.beancount import add_beancount_tables
 
 
 class QueryBase(cmptest.TestCase):
@@ -32,17 +31,14 @@ class QueryBase(cmptest.TestCase):
 
     def setUp(self):
         entries, errors, options = loader.load_string(textwrap.dedent(self.INPUT))
-        self.ctx = Connection()
-        add_beancount_tables(self.ctx, entries, errors, options)
+        self.ctx = beanquery.connect('beancount:', entries=entries, errors=errors, options=options)
 
     def compile(self, query):
         return self.ctx.compile(self.ctx.parse(query))
 
     def check_query(self, input_string, query, expected_types, expected_rows):
         entries, errors, options = loader.load_string(input_string)
-        ctx = Connection()
-        add_beancount_tables(ctx, entries, errors, options)
-
+        ctx = beanquery.connect('beancount:', entries=entries, errors=errors, options=options)
         curs = ctx.execute(query)
         self.assertEqual(tuple(expected_types), curs.description)
         result_rows = curs.fetchall()
@@ -1399,8 +1395,7 @@ class TestExecutePivot(QueryBase):
         super().setUp()
         entries, errors, options = loader.load_string(self.data, dedent=True)
         self.assertFalse(errors)
-        self.ctx = Connection()
-        add_beancount_tables(self.ctx, entries, errors, options)
+        self.ctx = beanquery.connect('beancount:', entries=entries, errors=errors, options=options)
 
     def execute(self, query):
         curs = self.ctx.execute(query)

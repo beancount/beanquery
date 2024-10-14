@@ -16,22 +16,22 @@ from .parser import ParseError
 __version__ = '0.1.dev1'
 
 
-def connect(dsn=None):
-    return Connection(dsn)
+def connect(dsn, **kwargs):
+    return Connection(dsn, **kwargs)
 
 
 class Connection:
-    def __init__(self, dsn=None):
+    def __init__(self, dsn=None, **kwargs):
         self.tables = {'': tables.NullTable()}
         self.options = {}
         self.errors = []
         if dsn is not None:
-            self.attach(dsn)
+            self.attach(dsn, **kwargs)
 
-    def attach(self, dsn):
+    def attach(self, dsn, **kwargs):
         scheme = urlparse(dsn).scheme
         source = importlib.import_module(f'beanquery.sources.{scheme}')
-        source.attach(self, dsn)
+        source.attach(self, dsn, **kwargs)
 
     def close(self):
         # Required by the DB-API.
