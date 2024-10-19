@@ -16,6 +16,12 @@ from .parser import ParseError
 __version__ = '0.1.dev1'
 
 
+# DB-API compliance
+apilevel = '2.0'
+threadsafety = 2
+paramstyle = 'pyformat'
+
+
 def connect(dsn, **kwargs):
     return Connection(dsn, **kwargs)
 
@@ -66,5 +72,8 @@ __all__ = [
     'ParseError',
     'ProgrammingError',
     'Warning',
+    'apilevel',
     'connet',
+    'paramstyle',
+    'threadsafety',
 ]
