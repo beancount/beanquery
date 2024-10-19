@@ -38,6 +38,12 @@ dependencies = [
     'tatsu >= 5.7.4, < 5.8.0',
 ]
 
+[project.optional-dependencies]
+docs = [
+    'furo >= 2024.08.06',
+    'sphinx ~= 8.1.0',
+]
+
 [project.scripts]
 bean-query = 'beanquery.shell:main'
 
