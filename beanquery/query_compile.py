@@ -4,10 +4,14 @@ This code accepts the abstract syntax tree produced by the query parser,
 resolves the column and function names, compiles and interpreter and prepares a
 query to be run against a list of entries.
 """
+
+from __future__ import annotations
+
 __copyright__ = "Copyright (C) 2014-2016  Martin Blais"
 __license__ = "GNU GPLv2"
 
 import collections
+import dataclasses
 import datetime
 import re
 import operator
@@ -22,6 +26,8 @@ from beanquery import query_execute
 from beanquery import types
 from beanquery import tables
 
+
+MARKER = object()
 
 FUNCTIONS = collections.defaultdict(list)
 OPERATORS = collections.defaultdict(list)
@@ -519,6 +525,26 @@ class SubqueryTable(tables.Table):
         return iter(rows)
 
 
+class EvalConstantSubquery1D(EvalNode):
+    def __init__(self, subquery):
+        # There is no support yet for list specialization, thus the
+        # type of the columns returned by the subquery cannot be taken
+        # into account.
+        self.dtype = list
+        self.subquery = subquery
+        self.value = MARKER
+
+    def __call__(self, context):
+        if self.value is MARKER:
+            # Subqueries accessing the current row are not supported yet,
+            # thus the subquery result can be simply cached.
+            columns, rows = query_execute.execute_query(self.subquery)
+            value = [row[0] for row in rows]
+            # Subqueries not returning any row are threates as NULL.
+            self.value = value if value else None
+        return self.value
+
+
 # A compiled target.
 #
 # Attributes:
@@ -543,10 +569,20 @@ EvalTarget = collections.namedtuple('EvalTarget', 'c_expr name is_aggregate')
 #     This list may refer to either aggregates or non-aggregates.
 #   limit: An optional integer used to cut off the number of result rows returned.
 #   distinct: An optional boolean that requests we should uniquify the result rows.
-EvalQuery = collections.namedtuple('EvalQuery', ('table c_targets c_where '
-                                                 'group_indexes having_index '
-                                                 'order_spec '
-                                                 'limit distinct'))
+@dataclasses.dataclass
+class EvalQuery:
+    table: tables.Table
+    c_targets: list
+    c_where: EvalNode
+    group_indexes: list[int]
+    having_index: int
+    order_spec: list[tuple[int, ast.Ordering]]
+    limit: int
+    distinct: bool
+
+    @property
+    def columns(self):
+        return [t for t in self.c_targets if t.name is not None]
 
 
 # A compiled query with a PIVOT BY clause.

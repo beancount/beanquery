@@ -1571,3 +1571,51 @@ class TestExecuteTables(QueryBase):
         self.assertEqual(
             self.execute("""SELECT sum(column) FROM #test GROUP BY column % 2"""),
             ((('sum(column)', int), ), [(56, ), (64, )]))
+
+
+class TestInSubquery(QueryBase):
+    data = """
+      2000-01-01 open Income:Contributions:One
+      2000-01-01 open Income:Contributions:Two
+      2000-01-01 open Income:Contributions:Three
+      2000-01-01 open Assets:Cash
+
+      2024-10-25 * "One"
+        Income:Contributions:One                            100.00 USD
+        Assets:Cash
+
+      2024-10-26 * "Two"
+        Income:Contributions:Two                             10.00 USD
+        Assets:Cash
+
+      2024-10-27 * "Three"
+        Income:Contributions:Three                           50.00 USD
+        Assets:Cash
+
+      2024-10-28 * "Three"
+        Income:Contributions:Three                            1.00 USD
+        Assets:Cash
+    """
+
+    def test_in_subquery(self):
+        self.check_query(self.data, """
+            SELECT
+              account,
+              date
+            FROM #postings
+            WHERE root(account, 2) = 'Income:Contributions'
+            AND account IN (
+              SELECT account
+              FROM #postings
+              GROUP BY account
+              HAVING number(only('USD', sum(position))) > 50.0
+            )
+            ORDER BY date
+            """,
+            (('account', str), ('date', datetime.date)),
+            [
+            ('Income:Contributions:One',   datetime.date(2024, 10, 25)),
+            ('Income:Contributions:Three', datetime.date(2024, 10, 27)),
+            ('Income:Contributions:Three', datetime.date(2024, 10, 28)),
+            ]
+        )
