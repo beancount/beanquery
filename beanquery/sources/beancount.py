@@ -19,7 +19,7 @@ from beanquery import query_render
 TABLES = [query_env.EntriesTable, query_env.PostingsTable]
 
 
-def attach(context, dsn, entries=None, errors=None, options=None):
+def attach(context, dsn, *, entries=None, errors=None, options=None):
     filename = urlparse(dsn).path
     if filename:
         entries, errors, options = loader.load_file(filename)
