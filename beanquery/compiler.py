@@ -2,7 +2,7 @@ import collections.abc
 
 from decimal import Decimal
 from functools import singledispatchmethod
-from typing import Optional, Sequence, Mapping
+from typing import Optional, Sequence, Mapping, Union
 
 from . import types
 from . import parser
@@ -21,6 +21,7 @@ from .query_compile import (
     EvalPivot,
     EvalPrint,
     EvalQuery,
+    EvalConstantSubquery1D,
     EvalTarget,
     FUNCTIONS,
     OPERATORS,
@@ -545,6 +546,20 @@ class Compiler:
         raise CompilationError(
             f'operator "{types.name(operand.dtype)} BETWEEN {types.name(lower.dtype)} '
             f'AND {types.name(upper.dtype)}" not supported', node)
+
+    @_compile.register(ast.In)
+    @_compile.register(ast.NotIn)
+    def _inop(self, node: Union[ast.In, ast.NotIn]):
+        left = self._compile(node.left)
+        right = self._compile(node.right)
+
+        if isinstance(right, EvalQuery):
+            if len(right.columns) != 1:
+                raise CompilationError('subquery has too many columns', node.right)
+            right = EvalConstantSubquery1D(right)
+
+        op = OPERATORS[type(node)][0]
+        return op(left, right)
 
     @_compile.register
     def _binaryop(self, node: ast.BinaryOp):
