@@ -27,11 +27,11 @@ def connect(dsn, **kwargs):
 
 
 class Connection:
-    def __init__(self, dsn=None, **kwargs):
+    def __init__(self, dsn='', **kwargs):
         self.tables = {'': tables.NullTable()}
         self.options = {}
         self.errors = []
-        if dsn is not None:
+        if dsn:
             self.attach(dsn, **kwargs)
 
     def attach(self, dsn, **kwargs):
