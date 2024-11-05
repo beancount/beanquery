@@ -17,6 +17,7 @@ jobs:
           - '3.13'
         beancount:
           - '~= 2.3.6'
+          - '~= 3.0.0'
           - '@ git+https://github.com/beancount/beancount.git'
     steps:
       - uses: actions/checkout@v4
