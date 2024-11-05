@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'beanquery'
-version = '0.1.0'
+version = '0.2.0.dev0'
 description = 'Customizable lightweight SQL query tool'
 license = { file = 'LICENSE' }
 readme = 'README.rst'
