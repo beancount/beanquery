@@ -1,3 +1,4 @@
 beancount >=2.3.4
 click >7.0
+python-dateutil >=2.6.0
 tatsu >=5.7.4, <5.8.0
