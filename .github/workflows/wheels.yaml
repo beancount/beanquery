@@ -22,7 +22,9 @@ jobs:
       id-token: write
     steps:
       - uses: actions/download-artifact@v4
-        path: dist
+        with:
+          merge-multiple: true
+          path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           attestations: false
