@@ -681,6 +681,49 @@ def interval(x):
     return None
 
 
+@function([relativedelta, datetime.date, datetime.date], datetime.date)
+def date_bin(stride, source, origin):
+    """Bin a date into the specified stride aligned with the specified origin.
+
+    As an extension to the the SQL standard ``date_bin()`` function this
+    function also accepts strides containing units of months and years.
+    """
+    if stride.months or stride.years:
+        if origin + stride <= origin:
+            # FIXME: this should raise and error: stride must be greater than zero
+            return None
+        if source >= origin:
+            d = n = origin
+            while True:
+                n += stride
+                if n >= source:
+                    return d
+                d = n
+        else:
+            n = origin
+            while True:
+                n -= stride
+                if n <= source:
+                    return n
+    else:
+        seconds = stride.days * 86400 + stride.hours * 3600 + stride.minutes * 60 + stride.seconds
+        if seconds < 0:
+            # FIXME: this should raise and error: stride must be greater than zero
+            return None
+        diff = (source - origin).total_seconds()
+        modulo = diff % seconds
+        delta = diff - modulo
+        result = origin + datetime.timedelta(seconds=delta)
+        if modulo < 0:
+            result -= datetime.timedelta(seconds=seconds)
+        return result
+
+
+@function([str, datetime.date, datetime.date], datetime.date, name='date_bin')
+def date_bin_str(stride, source, origin):
+    return date_bin(interval(stride), source, origin)
+
+
 def aggregator(intypes, name=None):
     def decorator(cls):
         cls.__intypes__ = intypes
