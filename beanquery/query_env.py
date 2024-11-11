@@ -666,10 +666,18 @@ def interval(x):
     unit = m.group(2)
     if unit == 'day':
         return relativedelta(days=number)
+    if unit == 'week':
+        return relativedelta(weeks=number)
     if unit == 'month':
         return relativedelta(months=number)
     if unit == 'year':
         return relativedelta(years=number)
+    if unit == 'decade':
+        return relativedelta(years=number * 10)
+    if unit == 'century':
+        return relativedelta(years=number * 100)
+    if unit == 'millennium':
+        return relativedelta(years=number * 1000)
     return None
 
 
