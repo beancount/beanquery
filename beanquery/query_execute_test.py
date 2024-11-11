@@ -401,6 +401,14 @@ class TestFundamentals(QueryBase):
         self.assertResult('''SELECT interval("1 baz")''', None, relativedelta)
         self.assertResult('''SELECT interval("A days")''', None, relativedelta)
 
+    def test_date_bin(self):
+        self.assertResult('''SELECT date_bin(interval('1 year'), 2024-11-10, 2024-06-01)''', datetime.date(2024, 6, 1))
+        self.assertResult('''SELECT date_bin('1 year', 2024-11-10, 2024-06-01)''', datetime.date(2024, 6, 1))
+        self.assertResult('''SELECT date_bin('1 year', 2024-11-10, 2025-06-01)''', datetime.date(2024, 6, 1))
+        self.assertResult('''SELECT date_bin('1 month', 2024-11-10, 2024-06-03)''', datetime.date(2024, 11, 3))
+        self.assertResult('''SELECT date_bin('3 days', 2024-11-10, 2024-11-02)''', datetime.date(2024, 11, 8))
+        self.assertResult('''SELECT date_bin('3 days', 2024-11-10, 2024-11-14)''', datetime.date(2024, 11, 8))
+
 
 class TestBeancountFunctions(QueryBase):
     INPUT = textwrap.dedent("""
