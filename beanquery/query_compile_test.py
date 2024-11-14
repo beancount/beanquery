@@ -699,16 +699,23 @@ class TestTranslationBalance(CompileSelectBase):
         None, self.group_by, self.order_by, None, None, None))
 
     def test_print(self):
-        self.assertCompile(qc.EvalPrint(Table('entries'), None), "PRINT;")
+        self.assertCompile(
+            qc.EvalQuery(
+                Table('entries'),
+                [qc.EvalTarget(qc.EvalRow(), 'ROW(*)', False)],
+                None, None, None, None, None, False),
+            "PRINT;",
+        )
 
     def test_print_from(self):
         self.assertCompile(
-            qc.EvalPrint(
+            qc.EvalQuery(
                 Table('entries'),
+                [qc.EvalTarget(qc.EvalRow(), 'ROW(*)', False)],
                 qc.Operator(ast.Equal, [
                     Column('year', int),
-                    qc.EvalConstant(2014),
-                ])),
+                    qc.EvalConstant(2014) ]),
+                None, None, None, None, False),
             "PRINT FROM year = 2014;")
 
 

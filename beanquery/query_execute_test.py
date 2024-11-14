@@ -2,7 +2,6 @@ __copyright__ = "Copyright (C) 2014-2017  Martin Blais"
 __license__ = "GNU GPLv2"
 
 import datetime
-import io
 import unittest
 import textwrap
 
@@ -678,26 +677,6 @@ class TestFilterEntries(CommonInputBase, QueryBase):
             Equity:Earnings:Current                            -510.00 USD
 
         """), filtered_entries)
-
-
-class TestExecutePrint(CommonInputBase, QueryBase):
-
-    def test_print_with_filter(self):
-        oss = io.StringIO()
-        qx.execute_print(self.compile("PRINT FROM year = 2012"), oss)
-
-        self.assertEqualEntries("""
-
-          2012-02-02 * "Dinner with Dos"
-            Assets:Bank:Checking                                                   102.00 USD
-            Expenses:Restaurant                                                   -102.00 USD
-
-        """, oss.getvalue())
-
-    def test_print_with_no_filter(self):
-        oss = io.StringIO()
-        qx.execute_print(self.compile("PRINT"), oss)
-        self.assertEqualEntries(self.INPUT, oss.getvalue())
 
 
 class TestAllocation(unittest.TestCase):
