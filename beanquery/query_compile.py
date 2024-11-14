@@ -484,6 +484,16 @@ class EvalAll(EvalNode):
         return all(self.op(left, x) for x in right)
 
 
+class EvalRow(EvalNode):
+    __slots__ = ()
+
+    def __init__(self):
+        super().__init__(object)
+
+    def __call__(self, context):
+        return context
+
+
 class EvalColumn(EvalNode):
     pass
 
