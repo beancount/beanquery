@@ -34,7 +34,6 @@ from beanquery import query_compile
 from beanquery import render
 from beanquery import types
 from beanquery.numberify import numberify_results
-from beanquery.query_execute import execute_print
 
 try:
     import readline
@@ -529,10 +528,12 @@ class BQLShell(DispatchingShell):
             CLEAR operations).
 
         """
-        # Compile the print statement.
-        query = self.context.compile(statement)
-        with self.output as out:
-            execute_print(query, out)
+        frmt = self.settings.format
+        try:
+            self.settings.format = 'beancount'
+            self.on_Select(statement)
+        finally:
+            self.settings.format = frmt
 
     def on_Select(self, statement):
         """

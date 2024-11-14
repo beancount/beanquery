@@ -22,7 +22,6 @@ from .query_compile import (
     EvalGetter,
     EvalOr,
     EvalPivot,
-    EvalPrint,
     EvalQuery,
     EvalConstantSubquery1D,
     EvalRow,
@@ -708,7 +707,8 @@ class Compiler:
     def _print(self, node: ast.Print):
         self.table = self.context.tables.get('entries')
         expr = self._compile_from(node.from_clause)
-        return EvalPrint(self.table, expr)
+        targets = [EvalTarget(EvalRow(), 'ROW(*)', False)]
+        return EvalQuery(self.table, targets, expr, None, None, None, None, False)
 
 
 def transform_journal(journal):

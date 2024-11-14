@@ -7,9 +7,6 @@ import collections
 import itertools
 import operator
 
-from beancount.core import display_context
-from beancount.parser import printer
-
 from . import compiler
 from . import query_compile
 from .cursor import Column
@@ -21,28 +18,6 @@ def uniquify(iterable):
         if obj not in seen:
             seen.add(obj)
             yield obj
-
-
-def execute_print(c_print, file):
-    """Print entries from a print statement specification.
-
-    Args:
-      c_print: An instance of a compiled EvalPrint statement.
-      file: The output file to print to.
-    """
-    # Filter the entries with the FROM clause expression.
-    entries = []
-    expr = c_print.where
-    for row in c_print.table:
-        if expr is None or expr(row):
-            entries.append(row)
-
-    # Create a context that renders all numbers with their natural
-    # precision, but honors the commas option. This is kept in sync with
-    # {2c694afe3140} to avoid a dependency.
-    dcontext = display_context.DisplayContext()
-    dcontext.set_commas(c_print.table.options['dcontext'].commas)
-    printer.print_entries(entries, dcontext, file=file)
 
 
 class Allocator:
