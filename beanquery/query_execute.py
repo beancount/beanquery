@@ -35,7 +35,7 @@ def execute_print(c_print, file):
     expr = c_print.where
     for row in c_print.table:
         if expr is None or expr(row):
-            entries.append(row.entry)
+            entries.append(row)
 
     # Create a context that renders all numbers with their natural
     # precision, but honors the commas option. This is kept in sync with
