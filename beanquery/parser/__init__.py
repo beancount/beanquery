@@ -4,8 +4,8 @@ import decimal
 import tatsu
 
 from ..errors import ProgrammingError
+from .parser import BQLParser
 from . import ast
-from . import parser
 
 
 class BQLSemantics:
@@ -58,7 +58,7 @@ class ParseError(ProgrammingError):
 
 def parse(text):
     try:
-        return parser.BQLParser().parse(text, semantics=BQLSemantics())
+        return BQLParser().parse(text, semantics=BQLSemantics())
     except tatsu.exceptions.ParseError as exc:
         line = exc.tokenizer.line_info(exc.pos).line
         parseinfo = tatsu.infos.ParseInfo(exc.tokenizer, exc.item, exc.pos, exc.pos + 1, line, [])
