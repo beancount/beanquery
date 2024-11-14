@@ -22,6 +22,7 @@ from .query_compile import (
     EvalPrint,
     EvalQuery,
     EvalConstantSubquery1D,
+    EvalRow,
     EvalTarget,
     FUNCTIONS,
     OPERATORS,
@@ -461,6 +462,10 @@ class Compiler:
     @_compile.register
     def _function(self, node: ast.Function):
         operands = [self._compile(operand) for operand in node.operands]
+
+        # ``row(*)`` is parsed like a function call but does something special
+        if node.fname == 'row' and len(operands) == 1 and isinstance(operands[0], ast.Asterisk):
+            return EvalRow()
 
         # ``coalesce()`` is parsed like a function call but it does
         # not really fit our model for function evaluation, therefore
