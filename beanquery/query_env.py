@@ -895,19 +895,6 @@ class BeanTable(tables.Table):
         self.close = close
         self.clear = clear
 
-    @classmethod
-    def column(cls, dtype, name=None, help=None):
-        def decorator(func):
-            class Col(query_compile.EvalColumn):
-                def __init__(self):
-                    super().__init__(dtype)
-                __call__ = staticmethod(func)
-            Col.__name__ = name or func.__name__
-            Col.__doc__ = help or func.__doc__
-            cls.columns[Col.__name__] = Col()
-            return func
-        return decorator
-
     def update(self, **kwargs):
         table = copy.copy(self)
         for name, value in kwargs.items():
@@ -1045,7 +1032,7 @@ class EntriesTable(BeanTable):
 
 class PostingsTable(EntriesTable):
     name = 'postings'
-    columns = EntriesTable.columns.copy()
+    columns = ColumnsRegistry()
     wildcard_columns = 'date flag payee narration position'.split()
 
     def __iter__(self):
@@ -1059,182 +1046,176 @@ class PostingsTable(EntriesTable):
                     context.posting = posting
                     yield context
 
+    @columns.register(str, 'type')
+    def type(context):
+        return 'transaction'
 
-column = PostingsTable.column
+    @columns.register(str, 'id')
+    def id(context):
+        """Unique id of a directive."""
+        return hash_entry(context.entry)
 
+    @columns.register(datetime.date)
+    def date(context):
+        """The date of the directive."""
+        return context.entry.date
 
-# redefine EntriesTable's column definition to return posting information
-@column(str)
-def filename(context):
-    """The ledger where the posting is defined."""
-    meta = context.posting.meta
-    # Postings for pad transactions have their meta fields set to
-    # None. See https://github.com/beancount/beancount/issues/767
-    if meta is None:
-        return None
-    return meta["filename"]
+    @columns.register(int)
+    def year(context):
+        """The year of the date year of the directive."""
+        return context.entry.date.year
 
+    @columns.register(int)
+    def month(context):
+        """The year of the date month of the directive."""
+        return context.entry.date.month
 
-# redefine EntriesTable's column definition to return posting information
-@column(int)
-def lineno(context):
-    """The line number in the ledger file where the posting is defined."""
-    meta = context.posting.meta
-    # Postings for pad transactions have their meta fields set to
-    # None. See https://github.com/beancount/beancount/issues/767
-    if meta is None:
-        return None
-    return meta["lineno"]
+    @columns.register(int)
+    def day(context):
+        """The year of the date day of the directive."""
+        return context.entry.date.day
 
+    @columns.register(str)
+    def filename(context):
+        """The ledger where the posting is defined."""
+        meta = context.posting.meta
+        # Postings for pad transactions have their meta fields set to
+        # None. See https://github.com/beancount/beancount/issues/767
+        if meta is None:
+            return None
+        return meta["filename"]
 
-@column(str)
-def location(context):
-    """The filename:lineno location where the posting is defined."""
-    meta = context.posting.meta
-    # Postings for pad transactions have their meta fields set to
-    # None. See https://github.com/beancount/beancount/issues/767
-    if meta is None:
-        return None
-    return '{:s}:{:d}:'.format(meta['filename'], meta['lineno'])
+    @columns.register(int)
+    def lineno(context):
+        """The line number in the ledger file where the posting is defined."""
+        meta = context.posting.meta
+        # Postings for pad transactions have their meta fields set to
+        # None. See https://github.com/beancount/beancount/issues/767
+        if meta is None:
+            return None
+        return meta["lineno"]
 
+    @columns.register(str)
+    def location(context):
+        """The filename:lineno location where the posting is defined."""
+        meta = context.posting.meta
+        # Postings for pad transactions have their meta fields set to
+        # None. See https://github.com/beancount/beancount/issues/767
+        if meta is None:
+            return None
+        return '{:s}:{:d}:'.format(meta['filename'], meta['lineno'])
 
-# redefine EntriesEnvironment's column dropping the entry type check.
-@column(str)
-def flag(context):
-    """The flag of the parent transaction for this posting."""
-    return context.entry.flag
+    @columns.register(str)
+    def flag(context):
+        """The flag of the parent transaction for this posting."""
+        return context.entry.flag
 
+    @columns.register(str)
+    def payee(context):
+        """The payee of the parent transaction for this posting."""
+        return context.entry.payee
 
-# redefine EntriesEnvironment's column dropping the entry type check.
-@column(str)
-def payee(context):
-    """The payee of the parent transaction for this posting."""
-    return context.entry.payee
+    @columns.register(str)
+    def narration(context):
+        """The narration of the parent transaction for this posting."""
+        return context.entry.narration
 
+    @columns.register(str)
+    def description(context):
+        "A combination of the payee + narration for the transaction of this posting."
+        return ' | '.join(filter(None, [context.entry.payee, context.entry.narration]))
 
-# redefine EntriesEnvironment's column dropping the entry type check.
-@column(str)
-def narration(context):
-    """The narration of the parent transaction for this posting."""
-    return context.entry.narration
+    @columns.register(set)
+    def tags(context):
+        "The set of tags of the parent transaction for this posting."
+        return context.entry.tags
 
+    @columns.register(set)
+    def links(context):
+        """The set of links of the parent transaction for this posting."""
+        return context.entry.links
 
-# redefine EntriesEnvironment's column dropping the entry type check.
-@column(str)
-def description(context):
-    "A combination of the payee + narration for the transaction of this posting."
-    return ' | '.join(filter(None, [context.entry.payee, context.entry.narration]))
+    @columns.register(str)
+    def posting_flag(context):
+        """The flag of the posting itself."""
+        return context.posting.flag
 
+    @columns.register(str, 'account')
+    def account_(context):
+        """The account of the posting."""
+        return context.posting.account
 
-# redefine EntriesEnvironment's column dropping the entry type check.
-@column(set)
-def tags(context):
-    "The set of tags of the parent transaction for this posting."
-    return context.entry.tags
+    @columns.register(set)
+    def other_accounts(context):
+        """The list of other accounts in the transaction, excluding that of this posting."""
+        return sorted({posting.account for posting in context.entry.postings if posting is not context.posting})
 
+    @columns.register(Decimal)
+    def number(context):
+        """The number of units of the posting."""
+        return context.posting.units.number
 
-# redefine EntriesEnvironment's column dropping the entry type check.
-@column(set)
-def links(context):
-    """The set of links of the parent transaction for this posting."""
-    return context.entry.links
+    @columns.register(str)
+    def currency(context):
+        """The currency of the posting."""
+        return context.posting.units.currency
 
+    @columns.register(Decimal)
+    def cost_number(context):
+        """The number of cost units of the posting."""
+        cost = context.posting.cost
+        return cost.number if cost else None
 
-@column(str)
-def posting_flag(context):
-    """The flag of the posting itself."""
-    return context.posting.flag
+    @columns.register(str)
+    def cost_currency(context):
+        """The cost currency of the posting."""
+        cost = context.posting.cost
+        return cost.currency if cost else None
 
+    @columns.register(datetime.date)
+    def cost_date(context):
+        """The cost currency of the posting."""
+        cost = context.posting.cost
+        return cost.date if cost else None
 
-@column(str, 'account')
-def account_(context):
-    """The account of the posting."""
-    return context.posting.account
+    @columns.register(str)
+    def cost_label(context):
+        """The cost currency of the posting."""
+        cost = context.posting.cost
+        return cost.label if cost else ''
 
+    @columns.register(position.Position, 'position')
+    def position_(context):
+        """The position for the posting. These can be summed into inventories."""
+        posting = context.posting
+        return position.Position(posting.units, posting.cost)
 
-@column(set)
-def other_accounts(context):
-    """The list of other accounts in the transaction, excluding that of this posting."""
-    return sorted({posting.account for posting in context.entry.postings if posting is not context.posting})
+    @columns.register(amount.Amount)
+    def price(context):
+        """The price attached to the posting."""
+        return context.posting.price
 
+    @columns.register(amount.Amount)
+    def weight(context):
+        """The computed weight used for this posting."""
+        return convert.get_weight(context.posting)
 
-@column(Decimal)
-def number(context):
-    """The number of units of the posting."""
-    return context.posting.units.number
+    @columns.register(inventory.Inventory)
+    @cache(maxsize=1)  # noqa: B019
+    def balance(context):
+        """The balance for the posting. These can be summed into inventories."""
+        # Caching protects against multiple balance updates per row when
+        # the columns appears more than once in the execurted query. The
+        # rowid in the row context guarantees that otherwise identical
+        # rows do not hit the cache and thus that the balance is correctly
+        # updated.
+        context.balance.add_position(context.posting)
+        return copy.copy(context.balance)
 
+    @columns.register(dict)
+    def meta(context):
+        return context.posting.meta
 
-@column(str)
-def currency(context):
-    """The currency of the posting."""
-    return context.posting.units.currency
-
-
-@column(Decimal)
-def cost_number(context):
-    """The number of cost units of the posting."""
-    cost = context.posting.cost
-    return cost.number if cost else None
-
-
-@column(str)
-def cost_currency(context):
-    """The cost currency of the posting."""
-    cost = context.posting.cost
-    return cost.currency if cost else None
-
-
-@column(datetime.date)
-def cost_date(context):
-    """The cost currency of the posting."""
-    cost = context.posting.cost
-    return cost.date if cost else None
-
-
-@column(str)
-def cost_label(context):
-    """The cost currency of the posting."""
-    cost = context.posting.cost
-    return cost.label if cost else ''
-
-
-@column(position.Position, 'position')
-def position_(context):
-    """The position for the posting. These can be summed into inventories."""
-    posting = context.posting
-    return position.Position(posting.units, posting.cost)
-
-
-@column(amount.Amount)
-def price(context):
-    """The price attached to the posting."""
-    return context.posting.price
-
-
-@column(amount.Amount)
-def weight(context):
-    """The computed weight used for this posting."""
-    return convert.get_weight(context.posting)
-
-
-@column(inventory.Inventory)
-@cache(maxsize=1)
-def balance(context):
-    """The balance for the posting. These can be summed into inventories."""
-    # Caching protects against multiple balance updates per row when
-    # the columns appears more than once in the execurted query. The
-    # rowid in the row context guarantees that otherwise identical
-    # rows do not hit the cache and thus that the balance is correctly
-    # updated.
-    context.balance.add_position(context.posting)
-    return copy.copy(context.balance)
-
-
-@column(dict)
-def meta(context):
-    return context.posting.meta
-
-
-@column(data.Transaction)
-def entry(context):
-    return context.entry
+    @columns.register(data.Transaction)
+    def entry(context):
+        return context.entry
