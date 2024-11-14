@@ -1249,17 +1249,3 @@ def meta(context):
 @column(data.Transaction)
 def entry(context):
     return context.entry
-
-
-# Backward compatibility definitions for use in tests. These work
-# because the tests only access the columns definitions and these are
-# attached to the classes and not to the instances.
-
-def Column(name):
-    return PostingsTable.columns.get(name)
-
-def EntriesEnvironment():
-    return EntriesTable
-
-def PostingsEnvironment():
-    return PostingsTable
