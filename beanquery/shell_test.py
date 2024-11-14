@@ -144,7 +144,7 @@ class TestUseCases(unittest.TestCase):
     @runshell
     def test_print_from(self, out, err):
         """
-        PRINT FROM narration ~ 'alone'
+        PRINT FROM date = 2022-01-04
         """
         self.assertRegex(out, 'Eating out alone')
 
