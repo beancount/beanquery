@@ -20,9 +20,9 @@ import beanquery
 
 from beanquery import CompilationError
 from beanquery import query_compile as qc
-from beanquery import query_env as qe
 from beanquery import query_execute as qx
 from beanquery import tables
+from beanquery import compiler
 
 
 class QueryBase(cmptest.TestCase):
@@ -498,14 +498,18 @@ class TestBeancountMetadataFunctions(QueryBase):
 
 class TestFilterEntries(CommonInputBase, QueryBase):
 
+    def compile(self, query):
+        # use the ``entries`` table as default table for queries
+        c = compiler.Compiler(self.ctx)
+        c.table = self.ctx.tables.get('entries')
+        return c.compile(self.ctx.parse(query))
+
     @staticmethod
     def filter_entries(query):
         entries = []
         expr = query.c_where
-        context = qe.Row(entries, query.table.options)
-        for entry in query.table.prepare():
-            context.entry = entry
-            if expr is None or expr(context):
+        for entry in query.table:
+            if expr is None or expr(entry):
                 entries.append(entry)
         return entries
 

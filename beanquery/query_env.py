@@ -937,121 +937,110 @@ class BeanTable(tables.Table):
         return entries
 
 
+class ColumnsRegistry(dict):
+
+    def register(self, dtype, name=None, help=None):
+        def decorator(func):
+            class Col(query_compile.EvalColumn):
+                def __init__(self):
+                    super().__init__(dtype)
+                __call__ = staticmethod(func)
+            Col.__name__ = name or func.__name__
+            Col.__doc__ = help or func.__doc__
+            self[Col.__name__] = Col()
+            return func
+        return decorator
+
+
 class EntriesTable(BeanTable):
     name = 'entries'
-    columns = {}
+    columns = ColumnsRegistry()
 
     def __iter__(self):
         entries = self.prepare()
-        context = Row(entries, self.options)
-        for entry in entries:
-            context.entry = entry
-            context.rowid += 1
-            yield context
+        yield from iter(entries)
 
+    @columns.register(str)
+    def id(entry):
+        """Unique id of a directive."""
+        return hash_entry(entry)
 
-column = EntriesTable.column
+    @columns.register(str)
+    def type(entry):
+        """The data type of the directive."""
+        return type(entry).__name__.lower()
 
+    @columns.register(str)
+    def filename(entry):
+        """The filename where the directive was parsed from or created."""
+        return entry.meta["filename"]
 
-@column(str, 'id')
-def id_(context):
-    """Unique id of a directive."""
-    return hash_entry(context.entry)
+    @columns.register(int)
+    def lineno(entry):
+        """The line number from the file the directive was parsed from."""
+        return entry.meta["lineno"]
 
+    @columns.register(datetime.date)
+    def date(entry):
+        """The date of the directive."""
+        return entry.date
 
-@column(str, 'type')
-def type_(context):
-    """The data type of the directive."""
-    return type(context.entry).__name__.lower()
+    @columns.register(int)
+    def year(entry):
+        """The year of the date year of the directive."""
+        return entry.date.year
 
+    @columns.register(int)
+    def month(entry):
+        """The year of the date month of the directive."""
+        return entry.date.month
 
-@column(str)
-def filename(context):
-    """The filename where the directive was parsed from or created."""
-    return context.entry.meta["filename"]
+    @columns.register(int)
+    def day(entry):
+        """The year of the date day of the directive."""
+        return entry.date.day
 
+    @columns.register(str)
+    def flag(entry):
+        """The flag the transaction."""
+        if not isinstance(entry, data.Transaction):
+            return None
+        return entry.flag
 
-@column(int)
-def lineno(context):
-    """The line number from the file the directive was parsed from."""
-    return context.entry.meta["lineno"]
+    @columns.register(str)
+    def payee(entry):
+        """The payee of the transaction."""
+        if not isinstance(entry, data.Transaction):
+            return None
+        return entry.payee
 
+    @columns.register(str)
+    def narration(entry):
+        """The narration of the transaction."""
+        if not isinstance(entry, data.Transaction):
+            return None
+        return entry.narration
 
-@column(datetime.date)
-def date(context):
-    """The date of the directive."""
-    return context.entry.date
+    @columns.register(str)
+    def description(entry):
+        """A combination of the payee + narration of the transaction, if present."""
+        if not isinstance(entry, data.Transaction):
+            return None
+        return ' | '.join(filter(None, [entry.payee, entry.narration]))
 
+    @columns.register(set)
+    def tags(entry):
+        """The set of tags of the transaction."""
+        return getattr(entry, 'tags', None)
 
-@column(int)
-def year(context):
-    """The year of the date year of the directive."""
-    return context.entry.date.year
+    @columns.register(set)
+    def links(entry):
+        """The set of links of the transaction."""
+        return getattr(entry, 'links', None)
 
-
-@column(int)
-def month(context):
-    """The year of the date month of the directive."""
-    return context.entry.date.month
-
-
-@column(int)
-def day(context):
-    """The year of the date day of the directive."""
-    return context.entry.date.day
-
-
-@column(str)
-def flag(context):
-    """The flag the transaction."""
-    if not isinstance(context.entry, data.Transaction):
-        return None
-    return context.entry.flag
-
-
-@column(str)
-def payee(context):
-    """The payee of the transaction."""
-    if not isinstance(context.entry, data.Transaction):
-        return None
-    return context.entry.payee
-
-
-@column(str)
-def narration(context):
-    """The narration of the transaction."""
-    if not isinstance(context.entry, data.Transaction):
-        return None
-    return context.entry.narration
-
-
-@column(str)
-def description(context):
-    """A combination of the payee + narration of the transaction, if present."""
-    if not isinstance(context.entry, data.Transaction):
-        return None
-    return ' | '.join(filter(None, [context.entry.payee, context.entry.narration]))
-
-
-@column(set)
-def tags(context):
-    """The set of tags of the transaction."""
-    if not isinstance(context.entry, data.Transaction):
-        return None
-    return context.entry.tags
-
-
-@column(set)
-def links(context):
-    """The set of links of the transaction."""
-    if not isinstance(context.entry, data.Transaction):
-        return None
-    return context.entry.links
-
-
-@column(dict)
-def meta(context):
-    return context.entry.meta
+    @columns.register(dict)
+    def meta(entry):
+        return entry.meta
 
 
 class PostingsTable(EntriesTable):
