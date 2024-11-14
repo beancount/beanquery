@@ -643,11 +643,3 @@ class EvalQuery:
 #   query: The underlying EvalQuery.
 #   pivots: The pivot columns indexes
 EvalPivot = collections.namedtuple('EvalPivot', 'query pivots')
-
-
-# A compiled print statement, ready for execution.
-#
-# Attributes:
-#   table: Table to print
-#   where: Filtering expression, EvalNode instance.
-EvalPrint = collections.namedtuple('EvalPrint', 'table where')
