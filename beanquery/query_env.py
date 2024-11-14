@@ -867,23 +867,21 @@ class Max(query_compile.EvalAggregator):
 class Row:
     """A dumb container for information used by a row expression."""
 
-    rowid = None
-
-    # The current posting being evaluated.
-    posting = None
-
-    # The current transaction of the posting being evaluated.
-    entry = None
-
-    # The context hash is used in caching column accessor functions.
-    # Instead than hashing the row context content, use the rowid as
-    # hash.
-    def __hash__(self):
-        return self.rowid
-
-    def __init__(self, entries, options):
+    def __init__(self):
         self.rowid = 0
         self.balance = inventory.Inventory()
+
+        # The current transaction of the posting being evaluated.
+        self.entry = None
+
+        # The current posting being evaluated.
+        self.posting = None
+
+    def __hash__(self):
+        # The context hash is used in caching column accessor functions.
+        # Instead than hashing the row context content, use the rowid as
+        # hash.
+        return self.rowid
 
 
 class BeanTable(tables.Table):
@@ -1037,7 +1035,7 @@ class PostingsTable(EntriesTable):
 
     def __iter__(self):
         entries = self.prepare()
-        context = Row(entries, self.options)
+        context = Row()
         for entry in entries:
             if isinstance(entry, data.Transaction):
                 context.entry = entry
