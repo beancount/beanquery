@@ -23,7 +23,7 @@ class BQLSemantics:
         return decimal.Decimal(value)
 
     def date(self, value):
-        return datetime.datetime.strptime(value, '%Y-%m-%d').date()
+        return datetime.date.fromisoformat(value)
 
     def string(self, value):
         return value[1:-1]
