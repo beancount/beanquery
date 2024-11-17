@@ -372,11 +372,11 @@ class BQLShell(DispatchingShell):
     """An interactive shell interpreter for the Beancount query language."""
     prompt = 'beanquery> '
 
-    def __init__(self, filename, outfile, interactive=False, runinit=False, format='text', numberify=False, errors=True):
+    def __init__(self, source, outfile, interactive=False, runinit=False, format='text', numberify=False, errors=True):
         settings = Settings(format=format, numberify=numberify)
         super().__init__(outfile, interactive, runinit, settings)
         self.context = beanquery.connect(None)
-        self.filename = filename
+        self.source = source
         self.show_load_errors = errors
         self.queries = {}
         self.do_reload()
@@ -399,17 +399,17 @@ class BQLShell(DispatchingShell):
 
     def do_reload(self, arg=None):
         "Reload the Beancount input file."
-        if not self.filename:
-            return
         self.context.errors.clear()
         self.context.options.clear()
-        self.context.attach('beancount:' + self.filename)
-        table = self.context.tables['entries']
-        self._extract_queries(table.entries)
-        if self.context.errors and self.show_load_errors:
-            printer.print_errors(self.context.errors, file=sys.stderr)
-        if self.interactive:
-            print_statistics(table.entries, table.options, self.context.errors, self.outfile)
+        if self.source:
+            self.context.attach(self.source)
+        if self.source.startswith('beancount:'):
+            table = self.context.tables['entries']
+            self._extract_queries(table.entries)
+            if self.context.errors and self.show_load_errors:
+                printer.print_errors(self.context.errors, file=sys.stderr)
+            if self.interactive:
+                print_statistics(table.entries, table.options, self.context.errors, self.outfile)
 
     def _extract_queries(self, entries):
         self.queries = {}
@@ -582,7 +582,7 @@ class BQLShell(DispatchingShell):
         cursor = self.context.execute(statement)
         desc = cursor.description
         rows = cursor.fetchall()
-        dcontext = self.context.options['dcontext']
+        dcontext = self.context.options.get('dcontext', None)
 
         if self.settings.numberify:
             desc, rows = numberify_results(desc, rows, dcontext.build())
@@ -786,9 +786,15 @@ def main(filename, query, numberify, format, output, no_errors):
     inferred from the output file name, if specified.
 
     """
+    # Prepend ``beancount:`` to DSNs not having a ``scheme:`` prefix.
+    # Take into account file paths starting with a single letter
+    # Windows-style drive designations, which can be spelled with
+    # forward or backward slashes.
+    source = filename if re.match('[a-z]{2,}:',filename) else 'beancount:' + filename
+
     # Create the shell.
     interactive = sys.stdin.isatty() and not query
-    shell = BQLShell(filename, output, interactive, True, format, numberify, not no_errors)
+    shell = BQLShell(source, output, interactive, True, format, numberify, not no_errors)
 
     # Run interactively if we're a TTY and no query is supplied.
     if interactive:
