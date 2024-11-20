@@ -162,14 +162,26 @@ class DispatchingShell(cmd.Cmd):
         self.add_help()
 
         if interactive and readline is not None:
-            readline.parse_and_bind("tab: complete")
-            # Readline is used to complete command names, which are
-            # strictly alphanumeric strings, and named query
-            # identifiers, which may contain any ascii characters. To
-            # enable completion of the latter, reduce the set of
-            # completion word delimiters to the shell default. Notably
-            # remove "-" from the delimiters list setup by Python.a
+
+            # Setup completion on ``tab``. This needs to be done differently
+            # depending on whether the ``readline`` backend is GNU readline or
+            # libedit. This is handled automatically on Python 3.13 an
+            # later. For Python 3.12 and earlier, the recommended way to check
+            # for the string ``linedit`` in ``readline.__doc__``
+            if 'libedit' in readline.__doc__:
+                readline.parse_and_bind("bind ^I rl_complete")
+            else:
+                readline.parse_and_bind("tab: complete")
+
+            # ``readline`` is used to complete command names, which are
+            # strictly alphanumeric strings, and named query identifiers,
+            # which may contain any ASCII character. To enable completion of
+            # the latter, reduce the set of completion word delimiters to the
+            # shell default. Notably remove ``-`` from the delimiters list
+            # setup by Python.
             readline.set_completer_delims(" \t\n\"\\'`@$><=;|&{(")
+
+            # Setup ``readline`` history handling.
             history_filepath = path.expanduser(HISTORY_FILENAME)
             os.makedirs(path.dirname(history_filepath), exist_ok=True)
             with suppress(FileNotFoundError):
