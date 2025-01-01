@@ -317,6 +317,27 @@ class DispatchingShell(cmd.Cmd):
     def complete_set(self, text, _line, _begidx, _endidx):
         return [name for name in self.settings if name.startswith(text)]
 
+    def do_format(self, arg):
+        """Set output format to FRMT."""
+        if not arg:
+            frmt = self.settings.getstr('format')
+            print(f'format: {frmt}', file=self.outfile)
+        else:
+            value, *others = shlex.split(arg)
+            if others:
+                self.error('invalid number of arguments')
+            try:
+                self.settings.setstr('format', value)
+            except ValueError as ex:
+                self.error(str(ex))
+
+    def complete_format(self, text, _line, _begidx, _endidx):
+        return [frmt for frmt in FORMATS if frmt.startswith(text)]
+
+    def do_output(self, arg):
+        """Send output to FILE or stdout if FILE is omitted."""
+        self.outfile = open(arg, "w") if arg else sys.stdout
+
     def do_parse(self, arg):
         """Run the parser on the following command and print the output."""
         print(self.parse(arg).tosexp())
