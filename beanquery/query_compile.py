@@ -43,13 +43,9 @@ class EvalNode:
         self.dtype = dtype
 
     def __eq__(self, other):
-        """Override the equality operator to compare the data type and a all attributes
-        of this node. This is used by tests for comparing nodes.
-        """
-        return (isinstance(other, type(self))
-                and all(
-                    getattr(self, attribute) == getattr(other, attribute)
-                    for attribute in self.__slots__))
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return all(getattr(self, attr) == getattr(other, attr) for attr in self.__slots__)
 
     def __str__(self):
         return "{}({})".format(type(self).__name__,
