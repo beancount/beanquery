@@ -443,6 +443,16 @@ class EvalGetter(EvalNode):
         return self.getter(operand)
 
 
+class EvalRow(EvalNode):
+    __slots__ = ()
+
+    def __init__(self):
+        super().__init__(object)
+
+    def __call__(self, context):
+        return context
+
+
 class EvalColumn(EvalNode):
     pass
 
