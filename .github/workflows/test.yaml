@@ -19,6 +19,11 @@ jobs:
           - '~= 2.3.6'
           - '~= 3.0.0'
           - '@ git+https://github.com/beancount/beancount.git'
+        exclude:
+          - python: '3.8'
+            beancount: '@ git+https://github.com/beancount/beancount.git'
+          - python: '3.9'
+            beancount: '@ git+https://github.com/beancount/beancount.git'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
