@@ -81,6 +81,7 @@ ignore = [
     'PLR2004',
     'PLW2901',
     'RUF012',
+    'RUF023',  # unsorted-dunder-slots
     'UP007',
     'UP032',
 ]
