@@ -448,7 +448,7 @@ class Compiler:
         column = self.table.columns.get(node.name)
         if column is not None:
             return column
-        raise CompilationError(f'column "{node.name}" does not exist', node)
+        raise CompilationError(f'column "{node.name}" not found in table "{self.table.name}"', node)
 
     @_compile.register
     def _or(self, node: ast.Or):
