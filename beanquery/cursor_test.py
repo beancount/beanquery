@@ -2,7 +2,7 @@ import unittest
 import sqlite3
 
 import beanquery
-from beanquery.tests import tables
+from beanquery.sources import test
 
 
 class APITests:
@@ -79,4 +79,4 @@ class TestBeanquery(APITests, unittest.TestCase):
     def setUpClass(cls):
         cls.table = '#test'
         cls.conn = beanquery.Connection()
-        cls.conn.tables['test'] = tables.TestTable(0, 16)
+        cls.conn.tables['test'] = test.Table(16)
