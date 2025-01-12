@@ -985,34 +985,6 @@ class EntriesTable(BeanTable):
         """The year of the date day of the directive."""
         return entry.date.day
 
-    @columns.register(str)
-    def flag(entry):
-        """The flag the transaction."""
-        if not isinstance(entry, data.Transaction):
-            return None
-        return entry.flag
-
-    @columns.register(str)
-    def payee(entry):
-        """The payee of the transaction."""
-        if not isinstance(entry, data.Transaction):
-            return None
-        return entry.payee
-
-    @columns.register(str)
-    def narration(entry):
-        """The narration of the transaction."""
-        if not isinstance(entry, data.Transaction):
-            return None
-        return entry.narration
-
-    @columns.register(str)
-    def description(entry):
-        """A combination of the payee + narration of the transaction, if present."""
-        if not isinstance(entry, data.Transaction):
-            return None
-        return ' | '.join(filter(None, [entry.payee, entry.narration]))
-
     @columns.register(set)
     def tags(entry):
         """The set of tags of the transaction."""
