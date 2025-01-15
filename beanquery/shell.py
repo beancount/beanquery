@@ -384,11 +384,12 @@ class BQLShell(DispatchingShell):
     """An interactive shell interpreter for the Beancount query language."""
     prompt = 'beanquery> '
 
-    def __init__(self, filename, outfile, interactive=False, runinit=False, format='text', numberify=False):
+    def __init__(self, filename, outfile, interactive=False, runinit=False, format='text', numberify=False, errors=True):
         settings = Settings(format=format, numberify=numberify)
         super().__init__(outfile, interactive, runinit, settings)
         self.context = beanquery.connect(None)
         self.filename = filename
+        self.show_load_errors = errors
         self.queries = {}
         self.do_reload()
 
@@ -409,10 +410,10 @@ class BQLShell(DispatchingShell):
         self.context.attach('beancount:' + self.filename)
         table = self.context.tables['entries']
         self._extract_queries(table.entries)
-        if self.context.errors:
+        if self.context.errors and self.show_load_errors:
             printer.print_errors(self.context.errors, file=sys.stderr)
         if self.interactive:
-            print_statistics(table.entries, table.options, self.outfile)
+            print_statistics(table.entries, table.options, self.context.errors, self.outfile)
 
     def _extract_queries(self, entries):
         self.queries = {}
@@ -422,7 +423,7 @@ class BQLShell(DispatchingShell):
                 if x is not entry:
                     warnings.warn(f'duplicate query name "{entry.name}"', stacklevel=0)
 
-    def do_errors(self, arg=None):
+    def do_errors(self, arg):
         "Print the errors that occurred during Beancount input file parsing."
         if self.context.errors:
             printer.print_errors(self.context.errors)
@@ -743,10 +744,10 @@ def summary_statistics(entries):
         if isinstance(entry, data.Transaction):
             num_transactions += 1
             num_postings += len(entry.postings)
-    return (num_directives, num_transactions, num_postings)
+    return num_directives, num_transactions, num_postings
 
 
-def print_statistics(entries, options, outfile):
+def print_statistics(entries, options, errors, outfile):
     """Print summary statistics to stdout.
 
     Args:
@@ -757,22 +758,23 @@ def print_statistics(entries, options, outfile):
     num_directives, num_transactions, num_postings = summary_statistics(entries)
     if 'title' in options:
         print(f'''Input file: "{options['title']}"''', file=outfile)
-    print(f"Ready with {num_directives} directives",
-          f"({num_postings} postings in {num_transactions} transactions).",
+    print(f"Ready with {num_directives} directives "
+          f"({num_postings} postings in {num_transactions} transactions, "
+          f"{len(errors)} validation errors)",
           file=outfile)
 
 
 @click.command()
 @click.argument('filename')
 @click.argument('query', nargs=-1)
-@click.option('--numberify', '-m', is_flag=True,
-              help="Numberify the output, removing the currencies.")
-@click.option('--format', '-f', type=click.Choice(FORMATS.keys()), default='text',
-              help="Output format.")
 @click.option('--output', '-o', type=click.File('w'), default='-',
               help="Output filename.")
+@click.option('--format', '-f', type=click.Choice(FORMATS.keys()), default='text',
+              help="Output format.")
+@click.option('--numberify', '-m', is_flag=True,
+              help="Numberify the output, removing the currencies.")
 @click.option('--no-errors', '-q', is_flag=True,
-              help="Do not report errors.")
+              help="Do not report ledger validation errors on load.")
 @click.version_option('', message=f'beanquery {beanquery.__version__}, beancount {beancount.__version__}')
 def main(filename, query, numberify, format, output, no_errors):
     """An interactive interpreter for the Beancount Query Language.
@@ -785,7 +787,7 @@ def main(filename, query, numberify, format, output, no_errors):
     """
     # Create the shell.
     interactive = sys.stdin.isatty() and not query
-    shell = BQLShell(filename, output, interactive, True, format, numberify)
+    shell = BQLShell(filename, output, interactive, True, format, numberify, not no_errors)
 
     # Run interactively if we're a TTY and no query is supplied.
     if interactive:
