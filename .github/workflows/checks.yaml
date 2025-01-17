@@ -8,6 +8,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/ruff-action@v3
+        with:
+          args: "check --output-format=full"
   coverage:
     runs-on: ubuntu-latest
     steps:
