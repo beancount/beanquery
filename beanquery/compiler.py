@@ -35,15 +35,23 @@ SUPPORT_IMPLICIT_GROUPBY = True
 
 
 class CompilationError(ProgrammingError):
-    def __init__(self, message, ast=None):
+    def __init__(self, message, node=None):
         super().__init__(message)
-        self.parseinfo = ast.parseinfo if ast is not None else None
+        self.parseinfo = node.parseinfo if node is not None else None
 
 
 class Compiler:
     def __init__(self, context):
         self.context = context
-        self.table = context.tables.get('postings')
+        self.stack = [context.tables.get('postings')]
+
+    @property
+    def table(self):
+        return self.stack[-1]
+
+    @table.setter
+    def table(self, value):
+        self.stack[-1] = value
 
     def compile(self, query, parameters=None):
         """Compile an AST into an executable statement."""
@@ -79,6 +87,7 @@ class Compiler:
 
     @_compile.register
     def _select(self, node: ast.Select):
+        self.stack.append(self.table)
 
         # Compile the FROM clause.
         c_from_expr = self._compile_from(node.from_clause)
@@ -135,6 +144,7 @@ class Compiler:
         if pivots:
             return EvalPivot(query, pivots)
 
+        self.stack.pop()
         return query
 
     def _compile_from(self, node):

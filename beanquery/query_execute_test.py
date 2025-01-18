@@ -37,7 +37,7 @@ class QueryBase(cmptest.TestCase):
         return self.ctx.compile(self.ctx.parse(query))
 
     def check_query(self, input_string, query, expected_types, expected_rows):
-        entries, errors, options = loader.load_string(input_string)
+        entries, errors, options = loader.load_string(textwrap.dedent(input_string))
         ctx = beanquery.connect('beancount:', entries=entries, errors=errors, options=options)
         curs = ctx.execute(query)
         self.assertEqual(tuple(expected_types), curs.description)
@@ -1629,5 +1629,87 @@ class TestInSubquery(QueryBase):
             ('Income:Contributions:One',   datetime.date(2024, 10, 25)),
             ('Income:Contributions:Three', datetime.date(2024, 10, 27)),
             ('Income:Contributions:Three', datetime.date(2024, 10, 28)),
+            ]
+        )
+
+
+class TestArrayOps(QueryBase):
+    data = """
+      1970-01-01 open Assets:Cash
+      2000-01-01 open Expenses:One
+      2000-01-02 open Expenses:Two
+      2000-01-03 open Expenses:Three
+
+      2025-01-01 * "One"
+        Expenses:One                            100.00 USD
+        Assets:Cash
+
+      2025-01-02 * "Two"
+        Expenses:Two                             10.00 USD
+        Assets:Cash
+
+      2025-01-03 * "Three"
+        Expenses:Three                           50.00 USD
+        Assets:Cash
+
+      2025-01-03 * "Three"
+        Expenses:Three                            1.00 USD
+        Assets:Cash
+    """
+
+    def test_in_accounts_entries(self):
+        self.check_query(self.data, """
+            SELECT date
+            FROM #entries
+            WHERE 'Expenses:Two' IN accounts
+            """,
+            (('date', datetime.date),),
+            [
+            (datetime.date(2000, 1, 2),),
+            (datetime.date(2025, 1, 2),),
+            ]
+        )
+
+    def test_in_accounts_transactions(self):
+        self.check_query(self.data, """
+            SELECT date, narration
+            FROM #transactions
+            WHERE 'Expenses:Two' IN accounts
+            """,
+            (('date', datetime.date), ('narration', str)),
+            [
+            (datetime.date(2025, 1, 2), 'Two'),
+            ]
+        )
+
+
+class TestArrayOpsSubquery(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.conn = beanquery.connect('test:test?end=10')
+
+    def check_query(self, query, expected_types, expected_rows):
+        curs = self.conn.execute(query)
+        self.assertEqual(tuple(expected_types), curs.description)
+        result_rows = curs.fetchall()
+        self.assertEqual(expected_rows, result_rows)
+
+    def test_in_subquery(self):
+        self.check_query(
+            """
+            SELECT 1 IN (SELECT x FROM #test) AS y FROM #
+            """,
+            (('y', bool),),
+            [
+            (True,),
+            ]
+        )
+        self.check_query(
+            """
+            SELECT 1 IN (SELECT x FROM #test WHERE x % 2 = 0) AS y FROM #
+            """,
+            (('y', bool),),
+            [
+            (False,),
             ]
         )
