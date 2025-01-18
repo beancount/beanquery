@@ -7,6 +7,7 @@ import collections
 import csv
 import datetime
 import enum
+import typing
 
 from decimal import Decimal
 
@@ -461,6 +462,7 @@ def render_rows(rows, renderers, ctx):
 
 
 def _get_renderer(datatype, ctx):
+    datatype = typing.get_origin(datatype) or datatype
     for d in datatype.__mro__:  # pragma: no branch
         renderer = RENDERERS.get(d)
         if renderer:
