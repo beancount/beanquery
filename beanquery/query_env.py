@@ -15,6 +15,7 @@ import textwrap
 
 from functools import lru_cache as cache
 from decimal import Decimal
+from typing import Set
 
 import dateutil.parser
 from dateutil.relativedelta import relativedelta, weekday
@@ -1027,6 +1028,10 @@ class EntriesTable(BeanTable):
     def meta(entry):
         return entry.meta
 
+    @columns.register(Set[str])
+    def accounts(entry):
+        return getters.get_entry_accounts(entry)
+
 
 class PostingsTable(EntriesTable):
     name = 'postings'
@@ -1217,3 +1222,7 @@ class PostingsTable(EntriesTable):
     @columns.register(data.Transaction)
     def entry(context):
         return context.entry
+
+    @columns.register(Set[str])
+    def accounts(context):
+        return {p.account for p in context.entry.postings}

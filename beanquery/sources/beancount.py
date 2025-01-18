@@ -94,6 +94,13 @@ class Transaction(types.Structure):
     del columns['postings']
 
 
+def _accounts(row):
+    return {p.account for p in row.postings}
+_accounts.dtype = typing.Set[str]
+_accounts.childnodes = ()
+Transaction.columns['accounts'] = _accounts
+
+
 types.ALIASES[position.Position] = Position
 types.ALIASES[data.Cost] = Cost
 types.ALIASES[data.Amount] = Amount
