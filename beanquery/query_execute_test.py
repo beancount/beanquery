@@ -201,6 +201,7 @@ class TestFundamentals(QueryBase):
         self.assertError ("SELECT 1970-01-01 + 2022-04-01")
         self.assertResult("SELECT 2022-04-01 + 1", datetime.date(2022, 4, 2))
         self.assertResult("SELECT 1 + 2022-04-01", datetime.date(2022, 4, 2))
+        self.assertResult("SELECT 'ab' + 'c'", 'abc')
 
         # sub
         self.assertResult("SELECT 1 - 1", 0)
