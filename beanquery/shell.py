@@ -694,7 +694,7 @@ def _describe_columns(columns):
     out = io.StringIO()
     wrapper = textwrap.TextWrapper(initial_indent='  ', subsequent_indent='  ', width=80)
     for name, column in columns.items():
-        print(f'{name}: {column.dtype.__name__.lower()}', file=out)
+        print(f'{name}: {types.name(column.dtype)}', file=out)
         print(wrapper.fill(re.sub(r'[ \n\t]+', ' ', column.__doc__ or '')), file=out)
         print(file=out)
     return out.getvalue().rstrip()
@@ -707,7 +707,7 @@ def _describe_functions(functions, aggregates=False):
             continue
         name = name.lower()
         for func in funcs:
-            args = ', '.join(d.__name__.lower() for d in func.__intypes__)
+            args = ', '.join(types.name(d) for d in func.__intypes__)
             doc = re.sub(r'[ \n\t]+', ' ', func.__doc__ or '')
             entries.append((name, doc, args))
     entries.sort()

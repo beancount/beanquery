@@ -92,4 +92,6 @@ ALIASES = {}
 def name(datatype):
     if datatype is NoneType:
         return 'NULL'
+    if isinstance(datatype, typing._GenericAlias):
+        return str(datatype).rsplit('.', 1)[-1].lower()
     return getattr(datatype, 'name', datatype.__name__.lower())
