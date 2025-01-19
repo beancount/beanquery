@@ -250,6 +250,7 @@ def mod_(x, y):
 @binaryop(ast.Add, [Decimal, int], Decimal)
 @binaryop(ast.Add, [int, Decimal], Decimal)
 @binaryop(ast.Add, [int, int], int)
+@binaryop(ast.Add, [str, str], str)
 @binaryop(ast.Add, [datetime.date, relativedelta], datetime.date)
 @binaryop(ast.Add, [relativedelta, datetime.date], datetime.date)
 @binaryop(ast.Add, [relativedelta, relativedelta], relativedelta)
