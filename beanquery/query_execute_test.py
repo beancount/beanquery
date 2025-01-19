@@ -240,6 +240,10 @@ class TestFundamentals(QueryBase):
         self.assertResult("SELECT 'foobarbaz' !~ 'bar'", False)
         self.assertResult("SELECT 'foobarbaz' !~ 'quz'", True)
 
+        # matches
+        self.assertResult("SELECT '[0-9]+' ?~ '123'", True)
+        self.assertResult("SELECT '[0-9]+' ?~ 'ABC'", False)
+
         # and
         self.assertResult("SELECT 1 and FALSE", False)
         self.assertResult("SELECT 'something' and FALSE", False)
@@ -1676,6 +1680,30 @@ class TestArrayOps(QueryBase):
             SELECT date, narration
             FROM #transactions
             WHERE 'Expenses:Two' IN accounts
+            """,
+            (('date', datetime.date), ('narration', str)),
+            [
+            (datetime.date(2025, 1, 2), 'Two'),
+            ]
+        )
+
+    def test_mathes_any_accounts_transactions(self):
+        self.check_query(self.data, """
+            SELECT date, narration
+            FROM #transactions
+            WHERE ':Two' ?~ ANY(accounts)
+            """,
+            (('date', datetime.date), ('narration', str)),
+            [
+            (datetime.date(2025, 1, 2), 'Two'),
+            ]
+        )
+
+    def test_mathes_all_accounts_transactions(self):
+        self.check_query(self.data, """
+            SELECT date, narration
+            FROM #transactions
+            WHERE '(?i):two|:cash' ?~ ALL(accounts)
             """,
             (('date', datetime.date), ('narration', str)),
             [

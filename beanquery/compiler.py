@@ -480,6 +480,7 @@ class Compiler:
         '!=': ast.NotEqual,
         '~': ast.Match,
         '!~': ast.NotMatch,
+        '?~': ast.Matches,
     }
 
     # dispatching on an Union is supported only starting with Python 3.11

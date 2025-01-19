@@ -499,8 +499,8 @@ class BQLParser(Parser):
                 'expecting one of: '
                 "'NOT' <all> <any> <between> <comparison>"
                 '<eq> <gt> <gte> <in> <isnotnull>'
-                '<isnull> <lt> <lte> <match> <neq> <not>'
-                '<notin> <notmatch> <sum>'
+                '<isnull> <lt> <lte> <match> <matches>'
+                '<neq> <not> <notin> <notmatch> <sum>'
             )
 
     @tatsumasu('Not')
@@ -539,6 +539,8 @@ class BQLParser(Parser):
             with self._option():
                 self._notmatch_()
             with self._option():
+                self._matches_()
+            with self._option():
                 self._isnull_()
             with self._option():
                 self._isnotnull_()
@@ -550,8 +552,8 @@ class BQLParser(Parser):
                 'expecting one of: '
                 '<add> <all> <any> <between> <eq> <gt>'
                 '<gte> <in> <isnotnull> <isnull> <lt>'
-                '<lte> <match> <neq> <notin> <notmatch>'
-                '<sub> <sum> <term>'
+                '<lte> <match> <matches> <neq> <notin>'
+                '<notmatch> <sub> <sum> <term>'
             )
 
     @tatsumasu('Any')
@@ -600,9 +602,11 @@ class BQLParser(Parser):
                 self._token('~')
             with self._option():
                 self._token('!~')
+            with self._option():
+                self._token('?~')
             self._error(
                 'expecting one of: '
-                "'!=' '!~' '<' '<=' '=' '>' '>=' '~'"
+                "'!=' '!~' '<' '<=' '=' '>' '>=' '?~' '~'"
             )
 
     @tatsumasu('Less')
@@ -692,6 +696,15 @@ class BQLParser(Parser):
         self._sum_()
         self.name_last_node('left')
         self._token('!~')
+        self._sum_()
+        self.name_last_node('right')
+        self._define(['left', 'right'], [])
+
+    @tatsumasu('Matches')
+    def _matches_(self):
+        self._sum_()
+        self.name_last_node('left')
+        self._token('?~')
         self._sum_()
         self.name_last_node('right')
         self._define(['left', 'right'], [])

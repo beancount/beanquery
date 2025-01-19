@@ -280,6 +280,10 @@ class NotMatch(BinaryOp):
     __slots__ = ()
 
 
+class Matches(BinaryOp):
+    __slots__ = ()
+
+
 # Membership operators.
 
 class In(BinaryOp):
