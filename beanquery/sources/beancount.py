@@ -1,3 +1,5 @@
+import sys
+import types as _types
 import typing
 
 from urllib.parse import urlparse
@@ -14,6 +16,12 @@ from beanquery import types
 from beanquery import query_compile
 from beanquery import query_env
 from beanquery import query_render
+
+
+if sys.version_info >= (3, 10):
+    _UNIONTYPES = {typing.Union, _types.UnionType}
+else:
+    _UNIONTYPES = {typing.Union}
 
 
 TABLES = [query_env.EntriesTable, query_env.PostingsTable]
@@ -49,25 +57,26 @@ class GetAttrColumn(query_compile.EvalColumn):
         return getattr(context, self.name)
 
 
+def _simplify_typing_annotation(dtype):
+    if typing.get_origin(dtype) in _UNIONTYPES:
+        args = typing.get_args(dtype)
+        if len(args) == 2:
+            if args[0] is type(None):
+                return args[1], True
+            if args[1] is type(None):
+                return args[0], True
+        raise NotImplementedError
+    return typing.get_origin(dtype) or dtype, False
+
+
 def _typed_namedtuple_to_columns(cls, renames=None):
     columns = {}
     for name, dtype in typing.get_type_hints(cls).items():
-        while True:
-            origin = typing.get_origin(dtype)
-            # Extract the underlying type from Optional[x] annotations,
-            # which are effectively Union[x, None] annotations.
-            if origin is typing.Union:
-                args = typing.get_args(dtype)
-                # Ensure that there is just one type other than None.
-                dtypes = [t for t in args if t is not type(None)]
-                assert len(dtypes) == 1
-                dtype = dtypes[0]
-            elif origin is not None:
-                dtype = origin
-            else:
-                break
+        dtype, nullable = _simplify_typing_annotation(dtype)
         if name == 'meta' and dtype is dict:
             dtype = Metadata
+        if dtype is frozenset:
+            dtype = set
         colname = renames.get(name, name) if renames is not None else name
         columns[colname] = GetAttrColumn(name, dtype)
     return columns
