@@ -8,16 +8,25 @@ import itertools
 import operator
 
 from . import compiler
+from . import hashable
 from . import query_compile
 from .cursor import Column
 
 
-def uniquify(iterable):
-    seen = set()
-    for obj in iterable:
-        if obj not in seen:
-            seen.add(obj)
-            yield obj
+
+class Unique:
+    def __init__(self, columns):
+        self.wrap = hashable.make(columns)
+
+    def __call__(self, iterable):
+        wrap = self.wrap
+        seen = set()
+        add = seen.add
+        for obj in iterable:
+            h = wrap(obj)
+            if h not in seen:
+                add(h)
+                yield obj
 
 
 class Allocator:
@@ -273,7 +282,8 @@ def execute_select(query):
 
     # Apply DISTINCT.
     if query.distinct:
-        rows = uniquify(rows)
+        unique = Unique(result_types)
+        rows = unique(rows)
 
     # Apply LIMIT.
     if query.limit is not None:

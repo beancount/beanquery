@@ -16,13 +16,15 @@ from beanquery import types
 from beanquery import query_compile
 from beanquery import query_env
 from beanquery import query_render
-
+from beanquery import hashable
 
 if sys.version_info >= (3, 10):
     _UNIONTYPES = {typing.Union, _types.UnionType}
 else:
     _UNIONTYPES = {typing.Union}
 
+
+hashable.register(data.Transaction, lambda t: (t.date, t.flag, t.narration))
 
 TABLES = [query_env.EntriesTable, query_env.PostingsTable]
 
