@@ -31,6 +31,9 @@ from .query_compile import (
     SubqueryTable,
 )
 
+# Load functions and types definitions.
+from . import query_env  # noqa: F401
+
 
 # A global constant which sets whether we support inferred/implicit group-by
 # semantics.

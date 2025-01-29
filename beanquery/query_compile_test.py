@@ -6,6 +6,8 @@ import unittest
 
 from decimal import Decimal as D
 
+from beancount import loader
+
 from beanquery import Connection, CompilationError, ProgrammingError
 from beanquery import compiler
 from beanquery import query_compile as qc
@@ -175,9 +177,8 @@ class CompileSelectBase(unittest.TestCase):
     maxDiff = 8192
 
     def setUp(self):
-        self.ctx = Connection()
-        self.ctx.tables['entries'] = qe.EntriesTable(None, None)
-        self.ctx.tables['postings'] = qe.PostingsTable(None, None)
+        entries, errors, options = loader.load_string('')
+        self.ctx = Connection('beancount:', entries=entries, errors=errors, options=options)
 
     def compile(self, query):
         """Parse one query and compile it.
