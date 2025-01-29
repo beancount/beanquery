@@ -1,20 +1,29 @@
+import copy
+import datetime
 import sys
 import types as _types
 import typing
 
+from decimal import Decimal
+from functools import lru_cache as cache
 from urllib.parse import urlparse
 
 from beancount import loader
 from beancount import parser
+from beancount.core import amount
+from beancount.core import convert
 from beancount.core import data
+from beancount.core import getters
+from beancount.core import inventory
 from beancount.core import position
 from beancount.core import prices
+from beancount.core.compare import hash_entry
 from beancount.core.getters import get_account_open_close, get_commodity_directives
+from beancount.ops import summarize
 
 from beanquery import tables
 from beanquery import types
 from beanquery import query_compile
-from beanquery import query_env
 from beanquery import query_render
 from beanquery import hashable
 
@@ -26,14 +35,15 @@ else:
 
 hashable.register(data.Transaction, lambda t: (t.date, t.flag, t.narration))
 
-TABLES = [query_env.EntriesTable, query_env.PostingsTable]
+
+_TABLES = []
 
 
 def attach(context, dsn, *, entries=None, errors=None, options=None):
     filename = urlparse(dsn).path
     if filename:
         entries, errors, options = loader.load_file(filename)
-    for table in TABLES:
+    for table in _TABLES:
         context.tables[table.name] = table(entries, options)
     context.options.update(options)
     context.errors.extend(errors)
@@ -136,7 +146,7 @@ class Table(tables.Table):
         self.options = options
 
     def __init_subclass__(cls):
-        TABLES.append(cls)
+        _TABLES.append(cls)
 
     def __iter__(self):
         datatype = self.datatype
@@ -216,7 +226,7 @@ class AccountsTable(tables.Table):
     def __iter__(self):
         return ((name, value[0], value[1]) for name, value in self.accounts.items())
 
-TABLES.append(AccountsTable)
+_TABLES.append(AccountsTable)
 
 
 class CommoditiesTable(tables.Table):
@@ -229,4 +239,371 @@ class CommoditiesTable(tables.Table):
     def __iter__(self):
         return iter(self.commodities.values())
 
-TABLES.append(CommoditiesTable)
+_TABLES.append(CommoditiesTable)
+
+
+class _BeancountTable(tables.Table):
+    def __init__(self, entries, options, open=None, close=None, clear=None):
+        super().__init__()
+        self.entries = entries
+        self.options = options
+        self.open = open
+        self.close = close
+        self.clear = clear
+
+    def update(self, **kwargs):
+        table = copy.copy(self)
+        for name, value in kwargs.items():
+            setattr(table, name, value)
+        return table
+
+    def prepare(self):
+        """Filter the entries applying the FROM clause qualifiers OPEN, CLOSE, CLEAR."""
+        entries = self.entries
+        options = self.options
+
+        # Process the OPEN clause.
+        if self.open is not None:
+            entries, index = summarize.open_opt(entries, self.open, options)
+
+        # Process the CLOSE clause.
+        if self.close is not None:
+            if isinstance(self.close, datetime.date):
+                entries, index = summarize.close_opt(entries, self.close, options)
+            elif self.close is True:
+                entries, index = summarize.close_opt(entries, None, options)
+
+        # Process the CLEAR clause.
+        if self.clear is not None:
+            entries, index = summarize.clear_opt(entries, None, options)
+
+        return entries
+
+
+class ColumnsRegistry(dict):
+
+    def register(self, dtype, name=None, help=None):
+        def decorator(func):
+            class Col(query_compile.EvalColumn):
+                def __init__(self):
+                    super().__init__(dtype)
+                __call__ = staticmethod(func)
+            Col.__name__ = name or func.__name__
+            Col.__doc__ = help or func.__doc__
+            self[Col.__name__] = Col()
+            return func
+        return decorator
+
+
+class EntriesTable(_BeancountTable):
+    name = 'entries'
+    columns = ColumnsRegistry()
+
+    def __iter__(self):
+        entries = self.prepare()
+        yield from iter(entries)
+
+    @columns.register(str)
+    def id(entry):
+        """Unique id of a directive."""
+        return hash_entry(entry)
+
+    @columns.register(str)
+    def type(entry):
+        """The data type of the directive."""
+        return type(entry).__name__.lower()
+
+    @columns.register(str)
+    def filename(entry):
+        """The filename where the directive was parsed from or created."""
+        return entry.meta["filename"]
+
+    @columns.register(int)
+    def lineno(entry):
+        """The line number from the file the directive was parsed from."""
+        return entry.meta["lineno"]
+
+    @columns.register(datetime.date)
+    def date(entry):
+        """The date of the directive."""
+        return entry.date
+
+    @columns.register(int)
+    def year(entry):
+        """The year of the date year of the directive."""
+        return entry.date.year
+
+    @columns.register(int)
+    def month(entry):
+        """The year of the date month of the directive."""
+        return entry.date.month
+
+    @columns.register(int)
+    def day(entry):
+        """The year of the date day of the directive."""
+        return entry.date.day
+
+    @columns.register(str)
+    def flag(entry):
+        """The flag the transaction."""
+        if not isinstance(entry, data.Transaction):
+            return None
+        return entry.flag
+
+    @columns.register(str)
+    def payee(entry):
+        """The payee of the transaction."""
+        if not isinstance(entry, data.Transaction):
+            return None
+        return entry.payee
+
+    @columns.register(str)
+    def narration(entry):
+        """The narration of the transaction."""
+        if not isinstance(entry, data.Transaction):
+            return None
+        return entry.narration
+
+    @columns.register(str)
+    def description(entry):
+        """A combination of the payee + narration of the transaction, if present."""
+        if not isinstance(entry, data.Transaction):
+            return None
+        return ' | '.join(filter(None, [entry.payee, entry.narration]))
+
+    @columns.register(set)
+    def tags(entry):
+        """The set of tags of the transaction."""
+        return getattr(entry, 'tags', None)
+
+    @columns.register(set)
+    def links(entry):
+        """The set of links of the transaction."""
+        return getattr(entry, 'links', None)
+
+    @columns.register(dict)
+    def meta(entry):
+        return entry.meta
+
+    @columns.register(typing.Set[str])
+    def accounts(entry):
+        return getters.get_entry_accounts(entry)
+
+_TABLES.append(EntriesTable)
+
+
+class _PostingsTableRow:
+    """A dumb container for information used by a row expression."""
+
+    def __init__(self):
+        self.rowid = 0
+        self.balance = inventory.Inventory()
+
+        # The current transaction of the posting being evaluated.
+        self.entry = None
+
+        # The current posting being evaluated.
+        self.posting = None
+
+    def __hash__(self):
+        # The context hash is used in caching column accessor functions.
+        # Instead than hashing the row context content, use the rowid as
+        # hash.
+        return self.rowid
+
+
+class PostingsTable(EntriesTable):
+    name = 'postings'
+    columns = ColumnsRegistry()
+    wildcard_columns = 'date flag payee narration position'.split()
+
+    def __iter__(self):
+        entries = self.prepare()
+        context = _PostingsTableRow()
+        for entry in entries:
+            if isinstance(entry, data.Transaction):
+                context.entry = entry
+                for posting in entry.postings:
+                    context.rowid += 1
+                    context.posting = posting
+                    yield context
+
+    @columns.register(str)
+    def type(context):
+        return 'transaction'
+
+    @columns.register(str)
+    def id(context):
+        """Unique id of a directive."""
+        return hash_entry(context.entry)
+
+    @columns.register(datetime.date)
+    def date(context):
+        """The date of the directive."""
+        return context.entry.date
+
+    @columns.register(int)
+    def year(context):
+        """The year of the date year of the directive."""
+        return context.entry.date.year
+
+    @columns.register(int)
+    def month(context):
+        """The year of the date month of the directive."""
+        return context.entry.date.month
+
+    @columns.register(int)
+    def day(context):
+        """The year of the date day of the directive."""
+        return context.entry.date.day
+
+    @columns.register(str)
+    def filename(context):
+        """The ledger where the posting is defined."""
+        meta = context.posting.meta
+        # Postings for pad transactions have their meta fields set to
+        # None. See https://github.com/beancount/beancount/issues/767
+        if meta is None:
+            return None
+        return meta["filename"]
+
+    @columns.register(int)
+    def lineno(context):
+        """The line number in the ledger file where the posting is defined."""
+        meta = context.posting.meta
+        # Postings for pad transactions have their meta fields set to
+        # None. See https://github.com/beancount/beancount/issues/767
+        if meta is None:
+            return None
+        return meta["lineno"]
+
+    @columns.register(str)
+    def location(context):
+        """The filename:lineno location where the posting is defined."""
+        meta = context.posting.meta
+        # Postings for pad transactions have their meta fields set to
+        # None. See https://github.com/beancount/beancount/issues/767
+        if meta is None:
+            return None
+        return '{:s}:{:d}:'.format(meta['filename'], meta['lineno'])
+
+    @columns.register(str)
+    def flag(context):
+        """The flag of the parent transaction for this posting."""
+        return context.entry.flag
+
+    @columns.register(str)
+    def payee(context):
+        """The payee of the parent transaction for this posting."""
+        return context.entry.payee
+
+    @columns.register(str)
+    def narration(context):
+        """The narration of the parent transaction for this posting."""
+        return context.entry.narration
+
+    @columns.register(str)
+    def description(context):
+        """A combination of the payee + narration for the transaction of this posting."""
+        return ' | '.join(filter(None, [context.entry.payee, context.entry.narration]))
+
+    @columns.register(set)
+    def tags(context):
+        """The set of tags of the parent transaction for this posting."""
+        return context.entry.tags
+
+    @columns.register(set)
+    def links(context):
+        """The set of links of the parent transaction for this posting."""
+        return context.entry.links
+
+    @columns.register(str)
+    def posting_flag(context):
+        """The flag of the posting itself."""
+        return context.posting.flag
+
+    @columns.register(str)
+    def account(context):
+        """The account of the posting."""
+        return context.posting.account
+
+    @columns.register(set)
+    def other_accounts(context):
+        """The list of other accounts in the transaction, excluding that of this posting."""
+        return sorted({posting.account for posting in context.entry.postings if posting is not context.posting})
+
+    @columns.register(Decimal)
+    def number(context):
+        """The number of units of the posting."""
+        return context.posting.units.number
+
+    @columns.register(str)
+    def currency(context):
+        """The currency of the posting."""
+        return context.posting.units.currency
+
+    @columns.register(Decimal)
+    def cost_number(context):
+        """The number of cost units of the posting."""
+        cost = context.posting.cost
+        return cost.number if cost else None
+
+    @columns.register(str)
+    def cost_currency(context):
+        """The cost currency of the posting."""
+        cost = context.posting.cost
+        return cost.currency if cost else None
+
+    @columns.register(datetime.date)
+    def cost_date(context):
+        """The cost currency of the posting."""
+        cost = context.posting.cost
+        return cost.date if cost else None
+
+    @columns.register(str)
+    def cost_label(context):
+        """The cost currency of the posting."""
+        cost = context.posting.cost
+        return cost.label if cost else ''
+
+    @columns.register(position.Position)
+    def position(context):
+        """The position for the posting. These can be summed into inventories."""
+        posting = context.posting
+        return position.Position(posting.units, posting.cost)
+
+    @columns.register(amount.Amount)
+    def price(context):
+        """The price attached to the posting."""
+        return context.posting.price
+
+    @columns.register(amount.Amount)
+    def weight(context):
+        """The computed weight used for this posting."""
+        return convert.get_weight(context.posting)
+
+    @columns.register(inventory.Inventory)
+    @cache(maxsize=1)  # noqa: B019
+    def balance(context):
+        """The balance for the posting. These can be summed into inventories."""
+        # Caching protects against multiple balance updates per row when
+        # the columns appears more than once in the execurted query. The
+        # rowid in the row context guarantees that otherwise identical
+        # rows do not hit the cache and thus that the balance is correctly
+        # updated.
+        context.balance.add_position(context.posting)
+        return copy.copy(context.balance)
+
+    @columns.register(dict)
+    def meta(context):
+        return context.posting.meta
+
+    @columns.register(data.Transaction)
+    def entry(context):
+        return context.entry
+
+    @columns.register(typing.Set[str])
+    def accounts(context):
+        return {p.account for p in context.entry.postings}
+
+_TABLES.append(PostingsTable)
