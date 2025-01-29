@@ -590,6 +590,27 @@ def possign(context, x, account):
     return x if sign >= 0  else -x
 
 
+# ``date`` type
+
+class Date(types.Structure):
+    name = 'date'
+    columns = ColumnsRegistry()
+
+    @columns.register(int)
+    def year(x):
+        return x.year
+
+    @columns.register(int)
+    def month(x):
+        return x.month
+
+    @columns.register(int)
+    def day(x):
+        return x.day
+
+types.ALIASES[datetime.date] = Date
+
+
 @function([str], datetime.date)
 @function([str, str], datetime.date)
 def parse_date(string, frmt=None):
