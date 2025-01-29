@@ -412,7 +412,7 @@ class _PostingsTableRow:
         return self.rowid
 
 
-class PostingsTable(EntriesTable):
+class PostingsTable(_BeancountTable):
     name = 'postings'
     columns = ColumnsRegistry()
     wildcard_columns = 'date flag payee narration position'.split()
