@@ -30,6 +30,21 @@ from beanquery import query_compile
 from beanquery import types
 
 
+class ColumnsRegistry(dict):
+
+    def register(self, dtype):
+        def decorator(func):
+            class Col(query_compile.EvalColumn):
+                def __init__(self):
+                    super().__init__(dtype)
+                __call__ = staticmethod(func)
+            Col.__name__ = func.__name__
+            Col.__doc__ = func.__doc__
+            self[Col.__name__] = Col()
+            return func
+        return decorator
+
+
 def function(intypes, outtype, pass_context=None, name=None):
     def decorator(func):
         class Func(query_compile.EvalFunction):

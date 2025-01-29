@@ -26,6 +26,8 @@ from beanquery import types
 from beanquery import query_compile
 from beanquery import query_render
 from beanquery import hashable
+from beanquery.query_env import ColumnsRegistry
+
 
 if sys.version_info >= (3, 10):
     _UNIONTYPES = {typing.Union, _types.UnionType}
@@ -113,15 +115,12 @@ class Amount(types.Structure):
 
 class Transaction(types.Structure):
     name = 'transaction'
-    columns = _typed_namedtuple_to_columns(data.Transaction)
+    columns = ColumnsRegistry(_typed_namedtuple_to_columns(data.Transaction))
     del columns['postings']
 
-
-def _accounts(row):
-    return {p.account for p in row.postings}
-_accounts.dtype = typing.Set[str]
-_accounts.childnodes = ()
-Transaction.columns['accounts'] = _accounts
+    @columns.register(typing.Set[str])
+    def accounts(row):
+        return {p.account for p in row.postings}
 
 
 types.ALIASES[position.Position] = Position
@@ -280,21 +279,6 @@ class _BeancountTable(tables.Table):
             entries, index = summarize.clear_opt(entries, None, options)
 
         return entries
-
-
-class ColumnsRegistry(dict):
-
-    def register(self, dtype, name=None, help=None):
-        def decorator(func):
-            class Col(query_compile.EvalColumn):
-                def __init__(self):
-                    super().__init__(dtype)
-                __call__ = staticmethod(func)
-            Col.__name__ = name or func.__name__
-            Col.__doc__ = help or func.__doc__
-            self[Col.__name__] = Col()
-            return func
-        return decorator
 
 
 class EntriesTable(_BeancountTable):
