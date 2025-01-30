@@ -4,7 +4,7 @@
 @@keyword :: 'AND' 'AS' 'ASC' 'BY' 'DESC' 'DISTINCT' 'FALSE' 'FROM'
     'GROUP' 'HAVING' 'IN' 'IS' 'LIMIT' 'NOT' 'OR' 'ORDER' 'PIVOT'
     'SELECT' 'TRUE' 'WHERE'
-@@keyword :: 'CREATE' 'TABLE' 'USING'
+@@keyword :: 'CREATE' 'TABLE' 'USING' 'INSERT' 'INTO'
 @@keyword :: 'BALANCES' 'JOURNAL' 'PRINT'
 @@comments :: /(\/\*([^*]|[\r\n]|(\*+([^*\/]|[\r\n])))*\*+\/)/
 @@eol_comments :: /\;[^\n]*?$/
@@ -20,11 +20,12 @@ statement
     | journal
     | print
     | create_table
+    | insert
     ;
 
 select::Select
     = 'SELECT' ['DISTINCT' distinct:`True`] targets:(','.{ target }+ | asterisk)
-      ['FROM' from_clause:(table | subselect | from)]
+      ['FROM' from_clause:(_table | subselect | from)]
       ['WHERE' where_clause:expression]
       ['GROUP' 'BY' group_by:groupby]
       ['ORDER' 'BY' order_by:','.{order}+]
@@ -44,8 +45,12 @@ from::From
     | expression:expression ['OPEN' 'ON' open:date] ['CLOSE' ('ON' close:date | {} close:`True`)] ['CLEAR' clear:`True`]
     ;
 
-table::Table
+_table::Table
     = name:/#([a-zA-Z_][a-zA-Z0-9_]*)?/
+    ;
+
+table::Table
+    = name:/[a-zA-Z_][a-zA-Z0-9_]*/
     ;
 
 groupby::GroupBy
@@ -372,4 +377,10 @@ create_table::CreateTable
     = 'CREATE' 'TABLE' ~ name:identifier
       ['(' columns:','.{( identifier identifier )} ')']
       ['USING' using:string]
+    ;
+
+insert::Insert
+    = 'INSERT' 'INTO' ~ table:table
+      ['(' columns:','.{column} ')']
+      'VALUES' '(' values:','.{expression} ')'
     ;

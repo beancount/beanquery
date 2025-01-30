@@ -48,6 +48,8 @@ KEYWORDS: set[str] = {
     'CREATE',
     'TABLE',
     'USING',
+    'INSERT',
+    'INTO',
     'BALANCES',
     'JOURNAL',
     'PRINT',
@@ -114,11 +116,14 @@ class BQLParser(Parser):
                 self._print_()
             with self._option():
                 self._create_table_()
+            with self._option():
+                self._insert_()
             self._error(
                 'expecting one of: '
-                "'BALANCES' 'CREATE' 'JOURNAL' 'PRINT'"
-                "'SELECT' <balances> <create_table>"
-                '<journal> <print> <select>'
+                "'BALANCES' 'CREATE' 'INSERT' 'JOURNAL'"
+                "'PRINT' 'SELECT' <balances>"
+                '<create_table> <insert> <journal>'
+                '<print> <select>'
             )
 
     @tatsumasu('Select')
@@ -151,14 +156,14 @@ class BQLParser(Parser):
             with self._group():
                 with self._choice():
                     with self._option():
-                        self._table_()
+                        self.__table_()
                     with self._option():
                         self._subselect_()
                     with self._option():
                         self._from_()
                     self._error(
                         'expecting one of: '
-                        '<from> <subselect> <table>'
+                        '<_table> <from> <subselect>'
                     )
             self.name_last_node('from_clause')
             self._define(['from_clause'], [])
@@ -312,8 +317,13 @@ class BQLParser(Parser):
             )
 
     @tatsumasu('Table')
-    def _table_(self):
+    def __table_(self):
         self._pattern('#([a-zA-Z_][a-zA-Z0-9_]*)?')
+        self.name_last_node('name')
+
+    @tatsumasu('Table')
+    def _table_(self):
+        self._pattern('[a-zA-Z_][a-zA-Z0-9_]*')
         self.name_last_node('name')
 
     @tatsumasu('GroupBy')
@@ -1179,6 +1189,38 @@ class BQLParser(Parser):
             self.name_last_node('using')
             self._define(['using'], [])
         self._define(['columns', 'name', 'using'], [])
+
+    @tatsumasu('Insert')
+    def _insert_(self):
+        self._token('INSERT')
+        self._token('INTO')
+        self._cut()
+        self._table_()
+        self.name_last_node('table')
+        with self._optional():
+            self._token('(')
+
+            def sep0():
+                self._token(',')
+
+            def block1():
+                self._column_()
+            self._gather(block1, sep0)
+            self.name_last_node('columns')
+            self._token(')')
+            self._define(['columns'], [])
+        self._token('VALUES')
+        self._token('(')
+
+        def sep2():
+            self._token(',')
+
+        def block3():
+            self._expression_()
+        self._gather(block3, sep2)
+        self.name_last_node('values')
+        self._token(')')
+        self._define(['columns', 'table', 'values'], [])
 
 
 def main(filename, **kwargs):

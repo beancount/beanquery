@@ -1777,3 +1777,31 @@ class TestCreateTable(unittest.TestCase):
         self.assertEqual(names, ['a', 'b', 'c', 'd'])
         types = [column.dtype for column in self.conn.tables['abcd'].columns.values()]
         self.assertEqual(types, [int, bool, str, datetime.date])
+
+
+class TestInsert(unittest.TestCase):
+
+    def setUp(self):
+        self.conn = beanquery.connect('')
+        self.conn.execute('''CREATE TABLE abcd (a int, b bool, c str, d date)''')
+
+    def test_insert_values(self):
+        curs = self.conn.execute('''INSERT INTO abcd (a, b, c, d) VALUES (1, TRUE, 'one', 2025-01-01)''')
+        self.assertEqual(self.conn.tables['abcd'].data[0], (1, True, 'one', datetime.date(2025, 1, 1)))
+        self.assertEqual(curs.fetchall(), [])
+
+    def test_insert_incomplete_row(self):
+        curs = self.conn.execute('''INSERT INTO abcd (a, d) VALUES (1, 2025-01-01)''')
+        self.assertEqual(self.conn.tables['abcd'].data[0], (1, None, None, datetime.date(2025, 1, 1)))
+        self.assertEqual(curs.fetchall(), [])
+
+    def test_insert_order(self):
+        curs = self.conn.execute('''INSERT INTO abcd (a, d, c, b) VALUES (1, 2025-01-01, 'one', FALSE)''')
+        self.assertEqual(self.conn.tables['abcd'].data[0], (1, False, 'one', datetime.date(2025, 1, 1)))
+        self.assertEqual(curs.fetchall(), [])
+
+    def test_insert_placeholders(self):
+        values = (1, True, 'one', datetime.date(2025, 1, 1))
+        curs = self.conn.execute('''INSERT INTO abcd (a, b, c, d) VALUES (%s, %s, %s, %s)''', values)
+        self.assertEqual(self.conn.tables['abcd'].data[0], values)
+        self.assertEqual(curs.fetchall(), [])

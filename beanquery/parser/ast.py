@@ -319,3 +319,5 @@ All = node('All', 'left op right')
 
 
 CreateTable = node('CreateTable', 'name columns using')
+
+Insert = node('Insert', 'table columns values')

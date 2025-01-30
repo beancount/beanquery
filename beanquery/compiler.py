@@ -24,6 +24,7 @@ from .query_compile import (
     EvalCreateTable,
     EvalGetItem,
     EvalGetter,
+    EvalInsert,
     EvalOr,
     EvalPivot,
     EvalQuery,
@@ -731,6 +732,30 @@ class Compiler:
         scheme = parts.scheme or path.splitext(parts.path)[1][1:] or 'memory'
         impl = importlib.import_module(f'beanquery.sources.{scheme}').create
         return EvalCreateTable(self.context, node.name, columns, node.using, impl)
+
+    @_compile.register
+    def _insert(self, node: ast.Insert):
+        table = self.context.tables.get(node.table.name)
+        if table is None:
+            raise CompilationError(f'table "{node.table.name}" does not exist', node.table)
+        impl = getattr(table, 'insert', None)
+        if impl is None:
+            raise CompilationError(f'table "{node.table.name}" does not support insertion', node.table)
+        if len(node.values) != len(node.columns):
+            raise CompilationError(
+                f'column names and values mismatch: '
+                f'expected {len(node.columns)} but {len(node.values)} values were supplied', node)
+        values = [EvalConstant(None)] * len(table.columns)
+        columns = {name: i for i, name in enumerate(table.columns.keys())}
+        for column, value in zip(node.columns, node.values):
+            index = columns.get(column.name)
+            if index is None:
+                raise CompilationError(f'column "{column.name}" not found in table "{node.table.name}"', column)
+            expr = self._compile(value)
+            if not expr.dtype == table.columns.get(column.name).dtype:
+                raise CompilationError(f'expression has wrong type for column "{column.name}"', value)
+            values[index] = expr
+        return EvalInsert(table, values)
 
 
 def transform_journal(journal):
