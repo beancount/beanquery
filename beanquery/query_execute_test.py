@@ -1551,7 +1551,7 @@ class TestExecuteTables(QueryBase):
 
     def execute(self, query):
         query = self.compile(query)
-        return qx.execute_query(query)
+        return query()
 
     def test_null_table(self):
         self.assertEqual(
