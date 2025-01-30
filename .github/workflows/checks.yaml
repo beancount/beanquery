@@ -20,10 +20,8 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt coverage
-      - name: Run coverage
-        # Check tests coverage. Instead of checking project coverage of
-        # all the tests we check that each module is exaustively tested
-        # by the dedicated units tests.
+      - name: Check coverage by module
+        # Check that each module is exaustively tested by the dedicated units tests.
         run: |
           set -x
           echo '{
@@ -37,6 +35,10 @@ jobs:
             python -m coverage report --fail-under=100 -m
             python -m coverage erase
           done
+      - name: Check overall coverage
+        run: |
+          python -m coverage run --branch -m unittest discover -t . -s beanquery/ -p \*_test.py
+          python -m coverage report --sort cover
   build:
     runs-on: ubuntu-latest
     steps:
