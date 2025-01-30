@@ -686,3 +686,14 @@ class EvalCreateTable:
     def __call__(self):
         self.context.tables[self.name] = self.create(self.name, self.columns, self.using)
         return (), []
+
+
+@dataclasses.dataclass
+class EvalInsert:
+    table: tables.Table
+    values: list[EvalNode]
+
+    def __call__(self):
+        values = tuple(value(None) for value in self.values)
+        self.table.insert(values)
+        return (), []
