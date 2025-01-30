@@ -45,6 +45,9 @@ KEYWORDS: set[str] = {
     'SELECT',
     'TRUE',
     'WHERE',
+    'CREATE',
+    'TABLE',
+    'USING',
     'BALANCES',
     'JOURNAL',
     'PRINT',
@@ -109,10 +112,13 @@ class BQLParser(Parser):
                 self._journal_()
             with self._option():
                 self._print_()
+            with self._option():
+                self._create_table_()
             self._error(
                 'expecting one of: '
-                "'BALANCES' 'JOURNAL' 'PRINT' 'SELECT'"
-                '<balances> <journal> <print> <select>'
+                "'BALANCES' 'CREATE' 'JOURNAL' 'PRINT'"
+                "'SELECT' <balances> <create_table>"
+                '<journal> <print> <select>'
             )
 
     @tatsumasu('Select')
@@ -1145,6 +1151,34 @@ class BQLParser(Parser):
             self.name_last_node('from_clause')
             self._define(['from_clause'], [])
         self._define(['from_clause'], [])
+
+    @tatsumasu('CreateTable')
+    def _create_table_(self):
+        self._token('CREATE')
+        self._token('TABLE')
+        self._cut()
+        self._identifier_()
+        self.name_last_node('name')
+        with self._optional():
+            self._token('(')
+
+            def sep0():
+                self._token(',')
+
+            def block1():
+                with self._group():
+                    self._identifier_()
+                    self._identifier_()
+            self._gather(block1, sep0)
+            self.name_last_node('columns')
+            self._token(')')
+            self._define(['columns'], [])
+        with self._optional():
+            self._token('USING')
+            self._string_()
+            self.name_last_node('using')
+            self._define(['using'], [])
+        self._define(['columns', 'name', 'using'], [])
 
 
 def main(filename, **kwargs):

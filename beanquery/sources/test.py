@@ -1,8 +1,8 @@
 import re
 from urllib.parse import urlparse, parse_qsl
 
-from ..query_compile import EvalColumn
-from .. import tables
+from beanquery import tables
+from beanquery.query_compile import EvalColumn
 
 
 class Column(EvalColumn):
@@ -56,9 +56,16 @@ class MagicTable(tables.Table):
         return iter(self.rows)
 
 
+def create(name, columns, using):
+    assert columns is None
+    parts = urlparse(using)
+    params = dict(parse_qsl(parts.query, strict_parsing=True))
+    cls = MagicTable if parts.path == 'magic' else Table
+    return cls(int(params.get('start', 0)), int(params.get('stop', 11)), int(params.get('step', 1)))
+
+
 def attach(context, dsn):
     parts = urlparse(dsn)
     params = dict(parse_qsl(parts.query, strict_parsing=True))
     name = params.get('name', 'test')
-    cls = MagicTable if parts.path == 'magic' else Table
-    context.tables[name] = cls(int(params.get('start', 0)), int(params.get('stop', 11)), int(params.get('step', 1)))
+    context.tables[name] = create(name, None, dsn)

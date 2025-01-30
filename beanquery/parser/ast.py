@@ -316,3 +316,6 @@ class Sub(BinaryOp):
 
 Any = node('Any', 'left op right')
 All = node('All', 'left op right')
+
+
+CreateTable = node('CreateTable', 'name columns using')

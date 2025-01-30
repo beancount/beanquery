@@ -1,9 +1,12 @@
 import collections.abc
+import importlib
 import typing
 
 from decimal import Decimal
 from functools import singledispatchmethod
+from os import path
 from typing import Optional, Sequence, Mapping, Union
+from urllib.parse import urlparse
 
 from . import types
 from . import parser
@@ -18,6 +21,7 @@ from .query_compile import (
     EvalCoalesce,
     EvalColumn,
     EvalConstant,
+    EvalCreateTable,
     EvalGetItem,
     EvalGetter,
     EvalOr,
@@ -712,6 +716,21 @@ class Compiler:
         expr = self._compile_from(node.from_clause)
         targets = [EvalTarget(EvalRow(), 'ROW(*)', False)]
         return EvalQuery(self.table, targets, expr, None, None, None, None, False)
+
+    @_compile.register
+    def _create_table(self, node: ast.CreateTable):
+        columns = None
+        if node.columns is not None:
+            columns = []
+            for cname, ctype in node.columns:
+                datatype = types.parse(ctype)
+                if datatype is None:
+                    raise CompilationError(f'unrecognized type "{ctype}"', node)
+                columns.append((cname, datatype))
+        parts = urlparse(node.using)
+        scheme = parts.scheme or path.splitext(parts.path)[1][1:] or 'memory'
+        impl = importlib.import_module(f'beanquery.sources.{scheme}').create
+        return EvalCreateTable(self.context, node.name, columns, node.using, impl)
 
 
 def transform_journal(journal):
