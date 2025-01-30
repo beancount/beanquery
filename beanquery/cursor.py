@@ -4,7 +4,6 @@ from typing import Sequence
 from . import types
 from . import parser
 from . import compiler
-from . import query_execute
 
 
 class Column(Sequence):
@@ -90,7 +89,7 @@ class Cursor:
         if not isinstance(query, parser.ast.Node):
             query = parser.parse(query)
         query = compiler.compile(self._context, query, params)
-        description, rows = query_execute.execute_query(query)
+        description, rows = query()
         self._description = description
         self._rows = rows
         self._pos = 0

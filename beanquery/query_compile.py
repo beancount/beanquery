@@ -13,15 +13,19 @@ __license__ = "GNU GPLv2"
 import collections
 import dataclasses
 import datetime
+import importlib
+import itertools
 import re
 import operator
 
 from decimal import Decimal
-from itertools import product
+from os import path
 from typing import List
+from urllib.parse import urlparse
 
 from dateutil.relativedelta import relativedelta
 
+from beanquery import cursor
 from beanquery.parser import ast
 from beanquery import query_execute
 from beanquery import types
@@ -348,7 +352,7 @@ _comparable = [
 ]
 
 for comparable in _comparable:
-    for intypes in product(comparable, repeat=3):
+    for intypes in itertools.product(comparable, repeat=3):
         class Between(EvalBetween):
             __intypes__ = list(intypes)
         OPERATORS[ast.Between].append(Between)
@@ -572,7 +576,7 @@ class SubqueryTable(tables.Table):
         return Column
 
     def __iter__(self):
-        columns, rows = query_execute.execute_query(self.subquery)
+        columns, rows = self.subquery()
         return iter(rows)
 
 
@@ -586,7 +590,7 @@ class EvalConstantSubquery1D(EvalNode):
         if self.value is MARKER:
             # Subqueries accessing the current row are not supported yet,
             # thus the subquery result can be simply cached.
-            columns, rows = query_execute.execute_query(self.subquery)
+            columns, rows = self.subquery()
             value = [row[0] for row in rows]
             # Subqueries not returning any row are threates as NULL.
             self.value = value if value else None
@@ -632,14 +636,43 @@ class EvalQuery:
     def columns(self):
         return [t for t in self.c_targets if t.name is not None]
 
+    def __call__(self):
+        return query_execute.execute_select(self)
 
-# A compiled query with a PIVOT BY clause.
-#
-# The PIVOT BY clause causes the structure of the returned table to be
-# fundamentally alterede, thus it makes sense to model it as a
-# distinct operation.
-#
-# Attributes:
-#   query: The underlying EvalQuery.
-#   pivots: The pivot columns indexes
-EvalPivot = collections.namedtuple('EvalPivot', 'query pivots')
+
+@dataclasses.dataclass
+class EvalPivot:
+    """Implement PIVOT BY clause."""
+
+    query: EvalQuery
+    pivots: list[int]
+
+    def __call__(self):
+        columns, rows = self.query()
+
+        col1, col2 = self.pivots
+        othercols = [i for i in range(len(columns)) if i not in self.pivots]
+        nother = len(othercols)
+        other = lambda x: tuple(x[i] for i in othercols)
+        keys = sorted({row[col2] for row in rows})
+
+        # Compute the new column names and dtypes.
+        if nother > 1:
+            it = itertools.product(keys, other(columns))
+            names = [f'{columns[col1].name}/{columns[col2].name}'] + [f'{key}/{col.name}' for key, col in it]
+        else:
+            names = [f'{columns[col1].name}/{columns[col2].name}'] + [f'{key}' for key in keys]
+        datatypes = [columns[col1].datatype] + [col.datatype for col in other(columns)] * len(keys)
+        columns = tuple(cursor.Column(name, datatype) for name, datatype in zip(names, datatypes))
+
+        # Populate the pivoted table.
+        pivoted = []
+        rows.sort(key=operator.itemgetter(col1))
+        for field1, group in itertools.groupby(rows, key=operator.itemgetter(col1)):
+            outrow = [field1] + [None] * (len(columns) - 1)
+            for row in group:
+                index = keys.index(row[col2]) * nother + 1
+                outrow[index:index+nother] = other(row)
+            pivoted.append(tuple(outrow))
+
+        return columns, pivoted
