@@ -4,6 +4,7 @@
 @@keyword :: 'AND' 'AS' 'ASC' 'BY' 'DESC' 'DISTINCT' 'FALSE' 'FROM'
     'GROUP' 'HAVING' 'IN' 'IS' 'LIMIT' 'NOT' 'OR' 'ORDER' 'PIVOT'
     'SELECT' 'TRUE' 'WHERE'
+@@keyword :: 'CREATE' 'TABLE' 'USING'
 @@keyword :: 'BALANCES' 'JOURNAL' 'PRINT'
 @@comments :: /(\/\*([^*]|[\r\n]|(\*+([^*\/]|[\r\n])))*\*+\/)/
 @@eol_comments :: /\;[^\n]*?$/
@@ -18,6 +19,7 @@ statement
     | balances
     | journal
     | print
+    | create_table
     ;
 
 select::Select
@@ -364,4 +366,10 @@ journal::Journal
 print::Print
     = 'PRINT'
       ['FROM' from_clause:from]
+    ;
+
+create_table::CreateTable
+    = 'CREATE' 'TABLE' ~ name:identifier
+      ['(' columns:','.{( identifier identifier )} ')']
+      ['USING' using:string]
     ;

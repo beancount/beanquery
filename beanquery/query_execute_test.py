@@ -1761,3 +1761,19 @@ class TestArrayOpsSubquery(unittest.TestCase):
             (True,),
             ]
         )
+
+
+class TestCreateTable(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.conn = beanquery.connect('')
+
+    def test_create_table(self):
+        curs = self.conn.execute('''CREATE TABLE abcd (a int, b bool, c str, d date)''')
+        r = curs.fetchall()
+        self.assertEqual(r, [])
+        names = list(self.conn.tables['abcd'].columns.keys())
+        self.assertEqual(names, ['a', 'b', 'c', 'd'])
+        types = [column.dtype for column in self.conn.tables['abcd'].columns.values()]
+        self.assertEqual(types, [int, bool, str, datetime.date])

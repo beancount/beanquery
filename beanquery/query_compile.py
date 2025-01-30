@@ -13,15 +13,12 @@ __license__ = "GNU GPLv2"
 import collections
 import dataclasses
 import datetime
-import importlib
 import itertools
 import re
 import operator
 
 from decimal import Decimal
-from os import path
 from typing import List
-from urllib.parse import urlparse
 
 from dateutil.relativedelta import relativedelta
 
@@ -676,3 +673,16 @@ class EvalPivot:
             pivoted.append(tuple(outrow))
 
         return columns, pivoted
+
+
+@dataclasses.dataclass
+class EvalCreateTable:
+    context: object = dataclasses.field(repr=False)
+    name: str
+    columns: list[tuple[str, str]]
+    using: str
+    create: object = dataclasses.field(repr=False)
+
+    def __call__(self):
+        self.context.tables[self.name] = self.create(self.name, self.columns, self.using)
+        return (), []

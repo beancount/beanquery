@@ -95,3 +95,23 @@ def name(datatype):
     if isinstance(datatype, typing._GenericAlias):
         return str(datatype).rsplit('.', 1)[-1].lower()
     return getattr(datatype, 'name', datatype.__name__.lower())
+
+
+_STRING_TO_DATATYPE = {
+    'bool': bool,
+    'date': datetime.date,
+    'decimal': decimal.Decimal,
+    'int': int,
+    'object': object,
+    'str': str,
+    'text': str,
+    'varchar': str,
+}
+
+
+def parse(name):
+    """Parse the string representation of a type into a type object.
+
+    This does not (yet) work for all supprted data types.
+    """
+    return _STRING_TO_DATATYPE.get(name, None)
