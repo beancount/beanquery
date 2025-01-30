@@ -13,6 +13,7 @@ from beancount.core.number import D
 from beancount.core import inventory
 from beancount.core.inventory import from_string as I
 from beancount.parser import cmptest
+from beancount.utils.test_utils import docfile
 from beancount import loader
 
 import beanquery
@@ -1805,3 +1806,37 @@ class TestInsert(unittest.TestCase):
         curs = self.conn.execute('''INSERT INTO abcd (a, b, c, d) VALUES (%s, %s, %s, %s)''', values)
         self.assertEqual(self.conn.tables['abcd'].data[0], values)
         self.assertEqual(curs.fetchall(), [])
+
+
+class TestCSVTable(unittest.TestCase):
+
+    def setUp(self):
+        self.conn = beanquery.connect('')
+
+    @docfile
+    def test_create_table(self, filename):
+        '''\
+        1234, 1, baz, 2025-01-01
+        5678, 0, qux, 2025-01-02
+        '''
+        using = f'csv:{filename}'
+        curs = self.conn.execute(f'''CREATE TABLE test (a int, b bool, c str, d date) USING {using!r}''')
+        self.assertEqual(curs.fetchall(), [])
+        curs = self.conn.execute('''SELECT * FROM test''')
+        self.assertEqual(curs.fetchone(), (1234, True, 'baz', datetime.date(2025, 1, 1)))
+        self.assertEqual(curs.fetchone(), (5678, False, 'qux', datetime.date(2025, 1, 2)))
+        curs = self.conn.execute('''SELECT * FROM test''')
+        self.assertEqual(len(curs.fetchall()), 2)
+
+    @docfile
+    def test_create_table_header(self, filename):
+        '''\
+        id
+        1234
+        5678
+        '''
+        using = f'csv:{filename}?header=1'
+        curs = self.conn.execute(f'''CREATE TABLE test (a int) USING {using!r}''')
+        self.assertEqual(curs.fetchall(), [])
+        curs = self.conn.execute('''SELECT * FROM test''')
+        self.assertEqual(len(curs.fetchall()), 2)
