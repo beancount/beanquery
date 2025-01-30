@@ -353,19 +353,8 @@ class DispatchingShell(cmd.Cmd):
         """Run the parser on the following command and print the output."""
         print(self.parse(arg).tosexp())
 
-    def parse(self, query, **kwargs):
-        raise NotImplementedError
-
     def execute(self, query, **kwargs):
-        """Handle statements via our parser instance and dispatch to appropriate methods.
-
-        Args:
-          query: The string to be parsed.
-        """
-        statement = self.parse(query, **kwargs)
-        name = type(statement).__name__
-        method = getattr(self, f'on_{name}')
-        return method(statement)
+        raise NotImplementedError
 
     def do_exit(self, arg):
         """Exit the command interpreter."""
@@ -399,6 +388,14 @@ class BQLShell(DispatchingShell):
             not statement.from_clause.close):
             statement.from_clause.close = default_close_date
         return statement
+
+    def execute(self, query, **kwargs):
+        statement = self.parse(query, **kwargs)
+        name = type(statement).__name__
+        method = getattr(self, f'on_{name}', None)
+        if method is not None:
+            return method(statement)
+        return self.on_Select(statement)
 
     def do_reload(self, arg=None):
         "Reload the Beancount input file."
@@ -501,6 +498,9 @@ class BQLShell(DispatchingShell):
         p('--------------')
         p(f'  {query}')
         p('')
+
+        if not isinstance(query, query_compile.EvalNode):
+            return
 
         p('targets')
         p('-------')
