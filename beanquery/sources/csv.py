@@ -1,6 +1,7 @@
 import csv
 import datetime
 
+from os import path
 from urllib.parse import urlparse, parse_qsl
 
 from beanquery import tables
@@ -91,3 +92,14 @@ def create(name, columns, using):
     if filename:
         data = open(filename, encoding=encoding)
     return Table(name, columns, data, header=header, **params)
+
+
+def attach(context, dsn, *, data=None):
+    parts = urlparse(dsn)
+    filename = parts.path
+    params = dict(parse_qsl(parts.query))
+    encoding = params.pop('encoding', None)
+    if filename:
+        data = open(filename, encoding=encoding)
+    name = params.pop('name', None) or path.splitext(path.basename(filename))[0] or 'csv'
+    context.tables[name] = Table(name, None, data, header=True, **params)
