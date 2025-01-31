@@ -196,7 +196,8 @@ class Compiler:
                 raise CompilationError('CLOSE date must follow OPEN date')
 
             # Apply OPEN, CLOSE, and CLEAR clauses.
-            self.table = self.table.update(open=node.open, close=node.close, clear=node.clear)
+            if node.open is not None or node.close is not None or node.clear is not None:
+                self.table = self.table.evolve(open=node.open, close=node.close, clear=node.clear)
 
             return c_expression
 
