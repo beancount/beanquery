@@ -8,6 +8,8 @@ from decimal import Decimal as D
 
 from beancount import loader
 
+import beanquery
+
 from beanquery import Connection, CompilationError, ProgrammingError
 from beanquery import compiler
 from beanquery import query_compile as qc
@@ -758,3 +760,52 @@ class TestCompileParameters(unittest.TestCase):
     def test_missing_parameters_named(self):
         with self.assertRaises(ProgrammingError):
             self.compile('''SELECT %(x)s + %(y)s''', {'x': 1})
+
+
+class TestSelectFrom(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.conn = beanquery.connect('')
+        # create a table ``postings`` with coulums ``date`` and ``account``
+        cls.conn.execute('''CREATE TABLE postings (date date, account str)''')
+        # make it the default table
+        cls.conn.tables[None] = cls.conn.tables['postings']
+        # create a table ``foo`` with columns ``x`` and ``y``
+        cls.conn.execute('''CREATE TABLE foo (x int, y int)''')
+
+    def compile(self, query):
+        c = compiler.Compiler(self.conn)
+        return c.compile(parser.parse(query))
+
+    def test_select_from(self):
+        query = self.compile('''SELECT x FROM foo''')
+        self.assertEqual(query.table, self.conn.tables['foo'])
+
+    def test_select_from_invalid(self):
+        with self.assertRaisesRegex(beanquery.ProgrammingError, 'column "qux" not found in table "postings"'):
+            self.compile('''SELECT x FROM qux''')
+
+    def test_select_from_column(self):
+        query = self.compile('''SELECT account FROM date''')
+        self.assertEqual(query.table, self.conn.tables['postings'])
+
+    def test_select_from_hash(self):
+        query = self.compile('''SELECT x FROM #foo''')
+        self.assertEqual(query.table, self.conn.tables['foo'])
+
+    def test_select_from_hash_invalid(self):
+        with self.assertRaisesRegex(beanquery.ProgrammingError, 'table "qux" does not exist'):
+            self.compile('''SELECT x FROM #qux''')
+
+    def test_select_from_hash_column_invalid(self):
+        with self.assertRaisesRegex(beanquery.ProgrammingError, 'table "date" does not exist'):
+            self.compile('''SELECT account FROM #date''')
+
+    def test_select_from_hash_column(self):
+        self.conn.execute('''CREATE table date (year int, month int, day int)''')
+        def cleanup():
+            del self.conn.tables['date']
+        self.addCleanup(cleanup)
+        query = self.compile('''SELECT year FROM #date''')
+        self.assertEqual(query.table, self.conn.tables['date'])

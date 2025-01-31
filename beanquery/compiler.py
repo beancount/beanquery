@@ -176,6 +176,16 @@ class Compiler:
 
         # FROM expression.
         if isinstance(node, ast.From):
+            # Check if the FROM expression is a column name belongin to the current table.
+            if isinstance(node.expression, ast.Column):
+                column = self.table.columns.get(node.expression.name)
+                if column is None:
+                    # When it is not, threat it as a table name.
+                    table = self.context.tables.get(node.expression.name)
+                    if table is not None:
+                        self.table = table
+                        return None
+
             c_expression = self._compile(node.expression)
 
             # Check that the FROM clause does not contain aggregates.
