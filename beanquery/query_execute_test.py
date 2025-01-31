@@ -1855,3 +1855,18 @@ class TestCSVTable(unittest.TestCase):
         self.assertEqual(names, ['id', 'name', 'check', 'date', 'value'])
         types = [column.dtype for column in self.conn.tables['test'].columns.values()]
         self.assertEqual(types, [int, str, bool, datetime.date, Decimal])
+
+
+class TestCSVSource(unittest.TestCase):
+
+    @docfile
+    def test_csv_source(self, filename):
+        '''\
+        id, name, check, date, value
+        1234, one, true, 2025-01-01, 1.234
+        '''
+        conn = beanquery.connect(f'csv:{filename}?name=test')
+        names = list(conn.tables['test'].columns.keys())
+        self.assertEqual(names, ['id', 'name', 'check', 'date', 'value'])
+        types = [column.dtype for column in conn.tables['test'].columns.values()]
+        self.assertEqual(types, [int, str, bool, datetime.date, Decimal])
