@@ -1169,26 +1169,42 @@ class BQLParser(Parser):
         self._cut()
         self._identifier_()
         self.name_last_node('name')
-        with self._optional():
-            self._token('(')
+        with self._group():
+            with self._choice():
+                with self._option():
+                    self._token('(')
 
-            def sep0():
-                self._token(',')
+                    def sep0():
+                        self._token(',')
 
-            def block1():
-                with self._group():
-                    self._identifier_()
-                    self._identifier_()
-            self._gather(block1, sep0)
-            self.name_last_node('columns')
-            self._token(')')
-            self._define(['columns'], [])
-        with self._optional():
-            self._token('USING')
-            self._string_()
-            self.name_last_node('using')
-            self._define(['using'], [])
-        self._define(['columns', 'name', 'using'], [])
+                    def block1():
+                        with self._group():
+                            self._identifier_()
+                            self._identifier_()
+                    self._gather(block1, sep0)
+                    self.name_last_node('columns')
+                    self._token(')')
+                    with self._optional():
+                        self._token('USING')
+                        self._string_()
+                        self.name_last_node('using')
+                        self._define(['using'], [])
+                    self._define(['columns', 'using'], [])
+                with self._option():
+                    self._token('USING')
+                    self._string_()
+                    self.name_last_node('using')
+                    self._define(['using'], [])
+                with self._option():
+                    self._token('AS')
+                    self._select_()
+                    self.name_last_node('query')
+                    self._define(['query'], [])
+                self._error(
+                    'expecting one of: '
+                    "'(' 'AS' 'USING'"
+                )
+        self._define(['columns', 'name', 'query', 'using'], [])
 
     @tatsumasu('Insert')
     def _insert_(self):

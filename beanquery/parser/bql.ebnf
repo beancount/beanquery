@@ -375,8 +375,11 @@ print::Print
 
 create_table::CreateTable
     = 'CREATE' 'TABLE' ~ name:identifier
-      ['(' columns:','.{( identifier identifier )} ')']
-      ['USING' using:string]
+      (
+      | '(' columns:','.{( identifier identifier )} ')' ['USING' using:string]
+      | 'USING' using:string
+      | 'AS' query:select
+      )
     ;
 
 insert::Insert

@@ -731,6 +731,7 @@ class Compiler:
 
     @_compile.register
     def _create_table(self, node: ast.CreateTable):
+        query = None
         columns = None
         if node.columns is not None:
             columns = []
@@ -739,10 +740,13 @@ class Compiler:
                 if datatype is None:
                     raise CompilationError(f'unrecognized type "{ctype}"', node)
                 columns.append((cname, datatype))
+        if node.query is not None:
+            query = self._compile(node.query)
+            columns = [(t.name, t.c_expr.dtype) for t in query.c_targets if t.name is not None]
         parts = urlparse(node.using)
         scheme = parts.scheme or path.splitext(parts.path)[1][1:] or 'memory'
         impl = importlib.import_module(f'beanquery.sources.{scheme}').create
-        return EvalCreateTable(self.context, node.name, columns, node.using, impl)
+        return EvalCreateTable(self.context, node.name, columns, node.using, query, impl)
 
     @_compile.register
     def _insert(self, node: ast.Insert):
