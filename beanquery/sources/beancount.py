@@ -47,6 +47,8 @@ def attach(context, dsn, *, entries=None, errors=None, options=None):
         context.tables[table.name] = table(entries, options)
     context.options.update(options)
     context.errors.extend(errors)
+    # Set the default table. This eventually will have to be removed.
+    context.tables[None] = context.tables['postings']
 
 
 class Metadata(dict):

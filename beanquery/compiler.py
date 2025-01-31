@@ -54,7 +54,7 @@ class CompilationError(ProgrammingError):
 class Compiler:
     def __init__(self, context):
         self.context = context
-        self.stack = [context.tables.get('postings')]
+        self.stack = [context.tables.get(None)]
 
     @property
     def table(self):
