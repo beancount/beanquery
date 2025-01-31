@@ -5,6 +5,7 @@ from urllib.parse import urlparse, parse_qsl
 
 from beanquery import tables
 from beanquery import query_compile
+from beanquery.parser import BQLParser, BQLSemantics
 
 # Support conversions from all fundamental types supported by the BQL parser:
 #
@@ -18,6 +19,14 @@ from beanquery import query_compile
 #       | boolean
 #       ;
 #
+
+def _guess_type(value):
+    try:
+        r = BQLParser().parse(value, start='literal', semantics=BQLSemantics())
+    except Exception:
+        # Everything that is not recognized as something else is a string.
+        return str
+    return type(r)
 
 
 def _parse_bool(value):
@@ -56,6 +65,11 @@ class Table(tables.Table):
         fmtparams.setdefault('skipinitialspace', True)
         self.reader = csv.reader(data, **fmtparams)
         self.columns = {}
+        if columns is None:
+            names = next(self.reader, [])
+            values = next(self.reader, [])
+            datatypes = (_guess_type(value) for value in values)
+            columns = zip(names, datatypes)
         for cname, ctype in columns:
             converter = _TYPES_TO_PARSERS.get(ctype, ctype)
             self.columns[cname] = Column(len(self.columns), ctype, converter)

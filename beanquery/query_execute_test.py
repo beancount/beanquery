@@ -1840,3 +1840,18 @@ class TestCSVTable(unittest.TestCase):
         self.assertEqual(curs.fetchall(), [])
         curs = self.conn.execute('''SELECT * FROM test''')
         self.assertEqual(len(curs.fetchall()), 2)
+
+    @docfile
+    def test_create_table_guess_types(self, filename):
+        '''\
+        id, name, check, date, value
+        1234, one, true, 2025-01-01, 1.234
+        5678, two, false, 2025-01-02, 5.678
+        '''
+        using = f'csv:{filename}'
+        curs = self.conn.execute(f'''CREATE TABLE test USING {using!r}''')
+        self.assertEqual(curs.fetchall(), [])
+        names = list(self.conn.tables['test'].columns.keys())
+        self.assertEqual(names, ['id', 'name', 'check', 'date', 'value'])
+        types = [column.dtype for column in self.conn.tables['test'].columns.values()]
+        self.assertEqual(types, [int, str, bool, datetime.date, Decimal])
