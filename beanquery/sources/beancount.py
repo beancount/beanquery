@@ -253,7 +253,7 @@ class _BeancountTable(tables.Table):
         self.close = close
         self.clear = clear
 
-    def update(self, **kwargs):
+    def evolve(self, **kwargs):
         table = copy.copy(self)
         for name, value in kwargs.items():
             setattr(table, name, value)
