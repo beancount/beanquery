@@ -681,10 +681,16 @@ class EvalCreateTable:
     name: str
     columns: list[tuple[str, str]]
     using: str
+    data: EvalQuery | None
     create: object = dataclasses.field(repr=False)
 
     def __call__(self):
-        self.context.tables[self.name] = self.create(self.name, self.columns, self.using)
+        table = self.create(self.name, self.columns, self.using)
+        if self.data is not None:
+            columns, rows = self.data()
+            for row in rows:
+                table.insert(row)
+        self.context.tables[self.name] = table
         return (), []
 
 

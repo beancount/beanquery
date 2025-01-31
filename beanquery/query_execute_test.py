@@ -1766,8 +1766,7 @@ class TestArrayOpsSubquery(unittest.TestCase):
 
 class TestCreateTable(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(cls):
+    def setUp(cls):
         cls.conn = beanquery.connect('')
 
     def test_create_table(self):
@@ -1778,6 +1777,18 @@ class TestCreateTable(unittest.TestCase):
         self.assertEqual(names, ['a', 'b', 'c', 'd'])
         types = [column.dtype for column in self.conn.tables['abcd'].columns.values()]
         self.assertEqual(types, [int, bool, str, datetime.date])
+
+    def test_create_table_as(self):
+        self.conn.execute('''CREATE TABLE abc (a int, b bool, c str)''')
+        self.conn.execute('''INSERT INTO abc (a, b, c) VALUES (1, true, '2025/01/01')''')
+        curs = self.conn.execute('''CREATE TABLE test AS SELECT a, parse_date(c, '%Y/%m/%d') AS date FROM abc''')
+        self.assertEqual(curs.fetchall(), [])
+        names = list(self.conn.tables['test'].columns.keys())
+        self.assertEqual(names, ['a', 'date'])
+        types = [column.dtype for column in self.conn.tables['test'].columns.values()]
+        self.assertEqual(types, [int, datetime.date])
+        curs = self.conn.execute('''SELECT * FROM test''')
+        self.assertEqual(curs.fetchall(), [(1, datetime.date(2025, 1, 1))])
 
 
 class TestInsert(unittest.TestCase):

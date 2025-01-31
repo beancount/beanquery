@@ -318,6 +318,6 @@ Any = node('Any', 'left op right')
 All = node('All', 'left op right')
 
 
-CreateTable = node('CreateTable', 'name columns using')
+CreateTable = node('CreateTable', 'name columns using query')
 
 Insert = node('Insert', 'table columns values')
