@@ -28,9 +28,19 @@ def connect(dsn, **kwargs):
 
 class Connection:
     def __init__(self, dsn='', **kwargs):
-        self.tables = {'': tables.NullTable()}
+        self.tables = {None: tables.NullTable()}
+
+        # The ``None`` table is the default table. The ``''`` table is the
+        # table that is explicitly selected with ``FROM #``. Having the
+        # default table and the ``''`` table allows to select the empty table
+        # when the ``beancount`` data source is initialized and it sets the
+        # default table to the ``postings`` table.
+        self.tables[''] = self.tables[None]
+
+        # These are used only by the ``beancount`` data source.
         self.options = {}
         self.errors = []
+
         if dsn:
             self.attach(dsn, **kwargs)
 
