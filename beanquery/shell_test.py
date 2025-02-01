@@ -293,6 +293,27 @@ class TestRun(unittest.TestCase):
         self.assertRegex(out, 'Expenses:Home:Rent')
 
 
+class TestCommands(unittest.TestCase):
+
+    @runshell
+    def test_tables(self, out, err):
+        """
+        .tables
+        """
+        self.assertEqual(out, textwrap.dedent('''\
+            accounts
+            balances
+            commodities
+            documents
+            entries
+            events
+            notes
+            postings
+            prices
+            transactions
+        '''))
+
+
 class TestHelp(unittest.TestCase):
 
     def test_help_functions(self):
