@@ -809,3 +809,44 @@ class TestSelectFrom(unittest.TestCase):
         self.addCleanup(cleanup)
         query = self.compile('''SELECT year FROM #date''')
         self.assertEqual(query.table, self.conn.tables['date'])
+
+
+class TestQuotedIdentifiers(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.conn = beanquery.connect('')
+        # create a table ``postings`` with coulums ``date`` and ``account``
+        cls.conn.execute('''CREATE TABLE postings (date date, account str)''')
+
+    def compile(self, query):
+        c = compiler.Compiler(self.conn)
+        return c.compile(parser.parse(query))
+
+    def test_from_quoted(self):
+        query = self.compile('''SELECT * FROM postings''')
+        self.assertIs(query.table, self.conn.tables['postings'])
+        query = self.compile('''SELECT * FROM "postings"''')
+        self.assertIs(query.table, self.conn.tables['postings'])
+
+    def test_quoted_target(self):
+        query = self.compile('''SELECT date FROM postings''')
+        self.assertEqual(query.c_targets[0].c_expr, self.conn.tables['postings'].columns['date'])
+        query = self.compile('''SELECT "date" FROM postings''')
+        self.assertEqual(query.c_targets[0].c_expr, self.conn.tables['postings'].columns['date'])
+
+    def test_quoted_string_target(self):
+        # if the double quoted string is not a table name, it is a string literal ideed
+        query = self.compile('''SELECT "baz" FROM postings''')
+        self.assertEqual(query.c_targets[0].c_expr.value, 'baz')
+
+    def test_quoted_in_expression(self):
+        query = self.compile('''SELECT date + 1 FROM postings''')
+        self.assertEqual(query.c_targets[0].c_expr.left, self.conn.tables['postings'].columns['date'])
+        query = self.compile('''SELECT "date" + 1 FROM postings''')
+        self.assertEqual(query.c_targets[0].c_expr.left, self.conn.tables['postings'].columns['date'])
+
+    def test_quoted_string_in_expression(self):
+        # if the double quoted string is not a table name, it is a string literal ideed
+        query = self.compile('''SELECT "a" + "b" FROM postings''')
+        self.assertEqual(query.c_targets[0].c_expr.value, 'ab')

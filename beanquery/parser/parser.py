@@ -318,12 +318,23 @@ class BQLParser(Parser):
 
     @tatsumasu('Table')
     def __table_(self):
-        self._pattern('#([a-zA-Z_][a-zA-Z0-9_]*)?')
-        self.name_last_node('name')
+        with self._choice():
+            with self._option():
+                self._pattern('#([a-zA-Z_][a-zA-Z0-9_]*)?')
+                self.name_last_node('name')
+            with self._option():
+                self._quoted_identifier_()
+                self.name_last_node('name')
+            self._error(
+                'expecting one of: '
+                '#([a-zA-Z_][a-zA-Z0-9_]*)?'
+                '<quoted_identifier>'
+                '\\"((?:[^\\"]|\\"\\")+)\\"'
+            )
 
     @tatsumasu('Table')
     def _table_(self):
-        self._pattern('[a-zA-Z_][a-zA-Z0-9_]*')
+        self._identifier_()
         self.name_last_node('name')
 
     @tatsumasu('GroupBy')

@@ -704,6 +704,14 @@ class Compiler:
 
     @_compile.register
     def _constant(self, node: ast.Constant):
+        # For backward compatibility, the parser allows strings to be
+        # delimited by single or double quotes. This creates ambiguity between
+        # quoted identifiers and string. Strings delimited by double quotes
+        # are treated as column names when they resolve to an existing column
+        # in the current table.
+        if isinstance(node.value, str) and node.text and node.text[0] == '"':
+            if node.value in self.table.columns:
+                return self._column(ast.Column(node.value))
         return EvalConstant(node.value)
 
     @_compile.register

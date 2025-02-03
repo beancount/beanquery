@@ -46,11 +46,13 @@ from::From
     ;
 
 _table::Table
-    = name:/#([a-zA-Z_][a-zA-Z0-9_]*)?/
+    =
+    | name:/#([a-zA-Z_][a-zA-Z0-9_]*)?/
+    | name:quoted_identifier
     ;
 
 table::Table
-    = name:/[a-zA-Z_][a-zA-Z0-9_]*/
+    = name:identifier
     ;
 
 groupby::GroupBy
