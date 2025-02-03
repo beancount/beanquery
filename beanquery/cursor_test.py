@@ -73,6 +73,10 @@ class TestSQLite(APITests, unittest.TestCase):
         curs.execute('CREATE TABLE test (x int)')
         curs.executemany('INSERT INTO test VALUES (?)', [(i, ) for i in range(16)])
 
+    @classmethod
+    def tearDownClass(cls):
+        cls.conn.close()
+
 
 class TestBeanquery(APITests, unittest.TestCase):
     @classmethod
