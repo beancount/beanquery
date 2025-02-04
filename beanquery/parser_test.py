@@ -84,27 +84,6 @@ class TestParseSelect(QueryParserTestBase):
             ]))
 
     def test_literals(self):
-        # null
-        self.assertParseTarget("SELECT NULL;", ast.Constant(None))
-
-        # bool
-        self.assertParseTarget("SELECT TRUE;", ast.Constant(True))
-        self.assertParseTarget("SELECT FALSE;", ast.Constant(False))
-
-        # int
-        self.assertParseTarget("SELECT 17;", ast.Constant(17))
-
-        # decimal
-        self.assertParseTarget("SELECT 17.345;", ast.Constant(D('17.345')))
-        self.assertParseTarget("SELECT .345;", ast.Constant(D('.345')))
-        self.assertParseTarget("SELECT 17.;", ast.Constant(D('17.')))
-
-        # string
-        self.assertParseTarget("SELECT 'rainy-day';", ast.Constant('rainy-day'))
-
-        # date
-        self.assertParseTarget("SELECT 1972-05-28;", ast.Constant(datetime.date(1972, 5, 28)))
-
         # not a list
         self.assertParseTarget("SELECT (1);", ast.Constant(1))
 
@@ -665,3 +644,48 @@ class TestIdentifier(unittest.TestCase):
         self.assertEqual(self.parse('"select"'), 'select')
         # quoted quotes
         self.assertEqual(self.parse('"foo""bar"'), 'foo"bar')
+
+
+class TestLiteral(unittest.TestCase):
+
+    @staticmethod
+    def parse(string):
+        return parser.BQLParser().parse(string, start='literal', semantics=parser.BQLSemantics())
+
+    def assertEqualEx(self, this, that):
+        self.assertIsInstance(this, type(that))
+        self.assertEqual(this, that)
+
+    def test_null(self):
+        self.assertEqualEx(self.parse('NULL'), None)
+        self.assertEqualEx(self.parse('null'), None)
+        self.assertEqualEx(self.parse('Null'), None)
+
+    def test_bool(self):
+        self.assertEqualEx(self.parse('TRUE'), True)
+        self.assertEqualEx(self.parse('true'), True)
+        self.assertEqualEx(self.parse('True'), True)
+        self.assertEqualEx(self.parse('FALSE'), False)
+        self.assertEqualEx(self.parse('false'), False)
+        self.assertEqualEx(self.parse('False'), False)
+
+    def test_int(self):
+        self.assertEqualEx(self.parse('17'), 17)
+
+    def test_decimal(self):
+        self.assertEqualEx(self.parse('17.345'), D('17.345'))
+        self.assertEqualEx(self.parse('.345'), D('.345'))
+        self.assertEqualEx(self.parse('17.'), D('17.'))
+
+    def test_string(self):
+        # single quoted string
+        self.assertEqualEx(self.parse("'rainy-day'"), 'rainy-day')
+        # single quites can be entered doubling them
+        self.assertEqualEx(self.parse("'rainy''day'"), "rainy''day")
+        # double quote string, kept for backward compatibility
+        self.assertEqualEx(self.parse('"rainy-day"'), 'rainy-day')
+        # double quotes cannot be escaped
+        self.assertEqualEx(self.parse('"rainy""day"'), 'rainy')
+
+    def test_date(self):
+        self.assertEqualEx(self.parse('1972-05-28'), datetime.date(1972, 5, 28))
