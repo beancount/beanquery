@@ -1033,11 +1033,11 @@ class BQLParser(Parser):
                 self._boolean_()
             self._error(
                 'expecting one of: '
-                "'FALSE' 'NULL' 'TRUE'"
-                '(\\"[^\\"]*\\"|\\\'[^\\\']*\\\') <boolean> <date>'
+                "'FALSE' 'NULL' 'TRUE' <boolean> <date>"
                 '<decimal> <integer> <null> <string>'
                 '[0-9]+ [0-9]+\\.[0-9]*|[0-9]*\\.[0-9]+'
                 '[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                '\\"[^\\"]*\\"|\\\'(?:[^\\\']|\\\'\\\')*\\\''
             )
 
     @tatsumasu('Constant')
@@ -1050,12 +1050,12 @@ class BQLParser(Parser):
                     self._list_()
                 self._error(
                     'expecting one of: '
-                    "'(' 'FALSE' 'NULL' 'TRUE'"
-                    '(\\"[^\\"]*\\"|\\\'[^\\\']*\\\') <boolean> <date>'
-                    '<decimal> <integer> <list> <literal>'
-                    '<null> <string> [0-9]+'
+                    "'(' 'FALSE' 'NULL' 'TRUE' <boolean>"
+                    '<date> <decimal> <integer> <list>'
+                    '<literal> <null> <string> [0-9]+'
                     '[0-9]+\\.[0-9]*|[0-9]*\\.[0-9]+'
                     '[0-9]{4}-[0-9]{2}-[0-9]{2}'
+                    '\\"[^\\"]*\\"|\\\'(?:[^\\\']|\\\'\\\')*\\\''
                 )
         self.name_last_node('value')
 
@@ -1114,7 +1114,7 @@ class BQLParser(Parser):
 
     @tatsumasu()
     def _string_(self):
-        self._pattern('(\\"[^\\"]*\\"|\\\'[^\\\']*\\\')')
+        self._pattern('\\"[^\\"]*\\"|\\\'(?:[^\\\']|\\\'\\\')*\\\'')
 
     @tatsumasu()
     def _boolean_(self):
