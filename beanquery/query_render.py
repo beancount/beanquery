@@ -147,6 +147,10 @@ class SetRenderer(ColumnRenderer):
         return self.sep.join(str(x) for x in sorted(value))
 
 
+class FrozensetRenderer(SetRenderer):
+    dtype = frozenset
+
+
 class DateRenderer(ColumnRenderer):
     dtype = datetime.date
 
