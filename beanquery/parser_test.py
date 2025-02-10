@@ -59,28 +59,28 @@ class TestParseSelect(QueryParserTestBase):
         self.assertParse(
             "SELECT date;",
             Select([
-                ast.Target(ast.Column('date'), None)
+                ast.Target(ast.Column([ast.Name('date')]), None)
             ]))
 
         self.assertParse(
             "SELECT date, account",
             Select([
-                ast.Target(ast.Column('date'), None),
-                ast.Target(ast.Column('account'), None)
+                ast.Target(ast.Column([ast.Name('date')]), None),
+                ast.Target(ast.Column([ast.Name('account')]), None)
             ]))
 
         self.assertParse(
             "SELECT date as xdate;",
             Select([
-                ast.Target(ast.Column('date'), 'xdate')
+                ast.Target(ast.Column([ast.Name('date')]), 'xdate')
             ]))
 
         self.assertParse(
             "SELECT date as x, account, position as y;",
             Select([
-                ast.Target(ast.Column('date'), 'x'),
-                ast.Target(ast.Column('account'), None),
-                ast.Target(ast.Column('position'), 'y')
+                ast.Target(ast.Column([ast.Name('date')]), 'x'),
+                ast.Target(ast.Column([ast.Name('account')]), None),
+                ast.Target(ast.Column([ast.Name('position')]), 'y')
             ]))
 
     def test_literals(self):
@@ -94,38 +94,38 @@ class TestParseSelect(QueryParserTestBase):
         self.assertParseTarget("SELECT ('x', 'y', 'z');", ast.Constant(['x', 'y', 'z']))
 
         # column
-        self.assertParseTarget("SELECT date;", ast.Column('date'))
+        self.assertParseTarget("SELECT date;", ast.Column([ast.Name('date')]))
 
     def test_expressions(self):
         # comparison operators
-        self.assertParseTarget("SELECT a = 42;", ast.Equal(ast.Column('a'), ast.Constant(42)))
-        self.assertParseTarget("SELECT a != 42;", ast.NotEqual(ast.Column('a'), ast.Constant(42)))
-        self.assertParseTarget("SELECT a > 42;", ast.Greater(ast.Column('a'), ast.Constant(42)))
-        self.assertParseTarget("SELECT a >= 42;", ast.GreaterEq(ast.Column('a'), ast.Constant(42)))
-        self.assertParseTarget("SELECT a < 42;", ast.Less(ast.Column('a'), ast.Constant(42)))
-        self.assertParseTarget("SELECT a <= 42;", ast.LessEq(ast.Column('a'), ast.Constant(42)))
-        self.assertParseTarget("SELECT a ~ 'abc';", ast.Match(ast.Column('a'), ast.Constant('abc')))
-        self.assertParseTarget("SELECT not a;", ast.Not(ast.Column('a')))
-        self.assertParseTarget("SELECT a IS NULL;", ast.IsNull(ast.Column('a')))
-        self.assertParseTarget("SELECT a IS NOT NULL;", ast.IsNotNull(ast.Column('a')))
+        self.assertParseTarget("SELECT a = 42;", ast.Equal(ast.Column([ast.Name('a')]), ast.Constant(42)))
+        self.assertParseTarget("SELECT a != 42;", ast.NotEqual(ast.Column([ast.Name('a')]), ast.Constant(42)))
+        self.assertParseTarget("SELECT a > 42;", ast.Greater(ast.Column([ast.Name('a')]), ast.Constant(42)))
+        self.assertParseTarget("SELECT a >= 42;", ast.GreaterEq(ast.Column([ast.Name('a')]), ast.Constant(42)))
+        self.assertParseTarget("SELECT a < 42;", ast.Less(ast.Column([ast.Name('a')]), ast.Constant(42)))
+        self.assertParseTarget("SELECT a <= 42;", ast.LessEq(ast.Column([ast.Name('a')]), ast.Constant(42)))
+        self.assertParseTarget("SELECT a ~ 'abc';", ast.Match(ast.Column([ast.Name('a')]), ast.Constant('abc')))
+        self.assertParseTarget("SELECT not a;", ast.Not(ast.Column([ast.Name('a')])))
+        self.assertParseTarget("SELECT a IS NULL;", ast.IsNull(ast.Column([ast.Name('a')])))
+        self.assertParseTarget("SELECT a IS NOT NULL;", ast.IsNotNull(ast.Column([ast.Name('a')])))
 
         # bool expressions
-        self.assertParseTarget("SELECT a AND b;", ast.And([ast.Column('a'), ast.Column('b')]))
-        self.assertParseTarget("SELECT a AND b AND c;", ast.And([ast.Column('a'), ast.Column('b'), ast.Column('c')]))
-        self.assertParseTarget("SELECT a OR b;", ast.Or([ast.Column('a'), ast.Column('b')]))
-        self.assertParseTarget("SELECT a OR b OR c;", ast.Or([ast.Column('a'), ast.Column('b'), ast.Column('c')]))
-        self.assertParseTarget("SELECT a AND b OR c;", ast.Or([ast.And([ast.Column('a'), ast.Column('b')]), ast.Column('c')]))
-        self.assertParseTarget("SELECT NOT a;", ast.Not(ast.Column('a')))
+        self.assertParseTarget("SELECT a AND b;", ast.And([ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])]))
+        self.assertParseTarget("SELECT a AND b AND c;", ast.And([ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')]), ast.Column([ast.Name('c')])]))
+        self.assertParseTarget("SELECT a OR b;", ast.Or([ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])]))
+        self.assertParseTarget("SELECT a OR b OR c;", ast.Or([ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')]), ast.Column([ast.Name('c')])]))
+        self.assertParseTarget("SELECT a AND b OR c;", ast.Or([ast.And([ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])]), ast.Column([ast.Name('c')])]))
+        self.assertParseTarget("SELECT NOT a;", ast.Not(ast.Column([ast.Name('a')])))
 
         # math expressions with identifiers
-        self.assertParseTarget("SELECT a * b;", ast.Mul(ast.Column('a'), ast.Column('b')))
-        self.assertParseTarget("SELECT a / b;", ast.Div(ast.Column('a'), ast.Column('b')))
-        self.assertParseTarget("SELECT a + b;", ast.Add(ast.Column('a'), ast.Column('b')))
-        self.assertParseTarget("SELECT a+b;", ast.Add(ast.Column('a'), ast.Column('b')))
-        self.assertParseTarget("SELECT a - b;", ast.Sub(ast.Column('a'), ast.Column('b')))
-        self.assertParseTarget("SELECT a-b;", ast.Sub(ast.Column('a'), ast.Column('b')))
-        self.assertParseTarget("SELECT +a;", ast.Column('a'))
-        self.assertParseTarget("SELECT -a;", ast.Neg(ast.Column('a')))
+        self.assertParseTarget("SELECT a * b;", ast.Mul(ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])))
+        self.assertParseTarget("SELECT a / b;", ast.Div(ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])))
+        self.assertParseTarget("SELECT a + b;", ast.Add(ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])))
+        self.assertParseTarget("SELECT a+b;", ast.Add(ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])))
+        self.assertParseTarget("SELECT a - b;", ast.Sub(ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])))
+        self.assertParseTarget("SELECT a-b;", ast.Sub(ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])))
+        self.assertParseTarget("SELECT +a;", ast.Column([ast.Name('a')]))
+        self.assertParseTarget("SELECT -a;", ast.Neg(ast.Column([ast.Name('a')])))
 
         # math expressions with numerals
         self.assertParseTarget("SELECT 2 * 3;", ast.Mul(ast.Constant(2), ast.Constant(3)))
@@ -143,8 +143,8 @@ class TestParseSelect(QueryParserTestBase):
 
         # functions
         self.assertParseTarget("SELECT random();", ast.Function('random', []))
-        self.assertParseTarget("SELECT min(a);", ast.Function('min', [ast.Column('a')]))
-        self.assertParseTarget("SELECT min(a, b);", ast.Function('min', [ast.Column('a'), ast.Column('b')]))
+        self.assertParseTarget("SELECT min(a);", ast.Function('min', [ast.Column([ast.Name('a')])]))
+        self.assertParseTarget("SELECT min(a, b);", ast.Function('min', [ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])]))
         self.assertParseTarget("SELECT count(*);", ast.Function('count', [ast.Asterisk()]))
 
     def test_non_associative(self):
@@ -157,9 +157,9 @@ class TestParseSelect(QueryParserTestBase):
             "SELECT NOT a = (b != (42 AND 17));",
             ast.Not(
                 ast.Equal(
-                    ast.Column('a'),
+                    ast.Column([ast.Name('a')]),
                     ast.NotEqual(
-                        ast.Column('b'),
+                        ast.Column([ast.Name('b')]),
                         ast.And([
                             ast.Constant(42),
                             ast.Constant(17)])))))
@@ -171,45 +171,45 @@ class TestSelectPrecedence(QueryParserTestBase):
 
         self.assertParseTarget(
             "SELECT a AND b OR c AND d;",
-            ast.Or([ast.And([ast.Column('a'), ast.Column('b')]),
-                   ast.And([ast.Column('c'), ast.Column('d')])]))
+            ast.Or([ast.And([ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])]),
+                   ast.And([ast.Column([ast.Name('c')]), ast.Column([ast.Name('d')])])]))
 
         self.assertParseTarget(
             "SELECT a = 2 AND b != 3;",
-            ast.And([ast.Equal(ast.Column('a'), ast.Constant(2)),
-                    ast.NotEqual(ast.Column('b'), ast.Constant(3))]))
+            ast.And([ast.Equal(ast.Column([ast.Name('a')]), ast.Constant(2)),
+                    ast.NotEqual(ast.Column([ast.Name('b')]), ast.Constant(3))]))
 
         self.assertParseTarget(
             "SELECT not a AND b;",
-            ast.And([ast.Not(ast.Column('a')), ast.Column('b')]))
+            ast.And([ast.Not(ast.Column([ast.Name('a')])), ast.Column([ast.Name('b')])]))
 
         self.assertParseTarget(
             "SELECT a + b AND c - d;",
-            ast.And([ast.Add(ast.Column('a'), ast.Column('b')),
-                    ast.Sub(ast.Column('c'), ast.Column('d'))]))
+            ast.And([ast.Add(ast.Column([ast.Name('a')]), ast.Column([ast.Name('b')])),
+                    ast.Sub(ast.Column([ast.Name('c')]), ast.Column([ast.Name('d')]))]))
 
         self.assertParseTarget(
             "SELECT a * b + c / d - 3;",
             ast.Sub(
                 ast.Add(
                     ast.Mul(
-                        ast.Column(name='a'),
-                        ast.Column(name='b')),
-                    ast.Div(ast.Column(name='c'),
-                           ast.Column(name='d'))),
+                        ast.Column([ast.Name('a')]),
+                        ast.Column([ast.Name('b')])),
+                    ast.Div(ast.Column([ast.Name('c')]),
+                           ast.Column([ast.Name('d')]))),
                 ast.Constant(value=3)))
 
         self.assertParseTarget(
             "SELECT 'orange' IN tags AND 'bananas' IN tags;",
             ast.And([
-                ast.In(ast.Constant('orange'), ast.Column('tags')),
-                ast.In(ast.Constant('bananas'), ast.Column('tags'))]))
+                ast.In(ast.Constant('orange'), ast.Column([ast.Name('tags')])),
+                ast.In(ast.Constant('bananas'), ast.Column([ast.Name('tags')]))]))
 
 
 class TestSelectFrom(QueryParserTestBase):
 
     def test_select_from(self):
-        expr = ast.Equal(ast.Column('d'), ast.And([ast.Function('max', [ast.Column('e')]), ast.Constant(17)]))
+        expr = ast.Equal(ast.Column([ast.Name('d')]), ast.And([ast.Function('max', [ast.Column([ast.Name('e')])]), ast.Constant(17)]))
 
         with self.assertRaises(parser.ParseError):
             parser.parse("SELECT a, b FROM;")
@@ -258,12 +258,12 @@ class TestSelectFrom(QueryParserTestBase):
 class TestSelectWhere(QueryParserTestBase):
 
     def test_where(self):
-        expr = ast.Equal(ast.Column('d'), ast.And([ast.Function('max', [ast.Column('e')]), ast.Constant(17)]))
+        expr = ast.Equal(ast.Column([ast.Name('d')]), ast.And([ast.Function('max', [ast.Column([ast.Name('e')])]), ast.Constant(17)]))
         self.assertParse(
             "SELECT a, b WHERE d = (max(e) and 17);",
             Select([
-                ast.Target(ast.Column('a'), None),
-                ast.Target(ast.Column('b'), None)
+                ast.Target(ast.Column([ast.Name('a')]), None),
+                ast.Target(ast.Column([ast.Name('b')]), None)
             ], None, expr))
 
         with self.assertRaises(parser.ParseError):
@@ -273,12 +273,12 @@ class TestSelectWhere(QueryParserTestBase):
 class TestSelectFromAndWhere(QueryParserTestBase):
 
     def test_from_and_where(self):
-        expr = ast.Equal(ast.Column('d'), ast.And([ast.Function('max', [ast.Column('e')]), ast.Constant(17)]))
+        expr = ast.Equal(ast.Column([ast.Name('d')]), ast.And([ast.Function('max', [ast.Column([ast.Name('e')])]), ast.Constant(17)]))
         self.assertParse(
             "SELECT a, b FROM d = (max(e) and 17) WHERE d = (max(e) and 17);",
             Select([
-                ast.Target(ast.Column('a'), None),
-                ast.Target(ast.Column('b'), None)
+                ast.Target(ast.Column([ast.Name('a')]), None),
+                ast.Target(ast.Column([ast.Name('b')]), None)
             ], ast.From(expr, None, None, None), expr))
 
 
@@ -290,16 +290,16 @@ class TestSelectFromSelect(QueryParserTestBase):
               SELECT * FROM date = 2014-05-02
             ) WHERE c = 5 LIMIT 100;""",
             Select([
-                ast.Target(ast.Column('a'), None),
-                ast.Target(ast.Column('b'), None)],
+                ast.Target(ast.Column([ast.Name('a')]), None),
+                ast.Target(ast.Column([ast.Name('b')]), None)],
             Select(
                 ast.Asterisk(),
                 ast.From(
                     ast.Equal(
-                        ast.Column('date'),
+                        ast.Column([ast.Name('date')]),
                         ast.Constant(datetime.date(2014, 5, 2))),
                     None, None, None)),
-            ast.Equal(ast.Column('c'), ast.Constant(5)),
+            ast.Equal(ast.Column([ast.Name('c')]), ast.Constant(5)),
             limit=100))
 
 
@@ -309,16 +309,16 @@ class TestSelectGroupBy(QueryParserTestBase):
         self.assertParse(
             "SELECT * GROUP BY a;",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([ast.Column('a')], None)))
+                   group_by=ast.GroupBy([ast.Column([ast.Name('a')])], None)))
 
     def test_groupby_many(self):
         self.assertParse(
             "SELECT * GROUP BY a, b, c;",
             Select(ast.Asterisk(),
                    group_by=ast.GroupBy([
-                       ast.Column('a'),
-                       ast.Column('b'),
-                       ast.Column('c')], None)))
+                       ast.Column([ast.Name('a')]),
+                       ast.Column([ast.Name('b')]),
+                       ast.Column([ast.Name('c')])], None)))
 
     def test_groupby_expr(self):
         self.assertParse(
@@ -327,18 +327,18 @@ class TestSelectGroupBy(QueryParserTestBase):
                    group_by=ast.GroupBy([
                        ast.Greater(
                            ast.Function('length', [
-                               ast.Column('a')]),
+                               ast.Column([ast.Name('a')])]),
                            ast.Constant(0)),
-                       ast.Column('b')], None)))
+                       ast.Column([ast.Name('b')])], None)))
 
     def test_groupby_having(self):
         self.assertParse(
             "SELECT * GROUP BY a HAVING sum(x) = 0;",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([ast.Column('a')],
+                   group_by=ast.GroupBy([ast.Column([ast.Name('a')])],
                         ast.Equal(
                             ast.Function('sum', [
-                                ast.Column('x')]),
+                                ast.Column([ast.Name('x')])]),
                             ast.Constant(0)))))
 
     def test_groupby_numbers(self):
@@ -364,39 +364,39 @@ class TestSelectOrderBy(QueryParserTestBase):
             "SELECT * ORDER BY a;",
             Select(ast.Asterisk(),
                    order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.ASC)]))
+                       ast.OrderBy(ast.Column([ast.Name('a')]), ast.Ordering.ASC)]))
 
     def test_orderby_many(self):
         self.assertParse(
             "SELECT * ORDER BY a, b, c;",
             Select(ast.Asterisk(),
                    order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.ASC),
-                       ast.OrderBy(ast.Column('b'), ast.Ordering.ASC),
-                       ast.OrderBy(ast.Column('c'), ast.Ordering.ASC)]))
+                       ast.OrderBy(ast.Column([ast.Name('a')]), ast.Ordering.ASC),
+                       ast.OrderBy(ast.Column([ast.Name('b')]), ast.Ordering.ASC),
+                       ast.OrderBy(ast.Column([ast.Name('c')]), ast.Ordering.ASC)]))
 
     def test_orderby_asc(self):
         self.assertParse(
             "SELECT * ORDER BY a ASC;",
             Select(ast.Asterisk(),
                    order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.ASC)]))
+                       ast.OrderBy(ast.Column([ast.Name('a')]), ast.Ordering.ASC)]))
 
     def test_orderby_desc(self):
         self.assertParse(
             "SELECT * ORDER BY a DESC;",
             Select(ast.Asterisk(),
                    order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.DESC)]))
+                       ast.OrderBy(ast.Column([ast.Name('a')]), ast.Ordering.DESC)]))
 
     def test_orderby_many_asc_desc(self):
         self.assertParse(
             "SELECT * ORDER BY a ASC, b DESC, c;",
             Select(ast.Asterisk(),
                    order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.ASC),
-                       ast.OrderBy(ast.Column('b'), ast.Ordering.DESC),
-                       ast.OrderBy(ast.Column('c'), ast.Ordering.ASC)]))
+                       ast.OrderBy(ast.Column([ast.Name('a')]), ast.Ordering.ASC),
+                       ast.OrderBy(ast.Column([ast.Name('b')]), ast.Ordering.DESC),
+                       ast.OrderBy(ast.Column([ast.Name('c')]), ast.Ordering.ASC)]))
 
     def test_orderby_empty(self):
         with self.assertRaises(parser.ParseError):
@@ -417,7 +417,7 @@ class TestSelectPivotBy(QueryParserTestBase):
 
         self.assertParse(
             "SELECT * PIVOT BY a, b",
-            Select(ast.Asterisk(), pivot_by=ast.PivotBy([ast.Column('a'), ast.Column('b')])))
+            Select(ast.Asterisk(), pivot_by=ast.PivotBy([ast.Name('a'), ast.Name('b')])))
 
         self.assertParse(
             "SELECT * PIVOT BY 1, 2",
@@ -428,7 +428,7 @@ class TestSelectOptions(QueryParserTestBase):
 
     def test_distinct(self):
         self.assertParse(
-            "SELECT DISTINCT x;", Select([ast.Target(ast.Column('x'), None)], distinct=True))
+            "SELECT DISTINCT x;", Select([ast.Target(ast.Column([ast.Name('x')]), None)], distinct=True))
 
     def test_limit_present(self):
         self.assertParse(
@@ -452,7 +452,7 @@ class TestBalances(QueryParserTestBase):
                 None,
                 ast.From(
                     ast.Equal(
-                        ast.Column('date'),
+                        ast.Column([ast.Name('date')]),
                         ast.Constant(datetime.date(2014, 1, 1))),
                     None, True, None),
                 None))
@@ -463,7 +463,7 @@ class TestBalances(QueryParserTestBase):
             ast.Balances('units',
                 ast.From(
                     ast.Equal(
-                        ast.Column('date'),
+                        ast.Column([ast.Name('date')]),
                         ast.Constant(datetime.date(2014, 1, 1))),
                     None, True, None),
                 None))
@@ -474,7 +474,7 @@ class TestBalances(QueryParserTestBase):
             ast.Balances('units',
                 None,
                 ast.Equal(
-                    ast.Column('date'),
+                    ast.Column([ast.Name('date')]),
                     ast.Constant(datetime.date(2014, 1, 1)))))
 
 
@@ -506,7 +506,7 @@ class TestJournal(QueryParserTestBase):
             ast.Journal(None, None,
                 ast.From(
                     ast.Equal(
-                        ast.Column('date'),
+                        ast.Column([ast.Name('date')]),
                         ast.Constant(datetime.date(2014, 1, 1))
                     ), None, True, None)))
 
@@ -523,7 +523,7 @@ class TestPrint(QueryParserTestBase):
             ast.Print(
                 ast.From(
                     ast.Equal(
-                        ast.Column('date'),
+                        ast.Column([ast.Name('date')]),
                         ast.Constant(datetime.date(2014, 1, 1))
                     ), None, True, None)))
 
@@ -534,8 +534,8 @@ class TestComments(QueryParserTestBase):
         self.assertParse(
             """SELECT first, /* comment */ second""",
             Select([
-                ast.Target(ast.Column('first'), None),
-                ast.Target(ast.Column('second'), None)
+                ast.Target(ast.Column([ast.Name('first')]), None),
+                ast.Target(ast.Column([ast.Name('second')]), None)
             ]))
 
         self.assertParse(
@@ -543,29 +543,29 @@ class TestComments(QueryParserTestBase):
                    comment
                    */ second;""",
             Select([
-                ast.Target(ast.Column('first'), None),
-                ast.Target(ast.Column('second'), None),
+                ast.Target(ast.Column([ast.Name('first')]), None),
+                ast.Target(ast.Column([ast.Name('second')]), None),
             ]))
 
         self.assertParse(
             """SELECT first, /**/ second;""",
             Select([
-                ast.Target(ast.Column('first'), None),
-                ast.Target(ast.Column('second'), None),
+                ast.Target(ast.Column([ast.Name('first')]), None),
+                ast.Target(ast.Column([ast.Name('second')]), None),
             ]))
 
         self.assertParse(
             """SELECT first, /* /* */ second;""",
             Select([
-                ast.Target(ast.Column('first'), None),
-                ast.Target(ast.Column('second'), None),
+                ast.Target(ast.Column([ast.Name('first')]), None),
+                ast.Target(ast.Column([ast.Name('second')]), None),
             ]))
 
         self.assertParse(
             """SELECT first, /* ; */ second;""",
             Select([
-                ast.Target(ast.Column('first'), None),
-                ast.Target(ast.Column('second'), None),
+                ast.Target(ast.Column([ast.Name('first')]), None),
+                ast.Target(ast.Column([ast.Name('second')]), None),
             ]))
 
 
@@ -587,20 +587,26 @@ class TestRepr(unittest.TestCase):
                 (target
                   expression: (add
                     left: (column
-                      name: 'a')
+                      ids: (
+                        (name
+                          name: 'a')))
                     right: (constant
                       value: 1))))
               from-clause: (table
                 name: 'test')
               where-clause: (greater
                 left: (column
-                  name: 'a')
+                  ids: (
+                    (name
+                      name: 'a')))
                 right: (constant
                   value: 42))
               order-by: (
                 (orderby
                   column: (column
-                    name: 'b')
+                    ids: (
+                      (name
+                        name: 'b')))
                   ordering: desc)))'''))
 
     def test_walk(self):

@@ -145,6 +145,8 @@ class From(Node):
     clear: Optional[bool] = None
     parseinfo: Any = dataclasses.field(default=None, compare=False, repr=False)
 
+Join = node('Join', 'left right constraint using')
+
 # A GROUP BY clause.
 #
 # Attributes:
@@ -180,11 +182,14 @@ PivotBy = node('PivotBy', 'columns')
 #   name: The table name.
 Table = node('Table', 'name')
 
+Name = node('Name', 'name')
+
 # A reference to a column.
 #
 # Attributes:
 #   name: A string, the name of the column to access.
-Column = node('Column', 'name')
+Column = node('Column', 'ids')
+
 
 # A function call.
 #

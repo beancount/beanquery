@@ -15,20 +15,22 @@ from .parser import ast
 
 from .query_compile import (
     EvalAggregator,
-    EvalAnd,
     EvalAll,
+    EvalAnd,
     EvalAny,
     EvalCoalesce,
     EvalColumn,
     EvalConstant,
+    EvalConstantSubquery1D,
     EvalCreateTable,
     EvalGetItem,
     EvalGetter,
+    EvalHashJoin,
     EvalInsert,
     EvalOr,
     EvalPivot,
+    EvalProjection,
     EvalQuery,
-    EvalConstantSubquery1D,
     EvalRow,
     EvalTarget,
     FUNCTIONS,
@@ -54,7 +56,8 @@ class CompilationError(ProgrammingError):
 class Compiler:
     def __init__(self, context):
         self.context = context
-        self.stack = [context.tables.get(None)]
+        self.stack = []
+        self.columns = {}
 
     @property
     def table(self):
@@ -98,7 +101,11 @@ class Compiler:
 
     @_compile.register
     def _select(self, node: ast.Select):
-        self.stack.append(self.table)
+        self.stack.append(self.context.tables.get(None))
+
+        # JOIN.
+        if isinstance(node.from_clause, ast.Join):
+            return self._compile_join(node)
 
         # Compile the FROM clause.
         c_from_expr = self._compile_from(node.from_clause)
@@ -177,11 +184,12 @@ class Compiler:
         # FROM expression.
         if isinstance(node, ast.From):
             # Check if the FROM expression is a column name belongin to the current table.
-            if isinstance(node.expression, ast.Column):
-                column = self.table.columns.get(node.expression.name)
+            if isinstance(node.expression, ast.Column) and len(node.expression.ids) == 1:
+                name = node.expression.ids[0].name
+                column = self.table.columns.get(name)
                 if column is None:
                     # When it is not, threat it as a table name.
-                    table = self.context.tables.get(node.expression.name)
+                    table = self.context.tables.get(name)
                     if table is not None:
                         self.table = table
                         return None
@@ -214,8 +222,7 @@ class Compiler:
         # Bind the targets expressions to the execution context.
         if isinstance(targets, ast.Asterisk):
             # Insert the full list of available columns.
-            targets = [ast.Target(ast.Column(name), None)
-                       for name in self.table.wildcard_columns]
+            targets = [ast.Target(ast.Column([ast.Name(name)]), None) for name in self.table.wildcard_columns]
 
         # Compile targets.
         c_targets = []
@@ -287,7 +294,7 @@ class Compiler:
                 # simple Column expressions. If they refer to a target name, we
                 # resolve them.
                 if isinstance(column, ast.Column):
-                    name = column.name
+                    name = '.'.join(i.name for i in column.ids)
                     index = targets_name_map.get(name, None)
 
                 # Otherwise we compile the expression and add it to the list of
@@ -337,7 +344,7 @@ class Compiler:
                 continue
 
             # Process target references by name.
-            if isinstance(column, ast.Column):
+            if isinstance(column, ast.Name):
                 index = names.get(column.name, None)
                 if index is None:
                     raise CompilationError(f'PIVOT BY column {column!r} is not in the targets list')
@@ -403,7 +410,7 @@ class Compiler:
                     # simple Column expressions. If they refer to a target name, we
                     # resolve them.
                     if isinstance(column, ast.Column):
-                        name = column.name
+                        name = '.'.join(i.name for i in column.ids)
                         index = targets_name_map.get(name, None)
 
                     # Otherwise we compile the expression and add it to the list of
@@ -475,12 +482,121 @@ class Compiler:
 
         return new_targets[len(c_targets):], group_indexes, having_index
 
+    def _compile_join(self, node):
+        join = node.from_clause
+
+        left = self.context.tables.get(join.left.name)
+        if left is None:
+            raise CompilationError(f'table "{join.left.name}" does not exist', join.left)
+        right = self.context.tables.get(join.right.name)
+        if right is None:
+            raise CompilationError(f'table "{join.right.name}" does not exist', join.right)
+        self.table = right
+        self.stack.append(left)
+
+        if join.using is not None:
+            join.constraint = ast.Equal(
+                ast.Column([ast.Name(join.left.name) , ast.Name(join.using.name)]),
+                ast.Column([ast.Name(join.right.name) , ast.Name(join.using.name)]),
+            )
+
+        constraint = self._compile(join.constraint)
+        keycolnames = [col for t, col in self.columns.keys() if t == left.name]
+        targets = self._compile_targets(node.targets)
+
+        left_column_names = [col for t, col in self.columns.keys() if t == left.name]
+        right_column_names = [col for t, col in self.columns.keys() if t == right.name]
+
+        left_p = EvalProjection(left, [left[col] for col in left_column_names])
+        right_p = EvalProjection(right, [right[col] for col in right_column_names])
+
+        from beanquery.tables import Table
+
+        def itemgetter(item, datatype):
+            def func(row):
+                return row[item]
+            func.dtype = datatype
+            func.__qualname__ = func.__name__ = f'column[{item}, {datatype.__name__}]'
+            return func
+
+        table = Table()
+        table.columns = {}
+        for i, column in enumerate(sorted(self.columns.items(), key=lambda x: x[0][0])):
+            key, col = column
+            tname, colname = key
+            table.columns[f'{tname}.{colname}'] = itemgetter(i, col.dtype)
+            table.columns[f'{colname}'] = itemgetter(i, col.dtype)
+
+        self.stack = [table]
+        constraint = self._compile(join.constraint)
+
+        left_columns = {col: itemgetter(i, left.columns[col].dtype) for i, col in enumerate(left_column_names)}
+        keycols = [left_columns[name] for name in keycolnames]
+        def keyfunc(lrow, keycols=keycols):
+            return tuple(keycol(lrow) for keycol in keycols)
+
+        join = EvalHashJoin(left_p, right_p, constraint, keyfunc)
+
+        targets = self._compile_targets(node.targets)
+        cols = []
+        for t in targets:
+            expr = t.c_expr
+            expr.name = t.name
+            cols.append(expr)
+
+        return EvalProjection(join, cols)
+
+    def _resolve_column(self, node: ast.Column):
+        parts = node.ids[::-1]
+
+        # FIXME!!
+        if len(parts) > 1:
+            colname = f'{parts[-1].name}.{parts[-2].name}'
+            for table in reversed(self.stack):
+                column = table.columns.get(colname)
+                if column is not None:
+                    self.columns[(table.name, colname)] = column
+                    return column, parts[:-2]
+
+        colname = parts.pop().name
+        for table in reversed(self.stack):
+            column = table.columns.get(colname)
+            if column is not None:
+                self.columns[(table.name, colname)] = column
+                return column, parts
+        if parts:
+            # table.column
+            name = colname
+            colname = parts.pop().name
+            for table in reversed(self.stack):
+                if table.name == name:
+                    column = table.columns.get(colname)
+                    if column is not None:
+                        self.columns[(table.name, colname)] = column
+                        return column, parts
+        raise CompilationError(f'column "{colname}" not found in table "{table.name}"', node)
+
     @_compile.register
     def _column(self, node: ast.Column):
-        column = self.table.columns.get(node.name)
-        if column is not None:
-            return column
-        raise CompilationError(f'column "{node.name}" not found in table "{self.table.name}"', node)
+        column, parts = self._resolve_column(node)
+        for part in parts:
+            column = self._resolve_attribute(column, part)
+        return column
+
+        # operand = None
+        # if isinstance(node.operand, ast.Column):
+        #     # This can be table.column or column.attribute.
+        #     if node.operand.name in self.table.columns:
+        #         operand = self._column(node.operand)
+        #     elif f'{node.operand.name}.{node.name}' in self.table.columns:
+        #         return self._column(ast.Column(f'{node.operand.name}.{node.name}'))
+        #     else:
+        #         for table in reversed(self.stack):
+        #             if table.name == node.operand.name:
+        #                 column = table.columns.get(node.name)
+        #                 if column:
+        #                     self.columns.append((table.name, node.name))
+        #                     return column
 
     @_compile.register
     def _or(self, node: ast.Or):
@@ -567,25 +683,25 @@ class Compiler:
         # Replace ``meta(key)`` with ``meta[key]``.
         if node.fname == 'meta':
             key = node.operands[0]
-            node = ast.Function('getitem', [ast.Column('meta', parseinfo=node.parseinfo), key])
+            node = ast.Function('getitem', [ast.Column([ast.Name('meta')], parseinfo=node.parseinfo), key])
             return self._compile(node)
 
         # Replace ``entry_meta(key)`` with ``entry.meta[key]``.
         if node.fname == 'entry_meta':
             key = node.operands[0]
-            node = ast.Function('getitem', [ast.Attribute(ast.Column('entry', parseinfo=node.parseinfo), 'meta'), key])
+            node = ast.Function('getitem', [ast.Attribute(ast.Column([ast.Name('entry')], parseinfo=node.parseinfo), 'meta'), key])
             return self._compile(node)
 
         # Replace ``any_meta(key)`` with ``getitem(meta, key, entry.meta[key])``.
         if node.fname == 'any_meta':
             key = node.operands[0]
-            node = ast.Function('getitem', [ast.Column('meta', parseinfo=node.parseinfo), key, ast.Function('getitem', [
-                ast.Attribute(ast.Column('entry', parseinfo=node.parseinfo), 'meta'), key])])
+            node = ast.Function('getitem', [ast.Column([ast.Name('meta')], parseinfo=node.parseinfo), key, ast.Function('getitem', [
+                ast.Attribute(ast.Column([ast.Name('entry')], parseinfo=node.parseinfo), 'meta'), key])])
             return self._compile(node)
 
         # Replace ``has_account(regexp)`` with ``('(?i)' + regexp) ~? any (accounts)``.
         if node.fname == 'has_account':
-            node = ast.Any(ast.Add(ast.Constant('(?i)'), node.operands[0]), '?~', ast.Column('accounts'))
+            node = ast.Any(ast.Add(ast.Constant('(?i)'), node.operands[0]), '?~', ast.Column([ast.Name('accounts')]))
             return self._compile(node)
 
         function = function(self.context, operands)
@@ -601,9 +717,7 @@ class Compiler:
             return EvalGetItem(operand, node.key)
         raise CompilationError('column type is not subscriptable', node)
 
-    @_compile.register
-    def _attribute(self, node: ast.Attribute):
-        operand = self._compile(node.operand)
+    def _resolve_attribute(self, operand, node):
         dtype = types.ALIASES.get(operand.dtype, operand.dtype)
         if issubclass(dtype, types.Structure):
             getter = dtype.columns.get(node.name)
@@ -611,6 +725,11 @@ class Compiler:
                 raise CompilationError(f'structured type has no attribute "{node.name}"', node)
             return EvalGetter(operand, getter, getter.dtype)
         raise CompilationError('column type is not structured', node)
+
+    @_compile.register
+    def _attribute(self, node: ast.Attribute):
+        operand = self._compile(node.operand)
+        return self._resolve_attribute(operand, node)
 
     @_compile.register
     def _unaryop(self, node: ast.UnaryOp):
@@ -711,7 +830,7 @@ class Compiler:
         # in the current table.
         if isinstance(node.value, str) and node.text and node.text[0] == '"':
             if node.value in self.table.columns:
-                return self._column(ast.Column(node.value))
+                return self._column(ast.Column([ast.Name(node.value)]))
         return EvalConstant(node.value)
 
     @_compile.register
@@ -732,7 +851,7 @@ class Compiler:
 
     @_compile.register
     def _print(self, node: ast.Print):
-        self.table = self.context.tables.get('entries')
+        self.stack.append(self.context.tables.get('entries'))
         expr = self._compile_from(node.from_clause)
         targets = [EvalTarget(EvalRow(), 'ROW(*)', False)]
         return EvalQuery(self.table, targets, expr, None, None, None, None, False)
@@ -854,7 +973,7 @@ def get_target_name(target):
     if target.name is not None:
         return target.name
     if isinstance(target.expression, ast.Column):
-        return target.expression.name
+        return '.'.join(i.name for i in target.expression.ids)
     return target.expression.text.strip()
 
 
