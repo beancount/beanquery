@@ -158,12 +158,14 @@ class BQLParser(Parser):
                     with self._option():
                         self.__table_()
                     with self._option():
+                        self._join_()
+                    with self._option():
                         self._subselect_()
                     with self._option():
                         self._from_()
                     self._error(
                         'expecting one of: '
-                        '<_table> <from> <subselect>'
+                        '<_table> <from> <join> <subselect>'
                     )
             self.name_last_node('from_clause')
             self._define(['from_clause'], [])
@@ -316,6 +318,32 @@ class BQLParser(Parser):
                 '<disjunction> <expression>'
             )
 
+    @tatsumasu('Join')
+    def _join_(self):
+        self._table_()
+        self.name_last_node('left')
+        self._token('JOIN')
+        self._cut()
+        self._table_()
+        self.name_last_node('right')
+        with self._group():
+            with self._choice():
+                with self._option():
+                    self._token('ON')
+                    self._expression_()
+                    self.name_last_node('constraint')
+                    self._define(['constraint'], [])
+                with self._option():
+                    self._token('USING')
+                    self._name_()
+                    self.name_last_node('using')
+                    self._define(['using'], [])
+                self._error(
+                    'expecting one of: '
+                    "'ON' 'USING'"
+                )
+        self._define(['constraint', 'left', 'right', 'using'], [])
+
     @tatsumasu('Table')
     def __table_(self):
         with self._choice():
@@ -400,10 +428,10 @@ class BQLParser(Parser):
                 with self._option():
                     self._integer_()
                 with self._option():
-                    self._column_()
+                    self._name_()
                 self._error(
                     'expecting one of: '
-                    '<column> <integer>'
+                    '<integer> <name>'
                 )
         self.add_last_node_to_name('columns')
         self._token(',')
@@ -412,10 +440,10 @@ class BQLParser(Parser):
                 with self._option():
                     self._integer_()
                 with self._option():
-                    self._column_()
+                    self._name_()
                 self._error(
                     'expecting one of: '
-                    '<column> <integer>'
+                    '<integer> <name>'
                 )
         self.add_last_node_to_name('columns')
         self._define(
@@ -955,7 +983,8 @@ class BQLParser(Parser):
                 "'%(' '%s' 'SELECT' <boolean> <column>"
                 '<constant> <date> <decimal> <function>'
                 '<identifier> <integer> <list> <literal>'
-                '<null> <placeholder> <select> <string>'
+                '<name> <null> <placeholder> <select>'
+                '<string>'
             )
 
     @tatsumasu('Placeholder')
@@ -1011,10 +1040,21 @@ class BQLParser(Parser):
                 '<unquoted_identifier>'
             )
 
-    @tatsumasu('Column')
-    def _column_(self):
+    @tatsumasu('Name')
+    def _name_(self):
         self._identifier_()
         self.name_last_node('name')
+
+    @tatsumasu('Column')
+    def _column_(self):
+
+        def sep0():
+            self._token('.')
+
+        def block1():
+            self._name_()
+        self._positive_gather(block1, sep0)
+        self.name_last_node('ids')
 
     @tatsumasu()
     def _literal_(self):
@@ -1250,7 +1290,7 @@ class BQLParser(Parser):
                 self._token(',')
 
             def block1():
-                self._column_()
+                self._name_()
             self._gather(block1, sep0)
             self.name_last_node('columns')
             self._token(')')

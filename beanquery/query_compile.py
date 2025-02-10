@@ -18,7 +18,7 @@ import re
 import operator
 
 from decimal import Decimal
-from typing import List
+from typing import List, Callable
 
 from dateutil.relativedelta import relativedelta
 
@@ -703,3 +703,54 @@ class EvalInsert:
         values = tuple(value(None) for value in self.values)
         self.table.insert(values)
         return (), []
+
+
+@dataclasses.dataclass
+class EvalProjection:
+    table: tables.Table
+    expressions: list[EvalNode]
+
+    def __iter__(self):
+        expressions = self.expressions
+        for row in self.table:
+            yield tuple(expr(row) for expr in expressions)
+
+    def __call__(self):
+        columns = tuple(cursor.Column(expr.name, expr.dtype) for expr in self.expressions)
+        return columns, list(iter(self))
+
+
+@dataclasses.dataclass
+class EvalScanJoin:
+    left: object
+    right: object
+    condition: EvalNode
+
+    def __iter__(self):
+        for lrow in self.left:
+            for rrow in self.right:
+                row = (*lrow, *rrow)
+                if self.condition(row):
+                    yield row
+
+
+@dataclasses.dataclass
+class EvalHashJoin:
+    left: object
+    right: object
+    condition: EvalNode
+    keyfunc: Callable
+
+    def __iter__(self):
+        cache = {}
+        for lrow in self.left:
+            key = self.keyfunc(lrow)
+            rrow = cache.get(key)
+            if rrow is not None:
+                yield (*lrow, *rrow)
+                continue
+            for rrow in self.right:
+                row = (*lrow, *rrow)
+                if self.condition(row):
+                    cache[key] = rrow
+                    yield row
