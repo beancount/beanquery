@@ -16,8 +16,10 @@ from beanquery import query_compile as qc
 from beanquery import query_env as qe
 from beanquery import parser
 from beanquery import tables
+from beanquery import types
 from beanquery.parser import ast
 from beanquery.sources import test
+from beanquery.sources.beancount import GetItemColumn
 
 
 class Table:
@@ -52,7 +54,7 @@ class TestCompileExpression(unittest.TestCase):
         # parser for expressions
         cls.parser = parser.BQLParser(start='expression')
         cls.compiler = compiler.Compiler(cls.context)
-        cls.compiler.table = cls.context.tables['test']
+        cls.compiler.stack.append(cls.context.tables['test'])
 
     def compile(self, expr):
         expr = self.parser.parse(expr, semantics=parser.BQLSemantics())
@@ -574,22 +576,20 @@ class TestCompileSelectOrderBy(CompileSelectBase):
 
 class TestTranslationJournal(CompileSelectBase):
 
-    maxDiff = 4096
-
     def test_journal(self):
         journal = parser.parse("JOURNAL;")
         select = compiler.transform_journal(journal)
         self.assertEqual(select,
             ast.Select([
-                ast.Target(ast.Column('date'), None),
-                ast.Target(ast.Column('flag'), None),
+                ast.Target(ast.Column([ast.Name('date')]), None),
+                ast.Target(ast.Column([ast.Name('flag')]), None),
                 ast.Target(ast.Function('maxwidth', [
-                    ast.Column('payee'), ast.Constant(48)]), None),
+                    ast.Column([ast.Name('payee')]), ast.Constant(48)]), None),
                 ast.Target(ast.Function('maxwidth', [
-                    ast.Column('narration'), ast.Constant(80)]), None),
-                ast.Target(ast.Column('account'), None),
-                ast.Target(ast.Column('position'), None),
-                ast.Target(ast.Column('balance'), None),
+                    ast.Column([ast.Name('narration')]), ast.Constant(80)]), None),
+                ast.Target(ast.Column([ast.Name('account')]), None),
+                ast.Target(ast.Column([ast.Name('position')]), None),
+                ast.Target(ast.Column([ast.Name('balance')]), None),
             ],
             None, None, None, None, None, None, None))
 
@@ -597,79 +597,79 @@ class TestTranslationJournal(CompileSelectBase):
         journal = parser.parse("JOURNAL 'liabilities';")
         select = compiler.transform_journal(journal)
         self.assertEqual(select, ast.Select([
-            ast.Target(ast.Column('date'), None),
-            ast.Target(ast.Column('flag'), None),
+            ast.Target(ast.Column([ast.Name('date')]), None),
+            ast.Target(ast.Column([ast.Name('flag')]), None),
             ast.Target(ast.Function('maxwidth', [
-                ast.Column('payee'),
+                ast.Column([ast.Name('payee')]),
                 ast.Constant(48)]), None),
             ast.Target(ast.Function('maxwidth', [
-                ast.Column('narration'),
+                ast.Column([ast.Name('narration')]),
                 ast.Constant(80)]), None),
-            ast.Target(ast.Column('account'), None),
-            ast.Target(ast.Column('position'), None),
-            ast.Target(ast.Column('balance'), None),
+            ast.Target(ast.Column([ast.Name('account')]), None),
+            ast.Target(ast.Column([ast.Name('position')]), None),
+            ast.Target(ast.Column([ast.Name('balance')]), None),
         ],
         None,
-        ast.Match(ast.Column('account'), ast.Constant('liabilities')),
+        ast.Match(ast.Column([ast.Name('account')]), ast.Constant('liabilities')),
         None, None, None, None, None))
 
     def test_journal_with_account_and_from(self):
         journal = parser.parse("JOURNAL 'liabilities' FROM year = 2014;")
         select = compiler.transform_journal(journal)
         self.assertEqual(select, ast.Select([
-            ast.Target(ast.Column('date'), None),
-            ast.Target(ast.Column('flag'), None),
+            ast.Target(ast.Column([ast.Name('date')]), None),
+            ast.Target(ast.Column([ast.Name('flag')]), None),
             ast.Target(ast.Function('maxwidth', [
-                ast.Column('payee'),
+                ast.Column([ast.Name('payee')]),
                 ast.Constant(48)]), None),
             ast.Target(ast.Function('maxwidth', [
-                ast.Column('narration'),
+                ast.Column([ast.Name('narration')]),
                 ast.Constant(80)]), None),
-            ast.Target(ast.Column('account'), None),
-            ast.Target(ast.Column('position'), None),
-            ast.Target(ast.Column('balance'), None),
+            ast.Target(ast.Column([ast.Name('account')]), None),
+            ast.Target(ast.Column([ast.Name('position')]), None),
+            ast.Target(ast.Column([ast.Name('balance')]), None),
         ],
-        ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
-        ast.Match(ast.Column('account'), ast.Constant('liabilities')),
+        ast.From(ast.Equal(ast.Column([ast.Name('year')]), ast.Constant(2014)), None, None, None),
+        ast.Match(ast.Column([ast.Name('account')]), ast.Constant('liabilities')),
         None, None, None, None, None))
 
     def test_journal_with_account_func_and_from(self):
         journal = parser.parse("JOURNAL 'liabilities' AT cost FROM year = 2014;")
         select = compiler.transform_journal(journal)
         self.assertEqual(select, ast.Select([
-            ast.Target(ast.Column('date'), None),
-            ast.Target(ast.Column('flag'), None),
+            ast.Target(ast.Column([ast.Name('date')]), None),
+            ast.Target(ast.Column([ast.Name('flag')]), None),
             ast.Target(ast.Function('maxwidth', [
-                ast.Column('payee'),
+                ast.Column([ast.Name('payee')]),
                 ast.Constant(48)]), None),
             ast.Target(ast.Function('maxwidth', [
-                ast.Column('narration'),
+                ast.Column([ast.Name('narration')]),
                 ast.Constant(80)]), None),
-            ast.Target(ast.Column('account'), None),
-            ast.Target(ast.Function('cost', [ast.Column('position')]), None),
-            ast.Target(ast.Function('cost', [ast.Column('balance')]), None),
+            ast.Target(ast.Column([ast.Name('account')]), None),
+            ast.Target(ast.Function('cost', [ast.Column([ast.Name('position')])]), None),
+            ast.Target(ast.Function('cost', [ast.Column([ast.Name('balance')])]), None),
         ],
-        ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
-        ast.Match(ast.Column('account'), ast.Constant('liabilities')),
+        ast.From(ast.Equal(ast.Column([ast.Name('year')]), ast.Constant(2014)), None, None, None),
+        ast.Match(ast.Column([ast.Name('account')]), ast.Constant('liabilities')),
         None, None, None, None, None))
 
 
 class TestTranslationBalance(CompileSelectBase):
 
     group_by = ast.GroupBy([
-        ast.Column('account'),
+        ast.Column([ast.Name('account')]),
         ast.Function('account_sortkey', [
-            ast.Column(name='account')])], None)
+            ast.Column([ast.Name('account')])])], None)
 
-    order_by = [ast.OrderBy(ast.Function('account_sortkey', [ast.Column('account')]), ast.Ordering.ASC)]
+    order_by = [ast.OrderBy(ast.Function('account_sortkey', [ast.Column([ast.Name('account')])]), ast.Ordering.ASC)]
 
     def test_balance(self):
         balance = parser.parse("BALANCES;")
         select = compiler.transform_balances(balance)
         self.assertEqual(select, ast.Select([
-            ast.Target(ast.Column('account'), None),
+            ast.Target(ast.Column([ast.Name('account')]), None),
             ast.Target(ast.Function('sum', [
-                ast.Column('position')
+                ast.Column([ast.Name('position')])
             ]), None),
         ],
         None, None, self.group_by, self.order_by, None, None, None))
@@ -678,10 +678,10 @@ class TestTranslationBalance(CompileSelectBase):
         balance = parser.parse("BALANCES AT cost;")
         select = compiler.transform_balances(balance)
         self.assertEqual(select, ast.Select([
-            ast.Target(ast.Column('account'), None),
+            ast.Target(ast.Column([ast.Name('account')]), None),
             ast.Target(ast.Function('sum', [
                 ast.Function('cost', [
-                    ast.Column('position')
+                    ast.Column([ast.Name('position')])
                 ])
             ]), None)
         ],
@@ -691,14 +691,14 @@ class TestTranslationBalance(CompileSelectBase):
         balance = parser.parse("BALANCES AT cost FROM year = 2014;")
         select = compiler.transform_balances(balance)
         self.assertEqual(select, ast.Select([
-            ast.Target(ast.Column('account'), None),
+            ast.Target(ast.Column([ast.Name('account')]), None),
             ast.Target(ast.Function('sum', [
                 ast.Function('cost', [
-                    ast.Column('position')
+                    ast.Column([ast.Name('position')])
                 ])
             ]), None),
         ],
-        ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
+        ast.From(ast.Equal(ast.Column([ast.Name('year')]), ast.Constant(2014)), None, None, None),
         None, self.group_by, self.order_by, None, None, None))
 
     def test_print(self):
@@ -730,7 +730,6 @@ class TestCompileParameters(unittest.TestCase):
 
     def compile(self, query, params):
         c = compiler.Compiler(self.context)
-        c.table = self.context.tables.get('')
         return c.compile(parser.parse(query), params)
 
     def test_named_parameters(self):
@@ -850,3 +849,54 @@ class TestQuotedIdentifiers(unittest.TestCase):
         # if the double quoted string is not a table name, it is a string literal ideed
         query = self.compile('''SELECT "a" + "b" FROM postings''')
         self.assertEqual(query.c_targets[0].c_expr.value, 'ab')
+
+
+class TestColumns(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.conn = beanquery.connect('')
+        cls.conn.execute('''CREATE TABLE foo (x int, y int)''')
+        class Baz(types.Structure):
+            columns = {
+                'one': GetItemColumn('one', int),
+                'two': GetItemColumn('two', int),
+            }
+        class Table(tables.Table):
+            name = 'bar'
+            columns = {
+                'p': GetItemColumn(0, 'int'),
+                'q': GetItemColumn(1, Baz),
+            }
+        cls.conn.tables['bar'] = Table()
+
+    def compile(self, query, params=None):
+        return self.conn.compile(self.conn.parse(query))
+
+    def test_column(self):
+        q = self.compile('''SELECT x FROM foo''')
+        self.assertEqual(q.c_targets[0].c_expr, self.conn.tables['foo'].columns['x'])
+
+    def test_column_invalid(self):
+        with self.assertRaisesRegex(beanquery.CompilationError, 'column "nope" not found in table "foo"'):
+            self.compile('''SELECT nope FROM foo''')
+
+    def test_table_column(self):
+        q = self.compile('''SELECT foo.x FROM foo''')
+        self.assertEqual(q.c_targets[0].c_expr, self.conn.tables['foo'].columns['x'])
+
+    def test_table_column_invalid(self):
+        with self.assertRaisesRegex(beanquery.CompilationError, 'column "nope" not found in table "foo"'):
+            self.compile('''SELECT foo.nope FROM foo''')
+
+    def test_column_field(self):
+        q = self.compile('''SELECT q.one FROM bar''')
+        self.assertEqual(q.c_targets[0].c_expr.operand, self.conn.tables['bar'].columns['q'])
+
+    def test_table_column_field(self):
+        q = self.compile('''SELECT bar.q.one FROM bar''')
+        self.assertEqual(q.c_targets[0].c_expr.operand, self.conn.tables['bar'].columns['q'])
+
+    def test_table_column_field_invalid(self):
+        with self.assertRaisesRegex(beanquery.CompilationError, 'structured type has no attribute "nope"'):
+            self.compile('''SELECT bar.q.nope FROM bar''')
