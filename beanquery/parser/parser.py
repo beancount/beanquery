@@ -1256,17 +1256,30 @@ class BQLParser(Parser):
             self._token(')')
             self._define(['columns'], [])
         self._token('VALUES')
-        self._token('(')
 
         def sep2():
             self._token(',')
 
         def block3():
-            self._expression_()
+            self._token('(')
+
+            def sep4():
+                self._token(',')
+
+            def block5():
+                self._expression_()
+            self._positive_gather(block5, sep4)
+            self.add_last_node_to_name('values')
+            self._token(')')
+            self._define(
+                [],
+                ['values'],
+            )
         self._gather(block3, sep2)
-        self.name_last_node('values')
-        self._token(')')
-        self._define(['columns', 'table', 'values'], [])
+        self._define(
+            ['columns', 'table'],
+            ['values'],
+        )
 
 
 def main(filename, **kwargs):

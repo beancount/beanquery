@@ -84,6 +84,7 @@ ignore = [
     'PLW2901',
     'RUF012',
     'RUF023',  # unsorted-dunder-slots
+    'RUF059',  # unused-unpacked-variable
     'UP007',
     'UP032',
 ]
