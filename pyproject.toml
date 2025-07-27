@@ -6,7 +6,7 @@ build-backend = 'setuptools.build_meta'
 name = 'beanquery'
 version = '0.3.0.dev0'
 description = 'Customizable lightweight SQL query tool'
-license = { file = 'LICENSE' }
+license = 'GPL-2.0-only'
 readme = 'README.rst'
 authors = [
     { name = 'Martin Blais', email = 'blais@furius.ca' },
