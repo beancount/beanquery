@@ -22,6 +22,23 @@ class Align(enum.Enum):
     RIGHT = 1
 
 
+class _CurrencyContext(display_context._CurrencyContext):
+    def __init__(self):
+        super().__init__()
+        # Since commit 10b6f5efd2385e3d0efe6715584d7f540e2e7abf
+        # beancount assumes the presence of a sign unconditionally ,
+        # changing the formatting of columns that do not contain
+        # negative numbers. Revert the change.
+        self.has_sign = False
+
+
+class _DisplayContext(display_context.DisplayContext):
+    def __init__(self):
+        self.ccontexts = collections.defaultdict(_CurrencyContext)
+        self.ccontexts["__default__"] = _CurrencyContext()
+        self.commas = False
+
+
 class RenderContext:
     """Hold the query rendering configuration."""
 
@@ -235,7 +252,7 @@ class AmountRenderer(ColumnRenderer):
         # determine the quantization of the column values.
         self.quantize = ctx.dcontext.quantize
         # Use column specific display context for formatting.
-        self.dcontext = display_context.DisplayContext()
+        self.dcontext = _DisplayContext()
         # Maximum width of the commodity symbol.
         self.curwidth = 0
 
