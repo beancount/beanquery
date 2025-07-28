@@ -1,12 +1,13 @@
 [build-system]
-requires = ['setuptools']
+requires = ['setuptools >= 77.0.3']
 build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'beanquery'
 version = '0.3.0.dev0'
 description = 'Customizable lightweight SQL query tool'
-license = { file = 'LICENSE' }
+license = 'GPL-2.0-only'
+license-files = ['LICENSE']
 readme = 'README.rst'
 authors = [
     { name = 'Martin Blais', email = 'blais@furius.ca' },
@@ -19,7 +20,6 @@ keywords = [
     'accounting', 'ledger', 'beancount', 'SQL', 'BQL'
 ]
 classifiers = [
-    'License :: OSI Approved :: GNU General Public License v2 (GPLv2)',
     'Programming Language :: Python :: 3 :: Only',
     'Programming Language :: Python :: 3.8',
     'Programming Language :: Python :: 3.9',
