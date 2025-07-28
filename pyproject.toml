@@ -67,6 +67,7 @@ line-length = 128
 target-version = 'py38'
 
 [tool.ruff.lint]
+pyupgrade.keep-runtime-typing = true
 select = ['E', 'F', 'W', 'UP', 'B', 'C4', 'PL', 'RUF']
 ignore = [
     'B007',
@@ -79,6 +80,7 @@ ignore = [
     'PLR0915',
     'PLR1714',
     'PLR2004',
+    'PLW1641', # eq-without-hash
     'PLW2901',
     'RUF012',
     'RUF023',  # unsorted-dunder-slots
