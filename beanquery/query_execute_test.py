@@ -1818,6 +1818,12 @@ class TestInsert(unittest.TestCase):
         self.assertEqual(self.conn.tables['abcd'].data[0], values)
         self.assertEqual(curs.fetchall(), [])
 
+    def test_insert_many(self):
+        curs = self.conn.execute('''INSERT INTO abcd (a) VALUES (1), (2), (3), (4)''')
+        values = [row[0] for row in self.conn.tables['abcd'].data]
+        self.assertEqual(values, [1, 2, 3, 4])
+        self.assertEqual(curs.fetchall(), [])
+
 
 class TestCSVTable(unittest.TestCase):
 

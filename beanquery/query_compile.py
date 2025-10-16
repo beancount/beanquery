@@ -18,7 +18,7 @@ import re
 import operator
 
 from decimal import Decimal
-from typing import List
+from typing import List, Sequence
 
 from dateutil.relativedelta import relativedelta
 
@@ -697,9 +697,9 @@ class EvalCreateTable:
 @dataclasses.dataclass
 class EvalInsert:
     table: tables.Table
-    values: list[EvalNode]
+    rows: Sequence[Sequence[EvalNode]]
 
     def __call__(self):
-        values = tuple(value(None) for value in self.values)
-        self.table.insert(values)
+        for row in self.rows:
+            self.table.insert(tuple(value(None) for value in row))
         return (), []

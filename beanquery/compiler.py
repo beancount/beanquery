@@ -764,21 +764,24 @@ class Compiler:
         impl = getattr(table, 'insert', None)
         if impl is None:
             raise CompilationError(f'table "{node.table.name}" does not support insertion', node.table)
-        if len(node.values) != len(node.columns):
-            raise CompilationError(
-                f'column names and values mismatch: '
-                f'expected {len(node.columns)} but {len(node.values)} values were supplied', node)
-        values = [EvalConstant(None)] * len(table.columns)
         columns = {name: i for i, name in enumerate(table.columns.keys())}
-        for column, value in zip(node.columns, node.values):
-            index = columns.get(column.name)
-            if index is None:
-                raise CompilationError(f'column "{column.name}" not found in table "{node.table.name}"', column)
-            expr = self._compile(value)
-            if not expr.dtype == table.columns.get(column.name).dtype:
-                raise CompilationError(f'expression has wrong type for column "{column.name}"', value)
-            values[index] = expr
-        return EvalInsert(table, values)
+        rows = []
+        for row in node.values:
+            if len(row) != len(node.columns):
+                raise CompilationError(
+                    f'column names and values mismatch: '
+                    f'expected {len(node.columns)} but {len(row)} values were supplied', node)
+            values = [EvalConstant(None)] * len(table.columns)
+            for column, value in zip(node.columns, row):
+                index = columns.get(column.name)
+                if index is None:
+                    raise CompilationError(f'column "{column.name}" not found in table "{node.table.name}"', column)
+                expr = self._compile(value)
+                if not expr.dtype == table.columns.get(column.name).dtype:
+                    raise CompilationError(f'expression has wrong type for column "{column.name}"', value)
+                values[index] = expr
+            rows.append(values)
+        return EvalInsert(table, rows)
 
 
 def transform_journal(journal):

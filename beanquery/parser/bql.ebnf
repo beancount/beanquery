@@ -397,5 +397,5 @@ create_table::CreateTable
 insert::Insert
     = 'INSERT' 'INTO' ~ table:table
       ['(' columns:','.{column} ')']
-      'VALUES' '(' values:','.{expression} ')'
+      'VALUES' ','.{ '(' values+:','.{expression}+ ')' }
     ;
