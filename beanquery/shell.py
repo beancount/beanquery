@@ -55,10 +55,18 @@ INIT_FILENAME = '~/.config/beanquery/init'
 TYPE_CATEGORIES = {
     'amount': [amount.Amount],
     'account': [],  # Must be manually assigned as account names are strings
-    'position': [position.Position],
-    'inventory': [inventory.Inventory],
+    'position': [position.Position, inventory.Inventory],
     'date': [datetime.date],
     'atomic': []  # fallback, default category
+}
+
+# Category information for help display. Tuples: (title, description)
+CATEGORY_INFO = {
+    'amount': ("Amount and Commodity Functions", "An amount is a value with a currency/commodity."),
+    'account': ("Account Functions", ""),
+    'position': ("Position & Inventory Functions", "A position is a single amount held at cost.\n\nExample: 10 HOOL {100.30 USD}\n\nA collection of multiple positions is an inventory"),
+    'date': ("Date Functions", ""),
+    'atomic': ("Atomic Functions", "Work on basic types: strings, numbers, etc.")
 }
 
 
@@ -296,7 +304,27 @@ class DispatchingShell(cmd.Cmd):
 
     def do_help(self, arg):
         """List available commands with "help" or detailed help with "help cmd"."""
-        super().do_help(arg.lower())
+        if not arg:
+            super().do_help(arg)
+            return
+            
+        # Split arg by space to get command and additional arguments
+        # e.g. "help functions amount" -> command="functions", args=["amount"]
+        parts = arg.split()
+        command = parts[0].lower()
+        args = parts[1:] if len(parts) > 1 else []
+        
+        # Check if there's a help method for this command
+        help_method = getattr(self, f'help_{command}', None)
+        if help_method and args:
+            # Call the help method with the additional arguments
+            try:
+                help_method(' '.join(args))
+            except TypeError:
+                # Fallback if the help method doesn't accept arguments
+                super().do_help(command)
+        else:
+            super().do_help(command)
 
     def do_history(self, arg):
         """Print the command-line history."""
@@ -575,9 +603,9 @@ class BQLShell(DispatchingShell):
             directive are made available in this context as well. Simple functions
             (that return a single value per row) and aggregation functions (that
             return a single value per group) are available. For the complete
-            list of supported columns and functions, see help on "targets".
-            You can also provide a wildcard here, which will select a reasonable
-            default set of columns for rendering a journal.
+            list of supported columns and functions, see help on "targets" and 
+            "functions". You can also provide a wildcard here, which will 
+            select a reasonable default set of columns for rendering a journal.
 
           from_expr: A logical expression that matches on the attributes of
             the directives (not postings). This allows you to select a subset of
@@ -654,10 +682,13 @@ class BQLShell(DispatchingShell):
 
           {columns}
 
+          ----------------------------------------------------------------------
+
           For available functions and aggregates, see "help functions".
 
         """)
-        print(template.format(**_describe_columns(self.context.tables['postings'].columns)),
+
+        print(template.format(columns = _describe_columns(self.context.tables['postings'].columns)),
               file=self.outfile)
 
     def help_from(self):
@@ -694,51 +725,82 @@ class BQLShell(DispatchingShell):
         print(template.format(columns=_describe_columns(self.context.tables['postings'].columns)),
               file=self.outfile)
 
-    def help_functions(self):
-        """Show all available functions and aggregates grouped by type."""
-        template = textwrap.dedent("""
-
-          Functions are organized by the type of their first argument:
-
-          Amount Functions (work on amounts)
-          --------------------------------
-
-          {amount_functions}
-
-          Position Functions (work on positions)
-          ------------------------------------
-
-          {position_functions}
-
-          Inventory Functions (work on inventories)
-          ---------------------------------------
-
-          {inventory_functions}
-
-          Date Functions (work on dates)
-          ----------------------------
-
-          {date_functions}
-
-          Atomic Functions (work on basic types: strings, numbers, etc.)
-          -----------------------------------------------------------
-
-          {atomic_functions}
-
-          Aggregates
-          ----------
-
-          {aggregates}
-
-        """)
-        print(template.format(
-            amount_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='amount'),
-            position_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='position'),
-            inventory_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='inventory'),
-            date_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='date'),
-            atomic_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='atomic'),
-            aggregates=_describe_functions(query_compile.FUNCTIONS, aggregates=True)
-        ), file=self.outfile)
+    def help_functions(self, arg=None):
+        """Show all available functions and aggregates grouped by type.
+        
+        Usage: help functions [type]
+        
+        Without type argument, shows only category descriptions.
+        With type argument, shows functions for that specific type.
+        Available types: amount, position, date, atomic, aggregates
+        """
+        if arg is None:
+            arg = ''
+        else:
+            arg = arg.strip().lower()
+        
+        
+        if not arg:
+            # Show only category descriptions when no type specified
+            sections = []
+            sections.append("\nUsage: help functions [type]\n")
+            sections.append("Functions are organized by the type of their main argument:\n")
+            
+            for category in TYPE_CATEGORIES.keys():                    
+                title, description = CATEGORY_INFO.get(category, (f"{category.title()} Functions", ""))
+                section = f"  {category}: {title}"
+                if description:
+                    section += f" - {description}"
+                sections.append(section)
+            
+            # Add aggregates info
+            sections.append("  aggregates: Aggregation Functions - Functions that compute summary values across groups, as defined by the SELECT ... GROUP BY clause.")
+            
+            # Format output with proper wrapping and indentation
+            wrapper = textwrap.TextWrapper(width=80, subsequent_indent='    ')
+            formatted_sections = []
+            for section in sections:
+                if section.startswith('  '):
+                    # For category lines, wrap with proper indentation
+                    wrapped = wrapper.fill(section)
+                    formatted_sections.append(wrapped)
+                else:
+                    # For headers and usage, keep as is
+                    formatted_sections.append(section)
+            print('\n'.join(formatted_sections), file=self.outfile)
+            return
+        
+        # Show functions for specific type
+        if arg == 'aggregates':
+            aggregates_content = _describe_functions(query_compile.FUNCTIONS, aggregates=True)
+            if aggregates_content.strip():
+                print("Aggregates\n----------\n", file=self.outfile)
+                print(aggregates_content, file=self.outfile)
+            else:
+                print("No aggregate functions found.", file=self.outfile)
+            return
+        
+        if arg not in TYPE_CATEGORIES:
+            available_types = list(TYPE_CATEGORIES.keys()) + ['aggregates']
+            available_types = [t for t in available_types if t != 'account']  # Skip account
+            print(f"Unknown type '{arg}'. Available types: {', '.join(available_types)}", file=self.outfile)
+            return
+        
+        if arg == 'account':
+            print("Account functions are manually assigned and may not have dedicated functions.", file=self.outfile)
+            return
+        
+        title, description = CATEGORY_INFO.get(arg, (f"{arg.title()} Functions", ""))
+        underline = '-' * len(title)
+        functions_content = _describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter=arg)
+        
+        if functions_content.strip():
+            print(f"{title}\n{underline}", file=self.outfile)
+            if description:
+                print(f"\n{description}", file=self.outfile)
+            print(f"\n{functions_content}", file=self.outfile)
+        else:
+            print(f"No functions found for type '{arg}'.", file=self.outfile)
 
 
 def _describe_columns(columns):

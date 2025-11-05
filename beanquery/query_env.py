@@ -185,7 +185,7 @@ def str_(x):
     return str(x)
 
 
-@function([datetime.date], datetime.date, groups=['atomic', 'date'])
+@function([datetime.date], datetime.date, name = 'date', groups=['date'])
 @function([str], datetime.date, name='date', groups=['atomic', 'date'])
 @function([object], datetime.date, name='date', groups=['atomic', 'date'])
 def date_(x):
@@ -420,30 +420,30 @@ def open_meta(context, account, key=None):
 
 
 # Stub kept only for function type checking and for generating documentation.
-@function([str], object, groups=['transaction'])
+@function([str], object)
 def meta(context, key):
     """Get some metadata key of the posting."""
     raise NotImplementedError
 
 
 # Stub kept only for function type checking and for generating documentation.
-@function([str], object, groups=['transaction'])
+@function([str], object)
 def entry_meta(context, key):
     """Get some metadata key of the transaction."""
     raise NotImplementedError
 
 
 # Stub kept only for function type checking and for generating documentation.
-@function([str], object, groups=['posting'])
+@function([str], object)
 def any_meta(context, key):
     """Get metadata from the posting or its parent transaction if not present."""
     raise NotImplementedError
 
 
-@function([str], dict, pass_context=True)
-@function([str, str], object, pass_context=True)
-@function([str], dict, pass_context=True, name='commodity_meta')
-@function([str, str], object, pass_context=True, name='commodity_meta')
+@function([str], dict, pass_context=True, groups = ['amount'])
+@function([str, str], object, pass_context=True, groups = ['amount'])
+@function([str], dict, pass_context=True, name='commodity_meta', groups = ['amount'])
+@function([str, str], object, pass_context=True, name='commodity_meta', groups = ['amount'])
 def currency_meta(context, commodity, key=None):
     """Get the metadata dict of the commodity directive of the currency."""
     entry = context.tables['commodities'].commodities.get(commodity)
@@ -550,10 +550,10 @@ def inventory_value(context, inv, date=None):
     return inv.reduce(convert.get_value, price_map, date)
 
 
-@function([str, str], Decimal, pass_context=True)
+@function([str, str], Decimal, pass_context=True, groups = ['position'])
 @function([str, str, datetime.date], Decimal, pass_context=True, name='getprice')
 def getprice(context, base, quote, date=None):
-    """Fetch a price."""
+    """Fetch a price. Arguments: Base currency, e.g. 'EUR'; Commodity name (string); Date: Price as of this date. Default: Latest price."""
     price_map = context.tables['prices'].price_map
     pair = (base.upper(), quote.upper())
     _, price = prices.get_price(price_map, pair, date)
@@ -868,7 +868,7 @@ class SumAmount(query_compile.EvalAggregator):
             store[self.handle].add_amount(value)
 
 
-@aggregator([position.Position], name='sum', groups = ['position', 'inventory'])
+@aggregator([position.Position], name='sum', groups = ['position'])
 class SumPosition(query_compile.EvalAggregator):
     """Calculate the sum of the position. The result is an Inventory."""
     def __init__(self, context, operands):
