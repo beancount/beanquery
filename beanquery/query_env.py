@@ -78,6 +78,8 @@ def register(name=None):
 
 @register('getitem')
 class GetItem2(query_compile.EvalFunction):
+    """Get one item from a dict object if it exists, otherwise None.
+    Arguments: dict, key."""
     __intypes__ = [dict, str]
 
     def __init__(self, context, operands):
@@ -93,6 +95,8 @@ class GetItem2(query_compile.EvalFunction):
 
 @register('getitem')
 class GetItem3(query_compile.EvalFunction):
+    """Get one item from a dict object if it exists, otherwise a default value.
+    Arguments: dict, key, default value."""
     __intypes__ = [dict, str, types.Any]
 
     def __init__(self, context, operands):
@@ -128,6 +132,7 @@ def bool_(x):
 @function([str], int, name='int')
 @function([object], int, name='int')
 def int_(x):
+    """Convert the object to an integer number."""
     try:
         return int(x)
     except (ValueError, TypeError):
@@ -140,6 +145,7 @@ def int_(x):
 @function([str], Decimal, name='decimal')
 @function([object], Decimal, name='decimal')
 def decimal_(x):
+    """Convert the object to a decimal number."""
     try:
         return Decimal(x)
     except (ValueError, TypeError, decimal.InvalidOperation):
@@ -148,6 +154,7 @@ def decimal_(x):
 
 @function([types.Any], str, name='str')
 def str_(x):
+    """Convert any object to a string."""
     if x is True:
         return 'TRUE'
     if x is False:
@@ -159,6 +166,9 @@ def str_(x):
 @function([str], datetime.date, name='date')
 @function([object], datetime.date, name='date')
 def date_(x):
+    """Convert the argument to a date. The argument should be 
+    a string in the format YYYY-MM-DD. Date objects are passed 
+    unchanged. Objects are converted to None."""
     if isinstance(x, datetime.date):
         return x
     if isinstance(x, str):
@@ -316,7 +326,7 @@ def leaf(acc):
 
 @function([str, str], str)
 def grep(pattern, string):
-    """Match a regular expression against a string and return only the matched portion."""
+    """Match a regular expression against a string and return only the matched portion. Arguments: Regex pattern, input string."""
     match = re.search(pattern, string)
     if match:
         return match.group(0)
@@ -325,7 +335,7 @@ def grep(pattern, string):
 
 @function([str, str, int], str)
 def grepn(pattern, string, n):
-    """Match a pattern with subgroups against a string and return the subgroup at the index."""
+    """Match a pattern with subgroups against a string and return the subgroup at the index. Arguments: Regex pattern, input string, subgroup index."""
     match = re.search(pattern, string)
     if match:
         return match.group(n)
@@ -334,7 +344,7 @@ def grepn(pattern, string, n):
 
 @function([str, str, str], str)
 def subst(pattern, repl, string):
-    """Substitute leftmost non-overlapping occurrences of pattern by replacement."""
+    """Substitute leftmost non-overlapping occurrences of pattern by replacement. Arguments: regex pattern, replacement, input string."""
     return re.sub(pattern, repl, string)
 
 
@@ -375,7 +385,9 @@ def close_date(context, acc):
 @function([str], dict, pass_context=True)
 @function([str, str], object, pass_context=True)
 def open_meta(context, account, key=None):
-    """Get the metadata dict of the open directive of the account."""
+    """Get the metadata dict of the open directive of the account. 
+    With one argument, returns all metadata as a dict object. With two
+    arguments, returns the value of a specific metadata key."""
     open_entry, _ = context.tables['accounts'].accounts.get(account, NONENONE)
     if open_entry is None:
         return None
@@ -614,7 +626,11 @@ types.ALIASES[datetime.date] = Date
 @function([str], datetime.date)
 @function([str, str], datetime.date)
 def parse_date(string, frmt=None):
-    """Parse date from string."""
+    """Parse date from string (first argument). Without second argument, 
+    the 'dateutil' library is used to parse the string. This can deal with
+    text like 'February 2nd', 'yesterday', 'next month'. The optional second 
+    argument specifies the format as in the 'datetime' library, for example:
+    '%Y-%m-%d' to parse '2022-01-20'."""
     if frmt is None:
         return dateutil.parser.parse(string).date()
     return datetime.datetime.strptime(string, frmt).date()
@@ -654,7 +670,7 @@ def date_trunc(field, x):
 
 @function([str, datetime.date], int)
 def date_part(field, x):
-    """Extract the specified field from a date."""
+    """Extract the specified field from a date. The first argument can be 'weekday', 'dow', 'week', 'month', 'quarter', 'year', 'isoyear', 'decade', 'century', 'millennium'. The second is the date to extract the field from."""
     if field == 'weekday' or field == 'dow':
         return x.weekday()
     if field == 'isoweekday' or field == 'isodow':
@@ -709,10 +725,7 @@ def interval(x):
 
 @function([relativedelta, datetime.date, datetime.date], datetime.date)
 def date_bin(stride, source, origin):
-    """Bin a date into the specified stride aligned with the specified origin.
-
-    As an extension to the the SQL standard ``date_bin()`` function this
-    function also accepts strides containing units of months and years.
+    """See date_bin(str, date, date). This variant accepts a relative time interval, as generated by interval().
     """
     if stride.months or stride.years:
         if origin + stride <= origin:
@@ -747,6 +760,14 @@ def date_bin(stride, source, origin):
 
 @function([str, datetime.date, datetime.date], datetime.date, name='date_bin')
 def date_bin_str(stride, source, origin):
+    """Bin a date into the specified stride aligned with the specified origin.
+
+    As an extension to the the SQL standard ``date_bin()`` function this
+    function also accepts strides containing units of months and years.
+    
+    Arguments:
+      stride: A string representing a time interval, e.g. '1 day', '1 month', '1 year'; source: The date to bin; origin: The start of the binning interval
+    """
     return date_bin(interval(stride), source, origin)
 
 
