@@ -45,10 +45,23 @@ class ColumnsRegistry(dict):
         return decorator
 
 
-def function(intypes, outtype, pass_context=None, name=None):
+def function(intypes, outtype, pass_context=None, name=None, groups=None):
+    """Decorator to register a function in the query environment. Expects
+    to decorate a function that takes operands as arguments.
+    
+    Args:
+      intypes: List of input types.
+      outtype: Return value.
+      pass_context: Whether the function receives the context as first argument 
+           or is pure.
+      name: Name of the function.
+      groups: In which group(s) the function in the help output (list). See 
+           shell._describe_function for group names.
+    """
     def decorator(func):
         class Func(query_compile.EvalFunction):
             __intypes__ = intypes
+            __groups__ = groups or []
             pure = not pass_context
             def __init__(self, context, operands):
                 super().__init__(context, operands, outtype)
@@ -67,10 +80,20 @@ def function(intypes, outtype, pass_context=None, name=None):
     return decorator
 
 
-def register(name=None):
+def register(name=None, groups=None):
+    """Decorator to register a function in the query environment with
+    more fine-grained control. Expects to decorate a class that implements
+    the query_compile.EvalFunction interface.
+
+    Args:
+      name: Name of the function.
+      groups: In which group(s) the function in the help output (list). See 
+           shell._describe_function for group names.    
+    """
     def decorator(cls):
         if name is not None:
             cls.__name__ = name
+        cls.__groups__ = groups or []
         query_compile.FUNCTIONS[cls.__name__].append(cls)
         return cls
     return decorator
@@ -771,9 +794,10 @@ def date_bin_str(stride, source, origin):
     return date_bin(interval(stride), source, origin)
 
 
-def aggregator(intypes, name=None):
+def aggregator(intypes, name=None, groups=None):
     def decorator(cls):
         cls.__intypes__ = intypes
+        cls.__groups__ = groups or []
         if name is not None:
             cls.__name__ = name
         query_compile.FUNCTIONS[cls.__name__].append(cls)

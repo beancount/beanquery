@@ -3,6 +3,7 @@ __license__ = "GNU GPLv2"
 
 import atexit
 import cmd
+import datetime
 import importlib
 import io
 import itertools
@@ -17,13 +18,15 @@ import warnings
 
 from contextlib import nullcontext, suppress
 from dataclasses import dataclass, asdict
+from decimal import Decimal
 from os import path
+
 
 import click
 import beancount
 
 from beancount.parser import printer
-from beancount.core import data
+from beancount.core import data, amount, position, inventory
 from beancount.utils import pager
 from beancount.utils.misc_utils import get_screen_height
 
@@ -678,13 +681,35 @@ class BQLShell(DispatchingShell):
               file=self.outfile)
 
     def help_functions(self):
-        """Show all available functions and aggregates."""
+        """Show all available functions and aggregates grouped by type."""
         template = textwrap.dedent("""
 
-          Functions
-          ---------
+          Functions are organized by the type of their first argument:
 
-          {functions}
+          Amount Functions (work on amounts)
+          --------------------------------
+
+          {amount_functions}
+
+          Position Functions (work on positions)
+          ------------------------------------
+
+          {position_functions}
+
+          Inventory Functions (work on inventories)
+          ---------------------------------------
+
+          {inventory_functions}
+
+          Date Functions (work on dates)
+          ----------------------------
+
+          {date_functions}
+
+          Atomic Functions (work on basic types: strings, numbers, etc.)
+          -----------------------------------------------------------
+
+          {atomic_functions}
 
           Aggregates
           ----------
@@ -693,7 +718,11 @@ class BQLShell(DispatchingShell):
 
         """)
         print(template.format(
-            functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False),
+            amount_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='amount'),
+            position_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='position'),
+            inventory_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='inventory'),
+            date_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='date'),
+            atomic_functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False, type_filter='atomic'),
             aggregates=_describe_functions(query_compile.FUNCTIONS, aggregates=True)
         ), file=self.outfile)
 
@@ -708,16 +737,77 @@ def _describe_columns(columns):
     return out.getvalue().rstrip()
 
 
-def _describe_functions(functions, aggregates=False):
+def _describe_functions(functions, aggregates=False, type_filter=None):
+    """Describe functions, optionally filtered by input type category.
+    
+    Args:
+        functions: Dictionary of function name -> list of function implementations
+        aggregates: If True, show aggregates; if False, show regular functions
+        type_filter: Optional filter by input type category:
+            'amount' - functions working on amounts
+            'account' - functions working on account names
+            'position' - functions working on positions
+            'inventory' - functions working on inventories
+            'date' - functions working on dates
+            'atomic' - functions working on basic types (str, int, Decimal, bool)
+    """
+    # Define type categories
+    # These types are matched agains the first input type of the function.
+    # Functions can be force-assigned to one or more of these categories
+    # by use of the group argument in the function decorators 'function',
+    # 'register' or 'aggregate' in the 'query_env' module.
+    type_categories = {
+        'amount': [amount.Amount],
+        'account': [],  # Must by manually assigned as account names are strings
+        'position': [position.Position],
+        'inventory': [inventory.Inventory],
+        'date': [datetime.date],
+        'atomic': [] # fallback, default category
+    }
+    
+    def get_type_category(input_types):
+        """Determine the category of a function based on its first input type."""
+        if not input_types:
+            return 'atomic'
+        
+        first_type = input_types[0]
+        
+        # Check each category for direct type match
+        for category, type_set in type_categories.items():
+            if first_type in type_set:
+                return category
+        
+        return 'atomic'  # Default fallback
+    
     entries = []
     for name, funcs in functions.items():
+        # Choice of whether to report aggregate or non-aggregate functions
         if aggregates != issubclass(funcs[0], query_compile.EvalAggregator):
             continue
+
         name = name.lower()
+
+        # Iterate through functions of the same name, but with different 
+        # signatures to filter by requested type category
         for func in funcs:
+            # Apply type filter if specified
+            if type_filter:
+                # Check if function has explicit groups
+                if hasattr(func, '__groups__') and func.__groups__:
+                    # Use explicit groups for filtering
+                    if type_filter not in func.__groups__:
+                        continue
+                else:
+                    # Use type-based categorization for filtering
+                    func_category = get_type_category(func.__intypes__)
+                    if func_category != type_filter:
+                        continue
+            
+            # Assemble function signature for output
             args = ', '.join(types.name(d) for d in func.__intypes__)
             doc = re.sub(r'[ \n\t]+', ' ', func.__doc__ or '')
             entries.append((name, doc, args))
+    
     entries.sort()
     out = io.StringIO()
     wrapper = textwrap.TextWrapper(initial_indent='  ', subsequent_indent='  ', width=80)
