@@ -637,19 +637,11 @@ class BQLShell(DispatchingShell):
 
           {columns}
 
-          Functions
-          ---------
-
-          {functions}
-
-          Aggregate functions
-          -------------------
-
-          {aggregates}
+          For available functions and aggregates, see "help functions".
 
         """)
-        print(template.format(**_describe(self.context.tables['postings'],
-                                          query_compile.FUNCTIONS)), file=self.outfile)
+        print(template.format(**_describe_columns(self.context.tables['postings'].columns)),
+              file=self.outfile)
 
     def help_from(self):
         template = textwrap.dedent("""
@@ -662,14 +654,10 @@ class BQLShell(DispatchingShell):
 
           {columns}
 
-          Functions
-          ---------
-
-          {functions}
+          For available functions, see "help functions".
 
         """)
-        print(template.format(**_describe(self.context.tables['entries'],
-                                          query_compile.FUNCTIONS)),
+        print(template.format(columns=_describe_columns(self.context.tables['entries'].columns)),
               file=self.outfile)
 
     def help_where(self):
@@ -683,14 +671,31 @@ class BQLShell(DispatchingShell):
 
           {columns}
 
+          For available functions, see "help functions".
+
+        """)
+        print(template.format(columns=_describe_columns(self.context.tables['postings'].columns)),
+              file=self.outfile)
+
+    def help_functions(self):
+        """Show all available functions and aggregates."""
+        template = textwrap.dedent("""
+
           Functions
           ---------
 
           {functions}
 
+          Aggregates
+          ----------
+
+          {aggregates}
+
         """)
-        print(template.format(**_describe(self.context.tables['postings'],
-                                          query_compile.FUNCTIONS)), file=self.outfile)
+        print(template.format(
+            functions=_describe_functions(query_compile.FUNCTIONS, aggregates=False),
+            aggregates=_describe_functions(query_compile.FUNCTIONS, aggregates=True)
+        ), file=self.outfile)
 
 
 def _describe_columns(columns):
