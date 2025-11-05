@@ -56,7 +56,7 @@ def function(intypes, outtype, pass_context=None, name=None, groups=None):
            or is pure.
       name: Name of the function.
       groups: In which group(s) the function in the help output (list). See 
-           shell._describe_function for group names.
+           shell.TYPE_CATEGORIES for valid group names.
     """
     def decorator(func):
         class Func(query_compile.EvalFunction):
@@ -88,7 +88,7 @@ def register(name=None, groups=None):
     Args:
       name: Name of the function.
       groups: In which group(s) the function in the help output (list). See 
-           shell._describe_function for group names.    
+           shell.TYPE_CATEGORIES for valid group names.    
     """
     def decorator(cls):
         if name is not None:
@@ -800,8 +800,8 @@ def aggregator(intypes, name=None, groups=None):
     Args:
       intypes: A list of types that the aggregator can accept.
       name: The name of the aggregator function.
-      groups: A list of groups that the aggregator belongs to. See the
-           function shell._describe_groups for a list of valid groups.
+      groups: A list of groups that the aggregator belongs to. See 
+           shell.TYPE_CATEGORIES for valid group names.
     """
     def decorator(cls):
         cls.__intypes__ = intypes

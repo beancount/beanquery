@@ -47,6 +47,20 @@ except ImportError:
 HISTORY_FILENAME = '~/.config/beanquery/history'
 INIT_FILENAME = '~/.config/beanquery/init'
 
+# Type categories for function classification
+# These types are matched against the first input type of the function.
+# Functions can be force-assigned to one or more of these categories
+# by use of the group argument in the function decorators 'function',
+# 'register' or 'aggregate' in the 'query_env' module.
+TYPE_CATEGORIES = {
+    'amount': [amount.Amount],
+    'account': [],  # Must be manually assigned as account names are strings
+    'position': [position.Position],
+    'inventory': [inventory.Inventory],
+    'date': [datetime.date],
+    'atomic': []  # fallback, default category
+}
+
 
 class style:
     ERROR = '\033[31;1m'
@@ -751,20 +765,6 @@ def _describe_functions(functions, aggregates=False, type_filter=None):
             'date' - functions working on dates
             'atomic' - functions working on basic types (str, int, Decimal, bool)
     """
-    # Define type categories
-    # These types are matched agains the first input type of the function.
-    # Functions can be force-assigned to one or more of these categories
-    # by use of the group argument in the function decorators 'function',
-    # 'register' or 'aggregate' in the 'query_env' module.
-    type_categories = {
-        'amount': [amount.Amount],
-        'account': [],  # Must by manually assigned as account names are strings
-        'position': [position.Position],
-        'inventory': [inventory.Inventory],
-        'date': [datetime.date],
-        'atomic': [] # fallback, default category
-    }
-    
     def get_type_category(input_types):
         """Determine the category of a function based on its first input type."""
         if not input_types:
@@ -773,7 +773,7 @@ def _describe_functions(functions, aggregates=False, type_filter=None):
         first_type = input_types[0]
         
         # Check each category for direct type match
-        for category, type_set in type_categories.items():
+        for category, type_set in TYPE_CATEGORIES.items():
             if first_type in type_set:
                 return category
         
