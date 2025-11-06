@@ -45,10 +45,23 @@ class ColumnsRegistry(dict):
         return decorator
 
 
-def function(intypes, outtype, pass_context=None, name=None):
+def function(intypes, outtype, pass_context=None, name=None, groups=None):
+    """Decorator to register a function in the query environment. Expects
+    to decorate a function that takes operands as arguments.
+    
+    Args:
+      intypes: List of input types.
+      outtype: Return value.
+      pass_context: Whether the function receives the context as first argument 
+           or is pure.
+      name: Name of the function.
+      groups: In which group(s) the function in the help output (list). See 
+           shell.TYPE_CATEGORIES for valid group names.
+    """
     def decorator(func):
         class Func(query_compile.EvalFunction):
             __intypes__ = intypes
+            __groups__ = groups or []
             pure = not pass_context
             def __init__(self, context, operands):
                 super().__init__(context, operands, outtype)
@@ -67,10 +80,20 @@ def function(intypes, outtype, pass_context=None, name=None):
     return decorator
 
 
-def register(name=None):
+def register(name=None, groups=None):
+    """Decorator to register a function in the query environment with
+    more fine-grained control. Expects to decorate a class that implements
+    the query_compile.EvalFunction interface.
+
+    Args:
+      name: Name of the function.
+      groups: In which group(s) the function in the help output (list). See 
+           shell.TYPE_CATEGORIES for valid group names.    
+    """
     def decorator(cls):
         if name is not None:
             cls.__name__ = name
+        cls.__groups__ = groups or []
         query_compile.FUNCTIONS[cls.__name__].append(cls)
         return cls
     return decorator
@@ -78,6 +101,8 @@ def register(name=None):
 
 @register('getitem')
 class GetItem2(query_compile.EvalFunction):
+    """Get one item from a dict object if it exists, otherwise None.
+    Arguments: dict, key."""
     __intypes__ = [dict, str]
 
     def __init__(self, context, operands):
@@ -93,6 +118,8 @@ class GetItem2(query_compile.EvalFunction):
 
 @register('getitem')
 class GetItem3(query_compile.EvalFunction):
+    """Get one item from a dict object if it exists, otherwise a default value.
+    Arguments: dict, key, default value."""
     __intypes__ = [dict, str, types.Any]
 
     def __init__(self, context, operands):
@@ -128,6 +155,7 @@ def bool_(x):
 @function([str], int, name='int')
 @function([object], int, name='int')
 def int_(x):
+    """Convert the object to an integer number."""
     try:
         return int(x)
     except (ValueError, TypeError):
@@ -140,6 +168,7 @@ def int_(x):
 @function([str], Decimal, name='decimal')
 @function([object], Decimal, name='decimal')
 def decimal_(x):
+    """Convert the object to a decimal number."""
     try:
         return Decimal(x)
     except (ValueError, TypeError, decimal.InvalidOperation):
@@ -148,6 +177,7 @@ def decimal_(x):
 
 @function([types.Any], str, name='str')
 def str_(x):
+    """Convert any object to a string."""
     if x is True:
         return 'TRUE'
     if x is False:
@@ -155,10 +185,13 @@ def str_(x):
     return str(x)
 
 
-@function([datetime.date], datetime.date, name='date')
-@function([str], datetime.date, name='date')
-@function([object], datetime.date, name='date')
+@function([datetime.date], datetime.date, name = 'date', groups=['date'])
+@function([str], datetime.date, name='date', groups=['atomic', 'date'])
+@function([object], datetime.date, name='date', groups=['atomic', 'date'])
 def date_(x):
+    """Convert the argument to a date. The argument should be 
+    a string in the format YYYY-MM-DD. Date objects are passed 
+    unchanged. Objects are converted to None."""
     if isinstance(x, datetime.date):
         return x
     if isinstance(x, str):
@@ -169,7 +202,7 @@ def date_(x):
     return None
 
 
-@function([int, int, int], datetime.date, name='date')
+@function([int, int, int], datetime.date, name='date', groups=['date'])
 def date_from_ymd(year, month, day):
     """Construct a date with year, month, day arguments."""
     try:
@@ -295,20 +328,20 @@ def today():
 
 # Operations on accounts.
 
-@function([str], str)
-@function([str, int], str)
+@function([str], str, groups=['account'])
+@function([str, int], str, groups=['account'])
 def root(acc, n=1):
     """Get the root name(s) of the account."""
     return account.root(n, acc)
 
 
-@function([str], str)
+@function([str], str, groups=['account'])
 def parent(acc):
     """Get the parent name of the account."""
     return account.parent(acc)
 
 
-@function([str], str)
+@function([str], str, groups=['account'])
 def leaf(acc):
     """Get the name of the leaf subaccount."""
     return account.leaf(acc)
@@ -316,7 +349,7 @@ def leaf(acc):
 
 @function([str, str], str)
 def grep(pattern, string):
-    """Match a regular expression against a string and return only the matched portion."""
+    """Match a regular expression against a string and return only the matched portion. Arguments: Regex pattern, input string."""
     match = re.search(pattern, string)
     if match:
         return match.group(0)
@@ -325,7 +358,7 @@ def grep(pattern, string):
 
 @function([str, str, int], str)
 def grepn(pattern, string, n):
-    """Match a pattern with subgroups against a string and return the subgroup at the index."""
+    """Match a pattern with subgroups against a string and return the subgroup at the index. Arguments: Regex pattern, input string, subgroup index."""
     match = re.search(pattern, string)
     if match:
         return match.group(n)
@@ -334,7 +367,7 @@ def grepn(pattern, string, n):
 
 @function([str, str, str], str)
 def subst(pattern, repl, string):
-    """Substitute leftmost non-overlapping occurrences of pattern by replacement."""
+    """Substitute leftmost non-overlapping occurrences of pattern by replacement. Arguments: regex pattern, replacement, input string."""
     return re.sub(pattern, repl, string)
 
 
@@ -354,7 +387,7 @@ def lower(string):
 NONENONE = None, None
 
 
-@function([str], datetime.date, pass_context=True)
+@function([str], datetime.date, pass_context=True, groups=['account'])
 def open_date(context, acc):
     """Get the date of the open directive of the account."""
     open_entry, _ = context.tables['accounts'].accounts.get(acc, NONENONE)
@@ -363,7 +396,7 @@ def open_date(context, acc):
     return open_entry.date
 
 
-@function([str], datetime.date, pass_context=True)
+@function([str], datetime.date, pass_context=True, groups=['account'])
 def close_date(context, acc):
     """Get the date of the close directive of the account."""
     _, close_entry = context.tables['accounts'].accounts.get(acc, NONENONE)
@@ -372,10 +405,12 @@ def close_date(context, acc):
     return close_entry.date
 
 
-@function([str], dict, pass_context=True)
-@function([str, str], object, pass_context=True)
+@function([str], dict, pass_context=True, groups=['account'])
+@function([str, str], object, pass_context=True, groups=['account'])
 def open_meta(context, account, key=None):
-    """Get the metadata dict of the open directive of the account."""
+    """Get the metadata dict of the open directive of the account. 
+    With one argument, returns all metadata as a dict object. With two
+    arguments, returns the value of a specific metadata key."""
     open_entry, _ = context.tables['accounts'].accounts.get(account, NONENONE)
     if open_entry is None:
         return None
@@ -405,10 +440,10 @@ def any_meta(context, key):
     raise NotImplementedError
 
 
-@function([str], dict, pass_context=True)
-@function([str, str], object, pass_context=True)
-@function([str], dict, pass_context=True, name='commodity_meta')
-@function([str, str], object, pass_context=True, name='commodity_meta')
+@function([str], dict, pass_context=True, groups = ['amount'])
+@function([str, str], object, pass_context=True, groups = ['amount'])
+@function([str], dict, pass_context=True, name='commodity_meta', groups = ['amount'])
+@function([str, str], object, pass_context=True, name='commodity_meta', groups = ['amount'])
 def currency_meta(context, commodity, key=None):
     """Get the metadata dict of the commodity directive of the currency."""
     entry = context.tables['commodities'].commodities.get(commodity)
@@ -419,7 +454,7 @@ def currency_meta(context, commodity, key=None):
     return entry.meta.get(key)
 
 
-@function([str], str, pass_context=True)
+@function([str], str, pass_context=True, groups=['account'])
 def account_sortkey(context, acc):
     """Get a string to sort accounts in order taking into account the types."""
     account_types = context.tables['accounts'].types
@@ -428,7 +463,7 @@ def account_sortkey(context, acc):
 
 
 # Stub kept only for function type checking and for generating documentation.
-@function([str], bool)
+@function([str], bool, groups=['account'])
 def has_account(context, pattern):
     """True if the transaction has at least one posting matching the regular expression argument."""
     raise NotImplementedError
@@ -515,10 +550,10 @@ def inventory_value(context, inv, date=None):
     return inv.reduce(convert.get_value, price_map, date)
 
 
-@function([str, str], Decimal, pass_context=True)
+@function([str, str], Decimal, pass_context=True, groups = ['position'])
 @function([str, str, datetime.date], Decimal, pass_context=True, name='getprice')
 def getprice(context, base, quote, date=None):
-    """Fetch a price."""
+    """Fetch a price. Arguments: Base currency, e.g. 'EUR'; Commodity name (string); Date: Price as of this date. Default: Latest price."""
     price_map = context.tables['prices'].price_map
     pair = (base.upper(), quote.upper())
     _, price = prices.get_price(price_map, pair, date)
@@ -611,10 +646,14 @@ class Date(types.Structure):
 types.ALIASES[datetime.date] = Date
 
 
-@function([str], datetime.date)
-@function([str, str], datetime.date)
+@function([str], datetime.date, groups=['atomic', 'date'])
+@function([str, str], datetime.date, groups=['atomic', 'date'])
 def parse_date(string, frmt=None):
-    """Parse date from string."""
+    """Parse date from string (first argument). Without second argument, 
+    the 'dateutil' library is used to parse the string. This can deal with
+    text like 'February 2nd', 'yesterday', 'next month'. The optional second 
+    argument specifies the format as in the 'datetime' library, for example:
+    '%Y-%m-%d' to parse '2022-01-20'."""
     if frmt is None:
         return dateutil.parser.parse(string).date()
     return datetime.datetime.strptime(string, frmt).date()
@@ -652,9 +691,9 @@ def date_trunc(field, x):
     return None
 
 
-@function([str, datetime.date], int)
+@function([str, datetime.date], int, groups = ['date'])
 def date_part(field, x):
-    """Extract the specified field from a date."""
+    """Extract the specified field from a date. The first argument can be 'weekday', 'dow', 'week', 'month', 'quarter', 'year', 'isoyear', 'decade', 'century', 'millennium'. The second is the date to extract the field from."""
     if field == 'weekday' or field == 'dow':
         return x.weekday()
     if field == 'isoweekday' or field == 'isodow':
@@ -682,7 +721,7 @@ def date_part(field, x):
     return None
 
 
-@function([str], relativedelta)
+@function([str], relativedelta, groups = ['date'])
 def interval(x):
     """Construct a relative time interval."""
     m = re.fullmatch(r'([-+]?[0-9]+)\s+(day|month|year)s?', x)
@@ -707,12 +746,9 @@ def interval(x):
     return None
 
 
-@function([relativedelta, datetime.date, datetime.date], datetime.date)
+@function([relativedelta, datetime.date, datetime.date], datetime.date, groups = ['date'])
 def date_bin(stride, source, origin):
-    """Bin a date into the specified stride aligned with the specified origin.
-
-    As an extension to the the SQL standard ``date_bin()`` function this
-    function also accepts strides containing units of months and years.
+    """See date_bin(str, date, date). This variant accepts a relative time interval, as generated by interval().
     """
     if stride.months or stride.years:
         if origin + stride <= origin:
@@ -745,14 +781,31 @@ def date_bin(stride, source, origin):
         return result
 
 
-@function([str, datetime.date, datetime.date], datetime.date, name='date_bin')
+@function([str, datetime.date, datetime.date], datetime.date, name='date_bin', groups = ['date'])
 def date_bin_str(stride, source, origin):
+    """Bin a date into the specified stride aligned with the specified origin.
+
+    As an extension to the the SQL standard ``date_bin()`` function this
+    function also accepts strides containing units of months and years.
+    
+    Arguments:
+      stride: A string representing a time interval, e.g. '1 day', '1 month', '1 year'; source: The date to bin; origin: The start of the binning interval
+    """
     return date_bin(interval(stride), source, origin)
 
 
-def aggregator(intypes, name=None):
+def aggregator(intypes, name=None, groups=None):
+    """Decorator to register an aggregator function.
+    
+    Args:
+      intypes: A list of types that the aggregator can accept.
+      name: The name of the aggregator function.
+      groups: A list of groups that the aggregator belongs to. See 
+           shell.TYPE_CATEGORIES for valid group names.
+    """
     def decorator(cls):
         cls.__intypes__ = intypes
+        cls.__groups__ = groups or []
         if name is not None:
             cls.__name__ = name
         query_compile.FUNCTIONS[cls.__name__].append(cls)
@@ -815,7 +868,7 @@ class SumAmount(query_compile.EvalAggregator):
             store[self.handle].add_amount(value)
 
 
-@aggregator([position.Position], name='sum')
+@aggregator([position.Position], name='sum', groups = ['position'])
 class SumPosition(query_compile.EvalAggregator):
     """Calculate the sum of the position. The result is an Inventory."""
     def __init__(self, context, operands):
