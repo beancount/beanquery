@@ -247,12 +247,23 @@ class Compiler:
         ]
         
         # Create union of all grouping set queries
-        return EvalUnion(
+        union = EvalUnion(
             queries=queries,
             rollup_sets=rollup_sets,
             order_spec=order_spec,
             limit=node.limit
         )
+        
+        # Flatten element_indexes for PIVOT BY compilation
+        group_indexes = regular_indexes + rollup_indexes
+        
+        # Handle PIVOT BY if present
+        pivots = self._compile_pivot_by(node.pivot_by, c_targets, group_indexes)
+        if pivots:
+            from .query_compile import EvalPivot
+            return EvalPivot(union, pivots)
+        
+        return union
 
     def _compile_from(self, node):
         if node is None:

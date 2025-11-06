@@ -13,6 +13,7 @@ __license__ = "GNU GPLv2"
 import collections
 import dataclasses
 import datetime
+import functools
 import itertools
 import re
 import operator
@@ -66,6 +67,7 @@ class Sentinel:
 # Sentinel instances for various use cases
 SENTINEL_EARLIER = Sentinel(-1, "(earlier)")
 SENTINEL_LATER = Sentinel(1, "(later)")
+ROLLUP_TOTAL = Sentinel(2, "(Total)")
 
 from decimal import Decimal
 from typing import List
@@ -733,15 +735,15 @@ class EvalUnion:
             if columns is None:
                 columns = cols
             
-            # NULL out columns that are not in this grouping set
-            # Columns in full_group_indexes but not in grouping_set should be NULL
+            # Mark subtotal columns that are not in this grouping set
+            # Columns in full_group_indexes but not in grouping_set get ROLLUP_TOTAL sentinel
             grouping_set_indexes = set(grouping_set)
-            null_indexes = [idx for idx in full_group_indexes if idx not in grouping_set_indexes]
+            subtotal_indexes = [idx for idx in full_group_indexes if idx not in grouping_set_indexes]
             
-            # Replace values with None for non-grouped columns
-            if null_indexes:
+            # Replace values with ROLLUP_TOTAL for non-grouped columns (subtotal rows)
+            if subtotal_indexes:
                 rows = [
-                    tuple(None if i in null_indexes else val for i, val in enumerate(row))
+                    tuple(ROLLUP_TOTAL if i in subtotal_indexes else val for i, val in enumerate(row))
                     for row in rows
                 ]
             
@@ -751,10 +753,10 @@ class EvalUnion:
         if self.order_spec:
             # Sort in reverse order to leverage Python's stable sort
             for col_index, ordering in reversed(self.order_spec):
-                # NULL sorts last: (0, val) for non-NULL, (1, None) for NULL
-                # This is because NULL denotes the total row in ROLLUP
+                # ROLLUP_TOTAL sorts last (after all regular values)
+                # RollupTotal implements comparison operators to sort after everything
                 all_rows.sort(
-                    key=lambda row: (0, row[col_index]) if row[col_index] is not None else (1, None),
+                    key=lambda row: row[col_index],
                     reverse=bool(ordering)
                 )
         
