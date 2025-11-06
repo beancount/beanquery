@@ -96,11 +96,15 @@ class Compiler:
             return None
         raise NotImplementedError
 
-    @_compile.register
-    def _select(self, node: ast.Select):
-        self.stack.append(self.table)
-
-        # Compile the FROM clause.
+    def _compile_select_base(self, node: ast.Select):
+        """Compile common parts of SELECT: FROM, targets, WHERE, GROUP BY, ORDER BY.
+        
+        Args:
+          node: A Select AST node.
+        Returns:
+          Tuple of (c_targets, c_where, element_indexes, having_index, order_spec)
+        """
+        # Compile FROM clause
         c_from_expr = self._compile_from(node.from_clause)
 
         # Compile the targets.
@@ -108,10 +112,6 @@ class Compiler:
 
         # Bind the WHERE expression to the execution environment.
         c_where = self._compile(node.where_clause)
-
-        # Check that the FROM clause does not contain aggregates. This
-        # should never trigger if the compilation environment does not
-        # contain any aggregate.
         if c_where is not None and is_aggregate(c_where):
             raise CompilationError('aggregates are not allowed in WHERE clause')
 
@@ -119,13 +119,50 @@ class Compiler:
         if c_from_expr is not None:
             c_where = c_from_expr if c_where is None else EvalAnd([c_from_expr, c_where])
 
-        # Process the GROUP-BY clause.
-        new_targets, group_indexes, having_index = self._compile_group_by(node.group_by, c_targets)
+        # Process the GROUP BY clause.
+        new_targets, element_indexes, having_index = self._compile_group_by(node.group_by, c_targets)
         c_targets.extend(new_targets)
 
         # Process the ORDER-BY clause.
         new_targets, order_spec = self._compile_order_by(node.order_by, c_targets)
         c_targets.extend(new_targets)
+        
+        return c_targets, c_where, element_indexes, having_index, order_spec
+
+    @_compile.register
+    def _select(self, node: ast.Select):
+        self.stack.append(self.table)
+
+        # Handle ROLLUP queries separately
+        # Check if any grouping element has rollup=True
+        if node.group_by and node.group_by.elements:
+            has_rollup = any(
+                elem.get('rollup') for elem in node.group_by.elements
+            )
+            if has_rollup:
+                result = self._compile_rollup(node)
+                self.stack.pop()
+                return result
+        
+        # Compile common SELECT parts
+        c_targets, c_where, element_indexes, having_index, order_spec = self._compile_select_base(node)
+
+        # There is no ROLLUP clause there, therefore all elements follow the 
+        # format {'indexes': [x], 'rollup': None}
+        assert (
+            element_indexes is None
+            or all(e['rollup'] is None for e in element_indexes)
+        )
+        assert ( 
+            element_indexes is None
+            or all(len(e['indexes']) == 1 for e in element_indexes)
+        )
+
+        # Flatten element_indexes for regular GROUP BY
+        if element_indexes is not None:
+            group_indexes = [elem['indexes'][0] for elem in element_indexes]
+        else:
+            group_indexes = None
 
         # If this is an aggregate query (it groups, see list of indexes), check that
         # the set of non-aggregates match exactly the group indexes. This should
@@ -157,6 +194,65 @@ class Compiler:
 
         self.stack.pop()
         return query
+
+
+    def _compile_rollup(self, node: ast.Select):
+        """Compile a ROLLUP query as a union of grouping sets.
+        
+        Supports both full ROLLUP and mixed grouping:
+        - GROUP BY ROLLUP (a, b, c) → grouping sets: [(a,b,c), (a,b), (a), ()]
+        - GROUP BY x, ROLLUP (a, b) → grouping sets: [(x,a,b), (x,a), (x)]
+        
+        Args:
+          node: A Select AST node with at least one rollup element in group_by.
+        Returns:
+          An EvalUnion that executes multiple queries for each grouping set.
+        """
+        from .query_compile import EvalUnion
+        
+        # Compile common SELECT parts
+        c_targets, c_where, element_indexes, having_index, order_spec = self._compile_select_base(node)
+        
+        # Separate regular columns from ROLLUP columns using element structure
+        regular_indexes = []
+        rollup_indexes = []
+        
+        for elem in element_indexes:
+            if elem['rollup']:
+                # ROLLUP element
+                rollup_indexes.extend(elem['indexes'])
+            else:
+                # Regular element
+                regular_indexes.extend(elem['indexes'])
+        
+        # Generate hierarchical grouping sets for ROLLUP columns
+        # For ROLLUP (a, b, c), generate: [(a,b,c), (a,b), (a), ()]
+        rollup_sets = []
+        for i in range(len(rollup_indexes), -1, -1):
+            # Combine regular columns (always present) with rollup columns (hierarchical)
+            grouping_set = regular_indexes + rollup_indexes[:i]
+            rollup_sets.append(grouping_set)
+        
+        # Create a query for each grouping set
+        queries = [
+            EvalQuery(self.table,
+                      c_targets,
+                      c_where,
+                      grouping_set,
+                      having_index,
+                      None,
+                      None,
+                      node.distinct)
+            for grouping_set in rollup_sets
+        ]
+        
+        # Create union of all grouping set queries
+        return EvalUnion(
+            queries=queries,
+            rollup_sets=rollup_sets,
+            order_spec=order_spec,
+            limit=node.limit
+        )
 
     def _compile_from(self, node):
         if node is None:
@@ -364,20 +460,32 @@ class Compiler:
         Returns:
           A tuple of
            new_targets: A list of new compiled target nodes.
-           group_indexes: If the query is an aggregate query, a list of integer
-             indexes to be used for processing grouping. Note that this list may be
-             empty (in the case of targets with only aggregates). On the other hand,
-             if this is not an aggregated query, this is set to None. So do
-             distinguish the empty list vs. None.
+           element_indexes: A list of dicts, one per grouping element:
+             [{'indexes': [int, ...], 'rollup': bool}, ...]
+             Each dict represents one grouping element from the grammar.
+             
+             Examples:
+             - Non-aggregate query: None
+             - Aggregate without GROUP BY: []
+             - Regular GROUP BY account, year:
+               [{'indexes': [0], 'rollup': None}, {'indexes': [1], 'rollup': None}]
+             - Full ROLLUP: GROUP BY ROLLUP (account, year):
+               [{'indexes': [0, 1], 'rollup': True}]
+             - Mixed grouping: GROUP BY region, ROLLUP (year, month):
+               [{'indexes': [2], 'rollup': None}, {'indexes': [0, 1], 'rollup': True}]
+             - Implicit GROUP BY (when SUPPORT_IMPLICIT_GROUPBY=True):
+               [{'indexes': [0], 'rollup': None}, {'indexes': [2], 'rollup': None}]
+               
+           having_index: Index of HAVING expression in targets, or None.
         """
         new_targets = c_targets[:]
         c_target_expressions = [c_target.c_expr for c_target in c_targets]
 
-        group_indexes = []
+        element_indexes = []
         having_index = None
 
         if group_by:
-            assert group_by.columns, "Internal error with GROUP-BY parsing"
+            assert group_by.elements, "Internal error with GROUP-BY parsing"
 
             # Compile group-by expressions and resolve them to their targets if
             # possible. A GROUP-BY column may be one of the following:
@@ -389,7 +497,32 @@ class Compiler:
             # References by name are converted to indexes. New expressions are
             # inserted into the list of targets as invisible targets.
             targets_name_map = {target.name: index for index, target in enumerate(c_targets)}
-            for column in group_by.columns:
+            
+            # Initialize element structures
+            for elem in group_by.elements:
+                # Iterating over GROUP BY syntax elements, which are either a 
+                # simple grouping column/expression, or a ROLLUP (col1, ...) 
+                # element.
+                rollup_value = elem.get('rollup')
+                element_indexes.append({
+                    'indexes': [],
+                    'rollup': rollup_value if rollup_value else None
+                })
+            
+            # Collect all columns with their syntax element position
+            columns_by_element = []
+            for elem_idx, elem in enumerate(group_by.elements):
+                if elem.get('rollup'):
+                    columns = elem['columns']
+                else:
+                    columns = [elem['column']]
+                
+                for column in columns:
+                    columns_by_element.append((elem_idx, column))
+            
+            # Compile all columns and add the indexes to element_indexes,
+            # to return the same structure as in the parsed GROUP BY clause.
+            for elem_idx, column in columns_by_element:
                 index = None
 
                 # Process target references by index.
@@ -428,7 +561,6 @@ class Compiler:
                             c_target_expressions.append(c_expr)
 
                 assert index is not None, "Internal error, could not index group-by reference."
-                group_indexes.append(index)
 
                 # Check that the group-by column references a non-aggregate.
                 c_expr = new_targets[index].c_expr
@@ -438,6 +570,9 @@ class Compiler:
                 # Check that the group-by column has a supported hashable type.
                 if not issubclass(c_expr.dtype, collections.abc.Hashable):
                     raise CompilationError(f'GROUP-BY a non-hashable type is not supported: "{column}"')
+                
+                # Add compiled index to the corresponding element
+                element_indexes[elem_idx]['indexes'].append(index)
 
             # Compile HAVING clause.
             if group_by.having is not None:
@@ -455,25 +590,28 @@ class Compiler:
                 # If the query is an aggregate query, check that all the targets are
                 # aggregates.
                 if all(aggregate_bools):
-                    # FIXME: shold we really be checking for the empty
-                    # list or is checking for a false value enough?
-                    assert group_indexes == []
+                    # Empty element_indexes for aggregate query without GROUP BY
+                    element_indexes = []
                 elif SUPPORT_IMPLICIT_GROUPBY:
                     # If some of the targets aren't aggregates, automatically infer
                     # that they are to be implicit group by targets. This makes for
                     # a much more convenient syntax for our lightweight SQL, where
                     # grouping is optional.
-                    group_indexes = [
+                    implicit_indexes = [
                         index for index, c_target in enumerate(c_targets)
                         if not c_target.is_aggregate]
+                    # Wrap as individual elements
+                    element_indexes = [
+                        {'indexes': [idx], 'rollup': None} for idx in implicit_indexes
+                    ]
                 else:
                     raise CompilationError('aggregate query without a GROUP-BY should have only aggregates')
             else:
-                # This is not an aggregate query; don't set group_indexes to
+                # This is not an aggregate query; don't set element_indexes to
                 # anything useful, we won't need it.
-                group_indexes = None
+                element_indexes = None
 
-        return new_targets[len(c_targets):], group_indexes, having_index
+        return new_targets[len(c_targets):], element_indexes, having_index
 
     @_compile.register
     def _column(self, node: ast.Column):

@@ -148,9 +148,12 @@ class From(Node):
 # A GROUP BY clause.
 #
 # Attributes:
-#   columns: A list of group-by expressions, simple Column() or otherwise.
+#   elements: A list of grouping elements. Each element is a dict with:
+#     - 'column': A single column expression (for regular grouping), or
+#     - 'columns': A list of columns (for ROLLUP grouping)
+#     - 'rollup': True if this element is a ROLLUP, None otherwise
 #   having: An expression tree for the optional HAVING clause, or None.
-GroupBy = node('GroupBy', 'columns having')
+GroupBy = node('GroupBy', 'elements having')
 
 # An ORDER BY clause.
 #

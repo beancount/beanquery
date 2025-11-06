@@ -42,6 +42,7 @@ KEYWORDS: set[str] = {
     'OR',
     'ORDER',
     'PIVOT',
+    'ROLLUP',
     'SELECT',
     'TRUE',
     'WHERE',
@@ -344,24 +345,63 @@ class BQLParser(Parser):
             self._token(',')
 
         def block1():
-            with self._group():
-                with self._choice():
-                    with self._option():
-                        self._integer_()
-                    with self._option():
-                        self._expression_()
-                    self._error(
-                        'expecting one of: '
-                        '<expression> <integer>'
-                    )
+            self._grouping_element_()
         self._positive_gather(block1, sep0)
-        self.name_last_node('columns')
+        self.name_last_node('elements')
         with self._optional():
             self._token('HAVING')
             self._expression_()
             self.name_last_node('having')
             self._define(['having'], [])
-        self._define(['columns', 'having'], [])
+        self._define(['elements', 'having'], [])
+
+    @tatsumasu()
+    def _grouping_element_(self):
+        with self._choice():
+            with self._option():
+                self._token('ROLLUP')
+                self._token('(')
+
+                def sep0():
+                    self._token(',')
+
+                def block1():
+                    with self._group():
+                        with self._choice():
+                            with self._option():
+                                self._integer_()
+                            with self._option():
+                                self._expression_()
+                            self._error(
+                                'expecting one of: '
+                                '<expression> <integer>'
+                            )
+                self._positive_gather(block1, sep0)
+                self.name_last_node('columns')
+                self._token(')')
+                self._constant(True)
+                self.name_last_node('rollup')
+                self._define(['columns', 'rollup'], [])
+            with self._option():
+                with self._group():
+                    with self._choice():
+                        with self._option():
+                            self._integer_()
+                        with self._option():
+                            self._expression_()
+                        self._error(
+                            'expecting one of: '
+                            '<expression> <integer>'
+                        )
+                self.name_last_node('column')
+                self._constant('')
+                self.name_last_node('rollup')
+                self._define(['column', 'rollup'], [])
+            self._error(
+                'expecting one of: '
+                "'ROLLUP' <conjunction> <disjunction>"
+                '<expression> <integer> [0-9]+'
+            )
 
     @tatsumasu('OrderBy')
     def _order_(self):

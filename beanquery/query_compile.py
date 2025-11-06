@@ -638,6 +638,84 @@ class EvalQuery:
 
 
 @dataclasses.dataclass
+class EvalUnion:
+    """Implement UNION of multiple queries for ROLLUP.
+    
+    This class executes multiple GROUP BY queries with different grouping sets
+    and unions their results to implement SQL ROLLUP functionality.
+    
+    Execution steps:
+    1. Compute the union of all grouping sets to identify all group columns
+    2. Execute each query with its specific grouping set
+    3. For each result set, NULL out columns that are not in that grouping set
+       (this distinguishes subtotal rows from detail rows)
+    4. Union all result sets together
+    5. Apply ORDER BY to the combined results (with NULL sorting last)
+    6. Apply LIMIT if specified
+    
+    Example for GROUP BY region, ROLLUP (year, month):
+    - Query 1: GROUP BY region, year, month (detail rows)
+    - Query 2: GROUP BY region, year (year subtotals, month=NULL)
+    - Query 3: GROUP BY region (region subtotals, year=NULL, month=NULL)
+    """
+
+    queries: list[EvalQuery]
+    rollup_sets: list[list[int]]  # List of grouping sets, one per query
+    order_spec: list[tuple[int, ast.Ordering]]
+    limit: int
+
+    @property
+    def columns(self):
+        # All queries have the same columns
+        return self.queries[0].columns
+
+    def __call__(self):
+        # Execute all queries and union the results
+        all_rows = []
+        columns = None
+        
+        # Compute union of all grouping sets to find all group columns
+        # This is needed to determine which columns to NULL at each level
+        full_group_indexes = list(set(idx for grouping_set in self.rollup_sets for idx in grouping_set))
+        
+        for query, grouping_set in zip(self.queries, self.rollup_sets):
+            cols, rows = query()
+            if columns is None:
+                columns = cols
+            
+            # NULL out columns that are not in this grouping set
+            # Columns in full_group_indexes but not in grouping_set should be NULL
+            grouping_set_indexes = set(grouping_set)
+            null_indexes = [idx for idx in full_group_indexes if idx not in grouping_set_indexes]
+            
+            # Replace values with None for non-grouped columns
+            if null_indexes:
+                rows = [
+                    tuple(None if i in null_indexes else val for i, val in enumerate(row))
+                    for row in rows
+                ]
+            
+            all_rows.extend(rows)
+        
+        # Apply ORDER BY if specified
+        if self.order_spec:
+            # Sort in reverse order to leverage Python's stable sort
+            for col_index, ordering in reversed(self.order_spec):
+                # NULL sorts last: (0, val) for non-NULL, (1, None) for NULL
+                # This is because NULL denotes the total row in ROLLUP
+                all_rows.sort(
+                    key=lambda row: (0, row[col_index]) if row[col_index] is not None else (1, None),
+                    reverse=bool(ordering)
+                )
+        
+        # Apply LIMIT if specified
+        if self.limit is not None:
+            all_rows = all_rows[:self.limit]
+        
+        return columns, all_rows
+
+
+@dataclasses.dataclass
 class EvalPivot:
     """Implement PIVOT BY clause."""
 
