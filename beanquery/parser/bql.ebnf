@@ -59,21 +59,32 @@ table::Table
 # A GROUP BY clause supports multiple syntaxes:
 # 1. Regular GROUP BY: GROUP BY col1, col2 [HAVING condition]
 # 2. Full ROLLUP: GROUP BY ROLLUP (col1, col2) [HAVING condition]
-# 3. Mixed grouping: GROUP BY col1, ROLLUP (col2, col3) [HAVING condition]
+# 3. Full CUBE: GROUP BY CUBE (col1, col2) [HAVING condition]
+# 4. GROUPING SETS: GROUP BY GROUPING SETS ((col1, col2), (col1), ()) [HAVING condition]
+# 5. Mixed grouping: GROUP BY col1, ROLLUP (col2, col3) [HAVING condition]
 #
 # Examples:
 # - GROUP BY account, year
 # - GROUP BY account, year HAVING SUM(position) > 100
 # - GROUP BY ROLLUP (account, year)
 # - GROUP BY ROLLUP (account, year) HAVING SUM(position) > 100
+# - GROUP BY CUBE (account, year)
+# - GROUP BY GROUPING SETS ((account, year), (account), ())
 # - GROUP BY region, ROLLUP (year, month)
+# - GROUP BY region, CUBE (year, month)
 groupby::GroupBy
     = elements:','.{ grouping_element }+ ['HAVING' having:expression]
     ;
 
 grouping_element
-    = 'ROLLUP' '(' columns:','.{ (integer | expression) }+ ')' rollup:`True`
-    | column:(integer | expression) rollup:``
+    = 'ROLLUP' '(' columns:','.{ (integer | expression) }+ ')' rollup:`True` cube:`` sets:``
+    | 'CUBE' '(' columns:','.{ (integer | expression) }+ ')' rollup:`` cube:`True` sets:``
+    | 'GROUPING' 'SETS' '(' grouping_sets:','.{ grouping_set }+ ')' rollup:`` cube:`` sets:`True`
+    | column:(integer | expression) rollup:`` cube:`` sets:``
+    ;
+
+grouping_set
+    = '(' columns:','.{ (integer | expression) }* ')'
     ;
 
 order::OrderBy

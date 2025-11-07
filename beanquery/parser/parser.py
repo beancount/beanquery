@@ -381,7 +381,59 @@ class BQLParser(Parser):
                 self._token(')')
                 self._constant(True)
                 self.name_last_node('rollup')
-                self._define(['columns', 'rollup'], [])
+                self._constant('')
+                self.name_last_node('cube')
+                self._constant('')
+                self.name_last_node('sets')
+                self._define(['columns', 'cube', 'rollup', 'sets'], [])
+            with self._option():
+                self._token('CUBE')
+                self._token('(')
+
+                def sep2():
+                    self._token(',')
+
+                def block3():
+                    with self._group():
+                        with self._choice():
+                            with self._option():
+                                self._integer_()
+                            with self._option():
+                                self._expression_()
+                            self._error(
+                                'expecting one of: '
+                                '<expression> <integer>'
+                            )
+                self._positive_gather(block3, sep2)
+                self.name_last_node('columns')
+                self._token(')')
+                self._constant('')
+                self.name_last_node('rollup')
+                self._constant(True)
+                self.name_last_node('cube')
+                self._constant('')
+                self.name_last_node('sets')
+                self._define(['columns', 'cube', 'rollup', 'sets'], [])
+            with self._option():
+                self._token('GROUPING')
+                self._token('SETS')
+                self._token('(')
+
+                def sep4():
+                    self._token(',')
+
+                def block5():
+                    self._grouping_set_()
+                self._positive_gather(block5, sep4)
+                self.name_last_node('grouping_sets')
+                self._token(')')
+                self._constant('')
+                self.name_last_node('rollup')
+                self._constant('')
+                self.name_last_node('cube')
+                self._constant(True)
+                self.name_last_node('sets')
+                self._define(['cube', 'grouping_sets', 'rollup', 'sets'], [])
             with self._option():
                 with self._group():
                     with self._choice():
@@ -396,12 +448,40 @@ class BQLParser(Parser):
                 self.name_last_node('column')
                 self._constant('')
                 self.name_last_node('rollup')
-                self._define(['column', 'rollup'], [])
+                self._constant('')
+                self.name_last_node('cube')
+                self._constant('')
+                self.name_last_node('sets')
+                self._define(['column', 'cube', 'rollup', 'sets'], [])
             self._error(
                 'expecting one of: '
-                "'ROLLUP' <conjunction> <disjunction>"
-                '<expression> <integer> [0-9]+'
+                "'CUBE' 'GROUPING' 'ROLLUP' <conjunction>"
+                '<disjunction> <expression> <integer>'
+                '[0-9]+'
             )
+
+    @tatsumasu()
+    def _grouping_set_(self):
+        self._token('(')
+
+        def sep0():
+            self._token(',')
+
+        def block1():
+            with self._group():
+                with self._choice():
+                    with self._option():
+                        self._integer_()
+                    with self._option():
+                        self._expression_()
+                    self._error(
+                        'expecting one of: '
+                        '<expression> <integer>'
+                    )
+        self._gather(block1, sep0)
+        self.name_last_node('columns')
+        self._token(')')
+        self._define(['columns'], [])
 
     @tatsumasu('OrderBy')
     def _order_(self):

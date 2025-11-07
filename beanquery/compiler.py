@@ -1,5 +1,6 @@
 import collections.abc
 import importlib
+import itertools
 import typing
 
 from decimal import Decimal
@@ -28,6 +29,7 @@ from .query_compile import (
     EvalOr,
     EvalPivot,
     EvalQuery,
+    EvalUnion,
     EvalConstantSubquery1D,
     EvalRow,
     EvalTarget,
@@ -133,29 +135,39 @@ class Compiler:
     def _select(self, node: ast.Select):
         self.stack.append(self.table)
 
-        # Handle ROLLUP queries separately
-        # Check if any grouping element has rollup=True
+        # Handle ROLLUP/CUBE/GROUPING SETS queries separately
+        # Check if any grouping element has rollup=True, cube=True, or sets=True
         if node.group_by and node.group_by.elements:
             has_rollup = any(
                 elem.get('rollup') for elem in node.group_by.elements
             )
+            has_cube = any(
+                elem.get('cube') for elem in node.group_by.elements
+            )
+            has_sets = any(
+                elem.get('sets') for elem in node.group_by.elements
+            )
             if has_rollup:
-                result = self._compile_rollup(node)
+                result = self._compile_grouping_sets(node, 'rollup')
+                self.stack.pop()
+                return result
+            if has_cube:
+                result = self._compile_grouping_sets(node, 'cube')
+                self.stack.pop()
+                return result
+            if has_sets:
+                result = self._compile_grouping_sets(node, 'sets')
                 self.stack.pop()
                 return result
         
         # Compile common SELECT parts
         c_targets, c_where, element_indexes, having_index, order_spec = self._compile_select_base(node)
 
-        # There is no ROLLUP clause there, therefore all elements follow the 
-        # format {'indexes': [x], 'rollup': None}
+        # There is no ROLLUP/CUBE clause, therefore all elements follow the 
+        # format {'indexes': [x], 'modifier': None}
         assert (
             element_indexes is None
-            or all(e['rollup'] is None for e in element_indexes)
-        )
-        assert ( 
-            element_indexes is None
-            or all(len(e['indexes']) == 1 for e in element_indexes)
+            or all(e['modifier'] is None for e in element_indexes)
         )
 
         # Flatten element_indexes for regular GROUP BY
@@ -196,42 +208,73 @@ class Compiler:
         return query
 
 
-    def _compile_rollup(self, node: ast.Select):
-        """Compile a ROLLUP query as a union of grouping sets.
+    def _compile_grouping_sets(self, node: ast.Select, grouping_type):
+        """Compile ROLLUP/CUBE/GROUPING SETS query as a union of grouping sets.
         
-        Supports both full ROLLUP and mixed grouping:
-        - GROUP BY ROLLUP (a, b, c) → grouping sets: [(a,b,c), (a,b), (a), ()]
-        - GROUP BY x, ROLLUP (a, b) → grouping sets: [(x,a,b), (x,a), (x)]
+        Supports full and mixed grouping:
+        - ROLLUP: GROUP BY ROLLUP (a, b, c) → grouping sets: [(a,b,c), (a,b), (a), ()]
+        - ROLLUP: GROUP BY x, ROLLUP (a, b) → grouping sets: [(x,a,b), (x,a), (x)]
+        - CUBE: GROUP BY CUBE (a, b) → grouping sets: [(a,b), (a), (b), ()]
+        - CUBE: GROUP BY x, CUBE (a, b) → grouping sets: [(x,a,b), (x,a), (x,b), (x)]
+        - SETS: GROUP BY GROUPING SETS ((a, b), (a), ()) → grouping sets: [(a,b), (a), ()]
+        
+        ROLLUP generates hierarchical grouping sets (prefixes).
+        CUBE generates all possible combinations (power set) of the columns.
+        SETS uses explicitly specified grouping sets.
         
         Args:
-          node: A Select AST node with at least one rollup element in group_by.
+          node: A Select AST node with at least one rollup/cube/sets element in group_by.
+          grouping_type: Either 'rollup', 'cube', or 'sets'.
         Returns:
           An EvalUnion that executes multiple queries for each grouping set.
         """
-        from .query_compile import EvalUnion
+        from .query_compile import EvalUnion, EvalPivot
+        import itertools
         
         # Compile common SELECT parts
         c_targets, c_where, element_indexes, having_index, order_spec = self._compile_select_base(node)
         
-        # Separate regular columns from ROLLUP columns using element structure
+        # Separate regular columns from ROLLUP/CUBE/SETS columns using element 
+        # structure. Columns are represented by their numerical indexes as 
+        # determined by _compile_select_base().
         regular_indexes = []
-        rollup_indexes = []
+        rollup_indexes = []  # Will be a flat list for ROLLUP/CUBE, list of lists for SETS
         
         for elem in element_indexes:
-            if elem['rollup']:
-                # ROLLUP element
-                rollup_indexes.extend(elem['indexes'])
+            if elem['modifier'] == grouping_type:
+                # For GROUPING SETS, 'indexes' is a list of lists
+                # For ROLLUP/CUBE, 'indexes' is a flat list
+                rollup_indexes = elem['indexes']
             else:
                 # Regular element
                 regular_indexes.extend(elem['indexes'])
         
-        # Generate hierarchical grouping sets for ROLLUP columns
-        # For ROLLUP (a, b, c), generate: [(a,b,c), (a,b), (a), ()]
-        rollup_sets = []
-        for i in range(len(rollup_indexes), -1, -1):
-            # Combine regular columns (always present) with rollup columns (hierarchical)
-            grouping_set = regular_indexes + rollup_indexes[:i]
-            rollup_sets.append(grouping_set)
+        # Generate grouping sets based on type
+        if grouping_type == 'rollup':
+            # Hierarchical: [(a,b,c), (a,b), (a), ()]
+            grouping_sets = []
+            for i in range(len(rollup_indexes), -1, -1):
+                # Combine regular columns (always present) with special columns (hierarchical)
+                grouping_set = regular_indexes + rollup_indexes[:i]
+                grouping_sets.append(grouping_set)
+        elif grouping_type == 'cube':
+            # All combinations: power set
+            # For CUBE (a, b, c), generate all 2^3 = 8 combinations:
+            # [(a,b,c), (a,b), (a,c), (a), (b,c), (b), (c), ()]
+            grouping_sets = []
+            for r in range(len(rollup_indexes), -1, -1):
+                for combo in itertools.combinations(rollup_indexes, r):
+                    # Combine regular columns (always present) with special column combination
+                    grouping_set = regular_indexes + list(combo)
+                    grouping_sets.append(grouping_set)
+        else:  # sets
+            # Explicit grouping sets specified by user
+            # rollup_indexes is already a list of lists
+            grouping_sets = []
+            for set_indexes in rollup_indexes:
+                # Combine regular columns with this grouping set
+                grouping_set = regular_indexes + set_indexes
+                grouping_sets.append(grouping_set)
         
         # Create a query for each grouping set
         queries = [
@@ -243,24 +286,29 @@ class Compiler:
                       None,
                       None,
                       node.distinct)
-            for grouping_set in rollup_sets
+            for grouping_set in grouping_sets
         ]
         
         # Create union of all grouping set queries
         union = EvalUnion(
             queries=queries,
-            rollup_sets=rollup_sets,
+            rollup_sets=grouping_sets,
             order_spec=order_spec,
             limit=node.limit
         )
         
         # Flatten element_indexes for PIVOT BY compilation
-        group_indexes = regular_indexes + rollup_indexes
+        # For GROUPING SETS, rollup_indexes is a list of lists, so flatten it
+        if grouping_type == 'sets':
+            # Flatten the list of lists and get unique indexes
+            flat_indexes = list(set(idx for set_indexes in rollup_indexes for idx in set_indexes))
+            group_indexes = regular_indexes + flat_indexes
+        else:
+            group_indexes = regular_indexes + rollup_indexes
         
         # Handle PIVOT BY if present
         pivots = self._compile_pivot_by(node.pivot_by, c_targets, group_indexes)
         if pivots:
-            from .query_compile import EvalPivot
             return EvalPivot(union, pivots)
         
         return union
@@ -472,20 +520,25 @@ class Compiler:
           A tuple of
            new_targets: A list of new compiled target nodes.
            element_indexes: A list of dicts, one per grouping element:
-             [{'indexes': [int, ...], 'rollup': bool}, ...]
+             [{'indexes': [int, ...], 'modifier': str or None}, ...]
              Each dict represents one grouping element from the grammar.
+             'modifier' can be None, 'rollup', 'cube', or 'sets'.
              
              Examples:
              - Non-aggregate query: None
              - Aggregate without GROUP BY: []
              - Regular GROUP BY account, year:
-               [{'indexes': [0], 'rollup': None}, {'indexes': [1], 'rollup': None}]
+               [{'indexes': [0], 'modifier': None}, {'indexes': [1], 'modifier': None}]
              - Full ROLLUP: GROUP BY ROLLUP (account, year):
-               [{'indexes': [0, 1], 'rollup': True}]
+               [{'indexes': [0, 1], 'modifier': 'rollup', 'grouping_sets': None}]
+             - Full CUBE: GROUP BY CUBE (account, year):
+               [{'indexes': [0, 1], 'modifier': 'cube', 'grouping_sets': None}]
+             - GROUPING SETS: GROUP BY GROUPING SETS ((account, year), (account), ()):
+               [{'indexes': [[0, 1], [0], []], 'modifier': 'sets', 'grouping_sets': [...]}]
              - Mixed grouping: GROUP BY region, ROLLUP (year, month):
-               [{'indexes': [2], 'rollup': None}, {'indexes': [0, 1], 'rollup': True}]
+               [{'indexes': [2], 'modifier': None, 'grouping_sets': None}, {'indexes': [0, 1], 'modifier': 'rollup', 'grouping_sets': None}]
              - Implicit GROUP BY (when SUPPORT_IMPLICIT_GROUPBY=True):
-               [{'indexes': [0], 'rollup': None}, {'indexes': [2], 'rollup': None}]
+               [{'indexes': [0], 'modifier': None, 'grouping_sets': None}, {'indexes': [2], 'modifier': None, 'grouping_sets': None}]
                
            having_index: Index of HAVING expression in targets, or None.
         """
@@ -512,28 +565,51 @@ class Compiler:
             # Initialize element structures
             for elem in group_by.elements:
                 # Iterating over GROUP BY syntax elements, which are either a 
-                # simple grouping column/expression, or a ROLLUP (col1, ...) 
-                # element.
-                rollup_value = elem.get('rollup')
-                element_indexes.append({
-                    'indexes': [],
-                    'rollup': rollup_value if rollup_value else None
-                })
+                # simple grouping column/expression, a ROLLUP (col1, ...) 
+                # element, a CUBE (col1, ...) element, or a GROUPING SETS element.
+                if elem.get('rollup'):
+                    modifier = 'rollup'
+                elif elem.get('cube'):
+                    modifier = 'cube'
+                elif elem.get('sets'):
+                    modifier = 'sets'
+                else:
+                    modifier = None
+                
+                # For GROUPING SETS, 'indexes' will be a list of lists
+                # For other modifiers, 'indexes' is a flat list
+                if modifier == 'sets':
+                    element_indexes.append({
+                        'indexes': [[] for _ in elem['grouping_sets']],
+                        'modifier': modifier,
+                        'grouping_sets': elem.get('grouping_sets')
+                    })
+                else:
+                    element_indexes.append({
+                        'indexes': [],
+                        'modifier': modifier,
+                        'grouping_sets': None
+                    })
             
             # Collect all columns with their syntax element position
+            # For GROUPING SETS, also track which set within the element
             columns_by_element = []
             for elem_idx, elem in enumerate(group_by.elements):
-                if elem.get('rollup'):
+                if elem.get('rollup') or elem.get('cube'):
                     columns = elem['columns']
+                    for column in columns:
+                        columns_by_element.append((elem_idx, None, column))
+                elif elem.get('sets'):
+                    # For GROUPING SETS, track which set each column belongs to
+                    for set_idx, grouping_set in enumerate(elem['grouping_sets']):
+                        for column in grouping_set['columns']:
+                            columns_by_element.append((elem_idx, set_idx, column))
                 else:
-                    columns = [elem['column']]
-                
-                for column in columns:
-                    columns_by_element.append((elem_idx, column))
+                    columns_by_element.append((elem_idx, None, elem['column']))
             
             # Compile all columns and add the indexes to element_indexes,
             # to return the same structure as in the parsed GROUP BY clause.
-            for elem_idx, column in columns_by_element:
+            for elem_idx, set_idx, column in columns_by_element:
                 index = None
 
                 # Process target references by index.
@@ -583,7 +659,12 @@ class Compiler:
                     raise CompilationError(f'GROUP-BY a non-hashable type is not supported: "{column}"')
                 
                 # Add compiled index to the corresponding element
-                element_indexes[elem_idx]['indexes'].append(index)
+                # For GROUPING SETS, append to the specific set's list
+                # For other modifiers, append to the flat list
+                if set_idx is not None:
+                    element_indexes[elem_idx]['indexes'][set_idx].append(index)
+                else:
+                    element_indexes[elem_idx]['indexes'].append(index)
 
             # Compile HAVING clause.
             if group_by.having is not None:
@@ -613,7 +694,7 @@ class Compiler:
                         if not c_target.is_aggregate]
                     # Wrap as individual elements
                     element_indexes = [
-                        {'indexes': [idx], 'rollup': None} for idx in implicit_indexes
+                        {'indexes': [idx], 'modifier': None} for idx in implicit_indexes
                     ]
                 else:
                     raise CompilationError('aggregate query without a GROUP-BY should have only aggregates')
