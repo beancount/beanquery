@@ -525,15 +525,14 @@ class Compiler:
 
         left = self._compile(node.left)
 
-        # lookup operator implementaton and check typing
+        # Lookup operator implementation and check typing.
         op = self._OPERATORS[node.op]
-        for func in OPERATORS[op]:
-            if func.__intypes__ == [right_element_dtype, left.dtype]:
-                break
-        else:
+        func = types.operator_lookup(OPERATORS[op], [right_element_dtype, left.dtype])
+        
+        if func is None:
             raise CompilationError(
                 f'operator "{op.__name__.lower()}('
-                f'{left.dtype.__name__}, {right_element_dtype.__name__})" not supported', node)
+                f'{types.name(left.dtype)}, {types.name(right_element_dtype)})" not supported', node)
 
         # need to instantiate the operaotr implementation to get to the underlying function
         operator = func(None, None).operator
