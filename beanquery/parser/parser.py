@@ -575,7 +575,7 @@ class BQLParser(Parser):
                 self._sum_()
             self._error(
                 'expecting one of: '
-                '<add> <all> <any> <between> <eq> <gt>'
+                "'all' 'any' <add> <between> <eq> <gt>"
                 '<gte> <in> <isnotnull> <isnull> <lt>'
                 '<lte> <match> <matches> <neq> <notin>'
                 '<notmatch> <sub> <sum> <term>'
@@ -584,29 +584,71 @@ class BQLParser(Parser):
     @tatsumasu('Any')
     @nomemo
     def _any_(self):
-        self._sum_()
-        self.name_last_node('left')
-        self._op_()
-        self.name_last_node('op')
-        self._token('any')
-        self._token('(')
-        self._expression_()
-        self.name_last_node('right')
-        self._token(')')
-        self._define(['left', 'op', 'right'], [])
+        with self._choice():
+            with self._option():
+                self._sum_()
+                self.name_last_node('left')
+                self._op_()
+                self.name_last_node('op')
+                self._token('any')
+                self._token('(')
+                self._expression_()
+                self.name_last_node('right')
+                self._token(')')
+                self._constant('rhs')
+                self.name_last_node('side')
+                self._define(['left', 'op', 'right', 'side'], [])
+            with self._option():
+                self._token('any')
+                self._token('(')
+                self._expression_()
+                self.name_last_node('left')
+                self._token(')')
+                self._op_()
+                self.name_last_node('op')
+                self._sum_()
+                self.name_last_node('right')
+                self._constant('lhs')
+                self.name_last_node('side')
+                self._define(['left', 'op', 'right', 'side'], [])
+            self._error(
+                'expecting one of: '
+                "'any' <add> <sub> <sum> <term>"
+            )
 
     @tatsumasu('All')
     def _all_(self):
-        self._sum_()
-        self.name_last_node('left')
-        self._op_()
-        self.name_last_node('op')
-        self._token('all')
-        self._token('(')
-        self._expression_()
-        self.name_last_node('right')
-        self._token(')')
-        self._define(['left', 'op', 'right'], [])
+        with self._choice():
+            with self._option():
+                self._sum_()
+                self.name_last_node('left')
+                self._op_()
+                self.name_last_node('op')
+                self._token('all')
+                self._token('(')
+                self._expression_()
+                self.name_last_node('right')
+                self._token(')')
+                self._constant('rhs')
+                self.name_last_node('side')
+                self._define(['left', 'op', 'right', 'side'], [])
+            with self._option():
+                self._token('all')
+                self._token('(')
+                self._expression_()
+                self.name_last_node('left')
+                self._token(')')
+                self._op_()
+                self.name_last_node('op')
+                self._sum_()
+                self.name_last_node('right')
+                self._constant('lhs')
+                self.name_last_node('side')
+                self._define(['left', 'op', 'right', 'side'], [])
+            self._error(
+                'expecting one of: '
+                "'all' <add> <sub> <sum> <term>"
+            )
 
     @tatsumasu()
     def _op_(self):

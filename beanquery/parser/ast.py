@@ -314,8 +314,8 @@ class Sub(BinaryOp):
     __slots__ = ()
 
 
-Any = node('Any', 'left op right')
-All = node('All', 'left op right')
+Any = node('Any', 'left op right side')
+All = node('All', 'left op right side')
 
 
 CreateTable = node('CreateTable', 'name columns using query')
