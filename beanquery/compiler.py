@@ -98,15 +98,11 @@ class Compiler:
             return None
         raise NotImplementedError
 
-    def _compile_select_base(self, node: ast.Select):
-        """Compile common parts of SELECT: FROM, targets, WHERE, GROUP BY, ORDER BY.
+    @_compile.register
+    def _select(self, node: ast.Select):
+        self.stack.append(self.table)
         
-        Args:
-          node: A Select AST node.
-        Returns:
-          Tuple of (c_targets, c_where, element_indexes, having_index, order_spec)
-        """
-        # Compile FROM clause
+        # Compile the FROM clause
         c_from_expr = self._compile_from(node.from_clause)
 
         # Compile the targets.
@@ -114,6 +110,10 @@ class Compiler:
 
         # Bind the WHERE expression to the execution environment.
         c_where = self._compile(node.where_clause)
+
+        # Check that the FROM clause does not contain aggregates. This
+        # should never trigger if the compilation environment does not
+        # contain any aggregate.
         if c_where is not None and is_aggregate(c_where):
             raise CompilationError('aggregates are not allowed in WHERE clause')
 
@@ -129,50 +129,32 @@ class Compiler:
         new_targets, order_spec = self._compile_order_by(node.order_by, c_targets)
         c_targets.extend(new_targets)
         
-        return c_targets, c_where, element_indexes, having_index, order_spec
-
-    @_compile.register
-    def _select(self, node: ast.Select):
-        self.stack.append(self.table)
-
-        # Handle ROLLUP/CUBE/GROUPING SETS queries separately
-        # Check if any grouping element has rollup=True, cube=True, or sets=True
         if node.group_by and node.group_by.elements:
-            has_rollup = any(
-                elem.get('rollup') for elem in node.group_by.elements
-            )
-            has_cube = any(
-                elem.get('cube') for elem in node.group_by.elements
-            )
-            has_sets = any(
-                elem.get('sets') for elem in node.group_by.elements
-            )
-            if has_rollup:
-                result = self._compile_grouping_sets(node, 'rollup')
-                self.stack.pop()
-                return result
-            if has_cube:
-                result = self._compile_grouping_sets(node, 'cube')
-                self.stack.pop()
-                return result
-            if has_sets:
-                result = self._compile_grouping_sets(node, 'sets')
-                self.stack.pop()
-                return result
+            if any(elem.get('rollup') or elem.get('cube') or elem.get('sets')
+                    for elem in node.group_by.elements):
+                is_grouping = "complex"
+            else:
+                is_grouping = "simple"
+        else:
+            is_grouping = "none"
         
-        # Compile common SELECT parts
-        c_targets, c_where, element_indexes, having_index, order_spec = self._compile_select_base(node)
+        if is_grouping in ['none', 'simple'] and element_indexes is not None:
+            # Element indexes might be != None if we are grouping implicitly
+            # (only aggregate functions or explicitly)
+            # 
+            # For simple grouping, there is no ROLLUP/CUBE clause, therefore all 
+            # elements follow the format {'indexes': [x], 'modifier': None}
+            assert all(e['modifier'] is None for e in element_indexes)
 
-        # There is no ROLLUP/CUBE clause, therefore all elements follow the 
-        # format {'indexes': [x], 'modifier': None}
-        assert (
-            element_indexes is None
-            or all(e['modifier'] is None for e in element_indexes)
-        )
+            # Ensure all elements in element_indexes[x]['indexes'] are of type int.
+            assert all(isinstance(idx, int) 
+                       for elem in element_indexes for idx in elem['indexes'])
 
         # Flatten element_indexes for regular GROUP BY
         if element_indexes is not None:
-            group_indexes = [elem['indexes'][0] for elem in element_indexes]
+            group_indexes = set()
+            for elem in element_indexes:
+                group_indexes.update(elem['indexes'])
         else:
             group_indexes = None
 
@@ -181,7 +163,7 @@ class Compiler:
         # always be the case at this point, because we have added all the necessary
         # targets to the list of group-by expressions and should have resolved all
         # the indexes.
-        if group_indexes is not None:
+        if is_grouping != 'none':
             non_aggregate_indexes = {index for index, c_target in enumerate(c_targets)
                                      if not c_target.is_aggregate}
             if non_aggregate_indexes != set(group_indexes):
@@ -191,15 +173,26 @@ class Compiler:
                     'all non-aggregates must be covered by GROUP-BY clause in aggregate query: '
                     'the following targets are missing: {}'.format(','.join(missing_names)))
 
-        query = EvalQuery(self.table,
-                          c_targets,
-                          c_where,
-                          group_indexes,
-                          having_index,
-                          order_spec,
-                          node.limit,
-                          node.distinct)
 
+        # Handle ROLLUP/CUBE/GROUPING SETS queries separately:
+        # Check if any grouping element has such a modifier.
+        if is_grouping == "complex":
+            
+            # Obtain the UnionEval node and the flattened list of group indexes
+            query, group_indexes = self._compile_grouping_sets(node, c_targets, c_where, element_indexes, having_index, order_spec)
+            
+        else:  # grouping in ['none', 'simple' ]
+
+            
+            query = EvalQuery(self.table,
+                            c_targets,
+                            c_where,
+                            group_indexes,
+                            having_index,
+                            order_spec,
+                            node.limit,
+                            node.distinct)
+            
         pivots = self._compile_pivot_by(node.pivot_by, c_targets, group_indexes)
         if pivots:
             return EvalPivot(query, pivots)
@@ -208,75 +201,59 @@ class Compiler:
         return query
 
 
-    def _compile_grouping_sets(self, node: ast.Select, grouping_type):
-        """Compile ROLLUP/CUBE/GROUPING SETS query as a union of grouping sets.
-        
-        Supports full and mixed grouping:
+    def _compile_grouping_sets(self, node: ast.Select, c_targets, c_where, element_indexes, having_index, order_spec):
+        """Compile a query with complex grouping (ROLLUP, CUBE, SETS) as a union.
+                Supports full and mixed grouping:
         - ROLLUP: GROUP BY ROLLUP (a, b, c) → grouping sets: [(a,b,c), (a,b), (a), ()]
         - ROLLUP: GROUP BY x, ROLLUP (a, b) → grouping sets: [(x,a,b), (x,a), (x)]
         - CUBE: GROUP BY CUBE (a, b) → grouping sets: [(a,b), (a), (b), ()]
         - CUBE: GROUP BY x, CUBE (a, b) → grouping sets: [(x,a,b), (x,a), (x,b), (x)]
         - SETS: GROUP BY GROUPING SETS ((a, b), (a), ()) → grouping sets: [(a,b), (a), ()]
-        
-        ROLLUP generates hierarchical grouping sets (prefixes).
-        CUBE generates all possible combinations (power set) of the columns.
-        SETS uses explicitly specified grouping sets.
-        
+
+        This function handles standard-compliant mixed grouping by:
+        1. Separating simple grouping columns from complex ones (ROLLUP, etc.).
+        2. Generating grouping sets for each complex element.
+        3. Combining the sets from complex elements using a cartesian product.
+        4. Prepending the simple grouping columns to each resulting set.
+
         Args:
-          node: A Select AST node with at least one rollup/cube/sets element in group_by.
-          grouping_type: Either 'rollup', 'cube', or 'sets'.
+          node: A Select AST node with one or more complex grouping elements.
+
         Returns:
-          An EvalUnion that executes multiple queries for each grouping set.
+          A tuple of (EvalUnion, list of group indexes). The EvalUnion node 
+          executes a query for each final grouping set. The list of group 
+          indexes has the indexes of the unique columns used in the GROUP BY 
+          clause.
         """
-        from .query_compile import EvalUnion, EvalPivot
-        import itertools
-        
-        # Compile common SELECT parts
-        c_targets, c_where, element_indexes, having_index, order_spec = self._compile_select_base(node)
-        
-        # Separate regular columns from ROLLUP/CUBE/SETS columns using element 
-        # structure. Columns are represented by their numerical indexes as 
-        # determined by _compile_select_base().
-        regular_indexes = []
-        rollup_indexes = []  # Will be a flat list for ROLLUP/CUBE, list of lists for SETS
-        
+        # Separate simple and complex grouping elements
+        # Why: Simple columns are treated as a prefix for all grouping sets, 
+        # while complex elements (ROLLUP, CUBE, SETS) generate multiple sets 
+        # that need to be combined.
+        simple_indexes = []
+        complex_elements = []
         for elem in element_indexes:
-            if elem['modifier'] == grouping_type:
-                # For GROUPING SETS, 'indexes' is a list of lists
-                # For ROLLUP/CUBE, 'indexes' is a flat list
-                rollup_indexes = elem['indexes']
+            if elem['modifier'] is None:
+                simple_indexes.extend(elem['indexes'])
             else:
-                # Regular element
-                regular_indexes.extend(elem['indexes'])
-        
-        # Generate grouping sets based on type
-        if grouping_type == 'rollup':
-            # Hierarchical: [(a,b,c), (a,b), (a), ()]
-            grouping_sets = []
-            for i in range(len(rollup_indexes), -1, -1):
-                # Combine regular columns (always present) with special columns (hierarchical)
-                grouping_set = regular_indexes + rollup_indexes[:i]
-                grouping_sets.append(grouping_set)
-        elif grouping_type == 'cube':
-            # All combinations: power set
-            # For CUBE (a, b, c), generate all 2^3 = 8 combinations:
-            # [(a,b,c), (a,b), (a,c), (a), (b,c), (b), (c), ()]
-            grouping_sets = []
-            for r in range(len(rollup_indexes), -1, -1):
-                for combo in itertools.combinations(rollup_indexes, r):
-                    # Combine regular columns (always present) with special column combination
-                    grouping_set = regular_indexes + list(combo)
-                    grouping_sets.append(grouping_set)
-        else:  # sets
-            # Explicit grouping sets specified by user
-            # rollup_indexes is already a list of lists
-            grouping_sets = []
-            for set_indexes in rollup_indexes:
-                # Combine regular columns with this grouping set
-                grouping_set = regular_indexes + set_indexes
-                grouping_sets.append(grouping_set)
-        
-        # Create a query for each grouping set
+                complex_elements.append(elem)
+
+        # Generate and combine grouping sets from complex elements
+        # Why: We iterate through the complex elements, generate the grouping 
+        # sets for each, and combine them using a cartesian product to handle 
+        # mixed grouping constructs like `GROUP BY ROLLUP(...), CUBE(...)`.
+        combined_sets = [[]] # Start with an empty set for the initial product
+        for elem in complex_elements:
+            element_sets = _get_grouping_sets_for_element(elem)
+            combined_sets = _combine_grouping_sets(combined_sets, element_sets)
+
+        # Prepend simple columns to all generated sets
+        # Why: The simple GROUP BY columns must be included in every grouping 
+        # set generated by the complex elements.
+        final_grouping_sets = [simple_indexes + s for s in combined_sets]
+
+        # Create a query for each final grouping set
+        # Why: The result of a complex grouping query is the UNION of the 
+        # results of running a separate query for each individual grouping set.
         queries = [
             EvalQuery(self.table,
                       c_targets,
@@ -286,32 +263,22 @@ class Compiler:
                       None,
                       None,
                       node.distinct)
-            for grouping_set in grouping_sets
+            for grouping_set in final_grouping_sets
         ]
-        
-        # Create union of all grouping set queries
+
+        # Wrap the individual queries in a UNION operator.
         union = EvalUnion(
             queries=queries,
-            rollup_sets=grouping_sets,
+            rollup_sets=final_grouping_sets,
             order_spec=order_spec,
             limit=node.limit
         )
-        
-        # Flatten element_indexes for PIVOT BY compilation
-        # For GROUPING SETS, rollup_indexes is a list of lists, so flatten it
-        if grouping_type == 'sets':
-            # Flatten the list of lists and get unique indexes
-            flat_indexes = list(set(idx for set_indexes in rollup_indexes for idx in set_indexes))
-            group_indexes = regular_indexes + flat_indexes
-        else:
-            group_indexes = regular_indexes + rollup_indexes
-        
-        # Handle PIVOT BY if present
-        pivots = self._compile_pivot_by(node.pivot_by, c_targets, group_indexes)
-        if pivots:
-            return EvalPivot(union, pivots)
-        
-        return union
+
+        # List of unique column indexes used in the GROUP BY clause
+        all_group_by_indexes = list(set(idx for s in final_grouping_sets for idx in s))
+
+        return union, all_group_by_indexes
+
 
     def _compile_from(self, node):
         if node is None:
@@ -1137,6 +1104,68 @@ def is_aggregate(node):
     # much. Performance of the query compilation matters very little overall.
     _, aggregates = get_columns_and_aggregates(node)
     return bool(aggregates)
+
+
+
+def _combine_grouping_sets(list_of_sets1, list_of_sets2):
+    """Compute the cartesian product of two lists of grouping sets.
+
+    >>> _combine_grouping_sets([['a'], ['b']], [['c'], ['d']])
+    [['a', 'c'], ['a', 'd'], ['b', 'c'], ['b', 'd']]
+    >>> _combine_grouping_sets([['a']], [['b', 'c'], []])
+    [['a', 'b', 'c'], ['a']]
+    >>> _combine_grouping_sets([], [['a']])
+    [['a']]
+    >>> _combine_grouping_sets([['a']], [])
+    [['a']]
+    """
+    # Why: This helper function is used to combine grouping sets from different
+    #      grouping elements (e.g., `ROLLUP` and `CUBE`) by creating a
+    #      cartesian product of their individual grouping sets.
+    import itertools
+    if not list_of_sets1:
+        return list_of_sets2
+    if not list_of_sets2:
+        return list_of_sets1
+    
+    return [s1 + s2 for s1, s2 in itertools.product(list_of_sets1, list_of_sets2)]
+
+def _get_grouping_sets_for_element(element):
+    """Generate grouping sets for a single GROUP BY element.
+    This function isolates the logic for generating grouping sets based on
+    the element's modifier (`rollup`, `cube`, `sets`).
+    
+    Args:
+      element (dict): A dictionary representing a grouping element, which contains:
+        - 'modifier' (str): The type of grouping modifier ('rollup', 'cube', 'sets', or None).
+        - 'indexes' (list): A list of integer indexes representing the grouping columns.
+
+    Returns:
+      list: A list of lists, where each inner list represents a grouping set.
+
+    Example:
+      >>> element = {'modifier': 'rollup', 'indexes': [0, 1]}
+      >>> _get_grouping_sets_for_element(element)
+      [[0, 1], [0], []]
+    """
+    modifier = element['modifier']
+    indexes = element['indexes']
+    
+    if modifier == 'rollup':
+        # Hierarchical prefixes: e.g., (a,b) -> [(a,b), (a), ()]
+        return [indexes[:i] for i in range(len(indexes), -1, -1)]
+    elif modifier == 'cube':
+        # Power set: e.g., (a,b) -> [(a,b), (a), (b), ()]
+        sets = []
+        for i in range(len(indexes), -1, -1):
+            for combo in itertools.combinations(indexes, i):
+                sets.append(list(combo))
+        return sets
+    elif modifier == 'sets':
+        # User-defined sets
+        return indexes
+    else: # Regular column
+        return [indexes]
 
 
 def compile(context, statement, parameters=None):
