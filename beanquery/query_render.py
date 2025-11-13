@@ -16,6 +16,8 @@ from beancount.core import display_context
 from beancount.core import inventory
 from beancount.core import position
 
+from beanquery.query_compile import Sentinel
+
 
 class Align(enum.Enum):
     LEFT = 0
@@ -449,10 +451,18 @@ def render_rows(rows, renderers, ctx):
 
     for row in rows:
 
-        # Render the row cells. Do not pass missing values to the
-        # renderers but substitute them with the appropriate
-        # placeholder string.
-        cells = [render.format(value) if value is not None else null for render, value in zip(renderers, row)]
+        # Render the row cells. Handle special cases:
+        # - Sentinel: Convert to string representation
+        # - None: Substitute with null placeholder
+        # - Regular values: Pass to renderer
+        cells = []
+        for render, value in zip(renderers, row):
+            if isinstance(value, Sentinel):
+                cells.append(str(value))
+            elif value is not None:
+                cells.append(render.format(value))
+            else:
+                cells.append(null)
 
         if not any(isinstance(cell, list) for cell in cells):
             # No multi line cells. Yield the row.

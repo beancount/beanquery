@@ -17,6 +17,56 @@ import itertools
 import re
 import operator
 
+
+@functools.total_ordering
+class Sentinel:
+    """General sentinel value with configurable sort order and display string.
+    
+    Sentinels are special marker values that can be used in query results.
+    They have a configurable sort order relative to regular values:
+    - Negative sort_order: sorts before all non-sentinel values
+    - Positive sort_order: sorts after all non-sentinel values
+    - Zero sort_order: sorts with regular values (not recommended)
+    
+    Args:
+        sort_order: Integer determining sort position. Negative sorts before
+                   regular values, positive sorts after.
+        display: String representation when rendered.
+    """
+    
+    def __init__(self, sort_order, display):
+        self.sort_order = sort_order
+        self.display = display
+    
+    def __str__(self):
+        return self.display
+    
+    def __repr__(self):
+        return f"Sentinel({self.sort_order}, {self.display!r})"
+    
+    def __eq__(self, other):
+        if not isinstance(other, Sentinel):
+            return False
+        return self.sort_order == other.sort_order and self.display == other.display
+    
+    def __lt__(self, other):
+        if isinstance(other, Sentinel):
+            # Compare sentinels by their sort order
+            return self.sort_order < other.sort_order
+        else:
+            # Compare sentinel to non-sentinel value
+            # Negative sort_order: sentinel sorts before regular values
+            # Positive sort_order: sentinel sorts after regular values
+            return self.sort_order < 0
+    
+    def __hash__(self):
+        return hash((self.sort_order, self.display))
+
+
+# Sentinel instances for various use cases
+SENTINEL_EARLIER = Sentinel(-1, "(earlier)")
+SENTINEL_LATER = Sentinel(1, "(later)")
+
 from decimal import Decimal
 from typing import List
 

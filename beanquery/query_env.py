@@ -28,6 +28,7 @@ from beancount.core.account_types import get_account_sign, get_account_sort_key
 
 from beanquery import query_compile
 from beanquery import types
+from beanquery.query_compile import SENTINEL_EARLIER, SENTINEL_LATER
 
 
 class ColumnsRegistry(dict):
