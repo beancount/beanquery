@@ -65,9 +65,9 @@ class Sentinel:
 
 
 # Sentinel instances for various use cases
+SENTINEL_ROLLUP_TOTAL = Sentinel(2, "(Total)")
 SENTINEL_EARLIER = Sentinel(-1, "(earlier)")
 SENTINEL_LATER = Sentinel(1, "(later)")
-ROLLUP_TOTAL = Sentinel(2, "(Total)")
 
 from decimal import Decimal
 from typing import List
@@ -736,14 +736,14 @@ class EvalUnion:
                 columns = cols
             
             # Mark subtotal columns that are not in this grouping set
-            # Columns in full_group_indexes but not in grouping_set get ROLLUP_TOTAL sentinel
+            # Columns in full_group_indexes but not in grouping_set get SENTINEL_ROLLUP_TOTAL sentinel
             grouping_set_indexes = set(grouping_set)
             subtotal_indexes = [idx for idx in full_group_indexes if idx not in grouping_set_indexes]
             
-            # Replace values with ROLLUP_TOTAL for non-grouped columns (subtotal rows)
+            # Replace values with SENTINEL_ROLLUP_TOTAL for non-grouped columns (subtotal rows)
             if subtotal_indexes:
                 rows = [
-                    tuple(ROLLUP_TOTAL if i in subtotal_indexes else val for i, val in enumerate(row))
+                    tuple(SENTINEL_ROLLUP_TOTAL if i in subtotal_indexes else val for i, val in enumerate(row))
                     for row in rows
                 ]
             
@@ -753,8 +753,8 @@ class EvalUnion:
         if self.order_spec:
             # Sort in reverse order to leverage Python's stable sort
             for col_index, ordering in reversed(self.order_spec):
-                # ROLLUP_TOTAL sorts last (after all regular values)
-                # RollupTotal implements comparison operators to sort after everything
+                # SENTINEL_ROLLUP_TOTAL sorts last (after all regular values)
+                # Sentinel implements comparison operators to sort based on sort_order
                 all_rows.sort(
                     key=lambda row: row[col_index],
                     reverse=bool(ordering)
