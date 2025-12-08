@@ -130,7 +130,7 @@ class Compiler:
         c_targets.extend(new_targets)
         
         if node.group_by and node.group_by.elements:
-            if any(elem.get('rollup') or elem.get('cube') or elem.get('sets')
+            if any(elem.get('type') in ('rollup', 'cube', 'sets')
                     for elem in node.group_by.elements):
                 is_grouping = "complex"
             else:
@@ -152,9 +152,9 @@ class Compiler:
 
         # Flatten element_indexes for regular GROUP BY
         if element_indexes is not None:
-            group_indexes = set()
+            group_indexes = []
             for elem in element_indexes:
-                group_indexes.update(elem['indexes'])
+                group_indexes.extend(elem['indexes'])
         else:
             group_indexes = None
 
@@ -490,6 +490,7 @@ class Compiler:
              [{'indexes': [int, ...], 'modifier': str or None}, ...]
              Each dict represents one grouping element from the grammar.
              'modifier' can be None, 'rollup', 'cube', or 'sets'.
+             Note: The 'type' field in the AST element is used to determine the modifier.
              
              Examples:
              - Non-aggregate query: None
@@ -531,14 +532,14 @@ class Compiler:
             
             # Initialize element structures
             for elem in group_by.elements:
-                # Iterating over GROUP BY syntax elements, which are either a 
-                # simple grouping column/expression, a ROLLUP (col1, ...) 
+                # Iterating over GROUP BY syntax elements, which are either a
+                # simple grouping column/expression, a ROLLUP (col1, ...)
                 # element, a CUBE (col1, ...) element, or a GROUPING SETS element.
-                if elem.get('rollup'):
+                if elem.get('type') == 'rollup':
                     modifier = 'rollup'
-                elif elem.get('cube'):
+                elif elem.get('type') == 'cube':
                     modifier = 'cube'
-                elif elem.get('sets'):
+                elif elem.get('type') == 'sets':
                     modifier = 'sets'
                 else:
                     modifier = None
@@ -562,11 +563,11 @@ class Compiler:
             # For GROUPING SETS, also track which set within the element
             columns_by_element = []
             for elem_idx, elem in enumerate(group_by.elements):
-                if elem.get('rollup') or elem.get('cube'):
+                if elem.get('type') in ('rollup', 'cube'):
                     columns = elem['columns']
                     for column in columns:
                         columns_by_element.append((elem_idx, None, column))
-                elif elem.get('sets'):
+                elif elem.get('type') == 'sets':
                     # For GROUPING SETS, track which set each column belongs to
                     for set_idx, grouping_set in enumerate(elem['grouping_sets']):
                         for column in grouping_set['columns']:

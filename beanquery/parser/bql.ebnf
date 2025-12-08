@@ -77,10 +77,10 @@ groupby::GroupBy
     ;
 
 grouping_element
-    = 'ROLLUP' '(' columns:','.{ (integer | expression) }+ ')' rollup:`True` cube:`` sets:``
-    | 'CUBE' '(' columns:','.{ (integer | expression) }+ ')' rollup:`` cube:`True` sets:``
-    | 'GROUPING' 'SETS' '(' grouping_sets:','.{ grouping_set }+ ')' rollup:`` cube:`` sets:`True`
-    | column:(integer | expression) rollup:`` cube:`` sets:``
+    = 'ROLLUP' '(' columns:','.{ (integer | expression) }+ ')' type:`rollup`
+    | 'CUBE' '(' columns:','.{ (integer | expression) }+ ')' type:`cube`
+    | 'GROUPING' 'SETS' '(' grouping_sets:','.{ grouping_set }+ ')' type:`sets`
+    | column:(integer | expression) type:``
     ;
 
 grouping_set
