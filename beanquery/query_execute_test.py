@@ -1111,6 +1111,126 @@ class TestExecuteAggregatedQuery(QueryBase):
                 ('Expenses:Bar', D(2.0)),
                 ('Expenses:Foo', D(1.0)),
             ])
+    def test_rollup_basic(self):
+        """Test ROLLUP functionality with a simple example."""
+        self.check_query(
+            """
+            2010-02-21 * "First"
+              Assets:Bank:Checking       -1.00 USD
+              Expenses:Restaurant         1.00 USD
+
+            2010-02-23 * "Second"
+              Liabilities:Credit-Card    -2.00 USD
+              Expenses:Restaurant         2.00 USD
+            """,
+            """
+            SELECT account, sum(number) as amount
+            GROUP BY ROLLUP (account)
+            ORDER BY account;
+            """,
+            [
+                ('account', str),
+                ('amount', Decimal),
+            ],
+            [
+                ('Assets:Bank:Checking', D('-1.00')),
+                ('Expenses:Restaurant', D('3.00')),
+                ('Liabilities:Credit-Card', D('-2.00')),
+                (qc.Sentinel(2, '(Total)'), D('0.00')),  # Total row
+            ])
+
+    def test_cube_basic(self):
+        """Test CUBE functionality with a simple example."""
+        self.check_query(
+            """
+            2010-02-21 * "First"
+              Assets:Bank:Checking       -1.00 USD
+              Expenses:Restaurant         1.00 USD
+
+            2010-02-23 * "Second"
+              Liabilities:Credit-Card    -2.00 USD
+              Expenses:Restaurant         2.00 USD
+            """,
+            """
+            SELECT account, sum(number) as amount
+            GROUP BY CUBE (account)
+            ORDER BY account;
+            """,
+            [
+                ('account', str),
+                ('amount', Decimal),
+            ],
+            [
+                ('Assets:Bank:Checking', D('-1.00')),
+                ('Expenses:Restaurant', D('3.00')),
+                ('Liabilities:Credit-Card', D('-2.00')),
+                (qc.Sentinel(2, '(Total)'), D('0.00')),  # Total row
+            ])
+
+    def test_rollup_two_columns(self):
+        """Test ROLLUP with two columns."""
+        self.check_query(
+            """
+            2010-02-21 * "First"
+              Assets:Bank:Checking       -1.00 USD
+              Expenses:Restaurant         1.00 USD
+
+            2010-02-23 * "Second"
+              Liabilities:Credit-Card    -2.00 USD
+              Expenses:Restaurant         2.00 USD
+            """,
+            """
+            SELECT account, year(date) as year, sum(number) as amount
+            GROUP BY ROLLUP (account, year(date))
+            ORDER BY account, year;
+            """,
+            [
+                ('account', str),
+                ('year', int),
+                ('amount', Decimal),
+            ],
+            [
+                ('Assets:Bank:Checking', 2010, D('-1.00')),
+                ('Assets:Bank:Checking', qc.Sentinel(2, '(Total)'), D('-1.00')),  # Subtotal for account
+                ('Expenses:Restaurant', 2010, D('3.00')),
+                ('Expenses:Restaurant', qc.Sentinel(2, '(Total)'), D('3.00')),  # Subtotal for account
+                ('Liabilities:Credit-Card', 2010, D('-2.00')),
+                ('Liabilities:Credit-Card', qc.Sentinel(2, '(Total)'), D('-2.00')),  # Subtotal for account
+                (qc.Sentinel(2, '(Total)'), qc.Sentinel(2, '(Total)'), D('0.00')),  # Grand total
+            ])
+
+    def test_cube_two_columns(self):
+        """Test CUBE with two columns."""
+        self.check_query(
+            """
+            2010-02-21 * "First"
+              Assets:Bank:Checking       -1.00 USD
+              Expenses:Restaurant         1.00 USD
+
+            2010-02-23 * "Second"
+              Liabilities:Credit-Card    -2.00 USD
+              Expenses:Restaurant         2.00 USD
+            """,
+            """
+            SELECT account, year(date) as year, sum(number) as amount
+            GROUP BY CUBE (account, year(date))
+            ORDER BY account, year;
+            """,
+            [
+                ('account', str),
+                ('year', int),
+                ('amount', Decimal),
+            ],
+            [
+                ('Assets:Bank:Checking', 2010, D('-1.00')),
+                ('Assets:Bank:Checking', qc.Sentinel(2, '(Total)'), D('-1.00')),  # Subtotal for account
+                ('Expenses:Restaurant', 2010, D('3.00')),
+                ('Expenses:Restaurant', qc.Sentinel(2, '(Total)'), D('3.00')),  # Subtotal for account
+                ('Liabilities:Credit-Card', 2010, D('-2.00')),
+                ('Liabilities:Credit-Card', qc.Sentinel(2, '(Total)'), D('-2.00')),  # Subtotal for account
+                (qc.Sentinel(2, '(Total)'), 2010, D('0.00')),  # Subtotal for year
+                (qc.Sentinel(2, '(Total)'), qc.Sentinel(2, '(Total)'), D('0.00')),  # Grand total
+            ])
 
 
 class TestExecuteOptions(QueryBase):

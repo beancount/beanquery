@@ -355,6 +355,59 @@ class TestSelectGroupBy(QueryParserTestBase):
     def test_groupby_empty(self):
         with self.assertRaises(parser.ParseError):
             parser.parse("SELECT * GROUP BY;")
+            
+    def test_groupby_rollup(self):
+        """Test ROLLUP syntax in GROUP BY clause."""
+        self.assertParse(
+            "SELECT * GROUP BY ROLLUP (account, year);",
+            Select(ast.Asterisk(),
+                   group_by=ast.GroupBy([
+                       {'columns': [ast.Column('account'), ast.Column('year')], 'type': 'rollup'}
+                   ], None)))
+
+    def test_groupby_cube(self):
+        """Test CUBE syntax in GROUP BY clause."""
+        self.assertParse(
+            "SELECT * GROUP BY CUBE (account, year);",
+            Select(ast.Asterisk(),
+                   group_by=ast.GroupBy([
+                       {'columns': [ast.Column('account'), ast.Column('year')], 'type': 'cube'}
+                   ], None)))
+
+    def test_groupby_grouping_sets(self):
+        """Test GROUPING SETS syntax in GROUP BY clause."""
+        self.assertParse(
+            "SELECT * GROUP BY GROUPING SETS ((account, year), (account), ());",
+            Select(ast.Asterisk(),
+                   group_by=ast.GroupBy([
+                       {'grouping_sets': [
+                           [ast.Column('account'), ast.Column('year')],
+                           [ast.Column('account')],
+                           []
+                       ], 'type': 'sets'}
+                   ], None)))
+
+    def test_groupby_mixed(self):
+        """Test mixed grouping elements in GROUP BY clause."""
+        self.assertParse(
+            "SELECT * GROUP BY region, ROLLUP (year, month);",
+            Select(ast.Asterisk(),
+                   group_by=ast.GroupBy([
+                       {'column': ast.Column('region'), 'type': ''},
+                       {'columns': [ast.Column('year'), ast.Column('month')], 'type': 'rollup'}
+                   ], None)))
+
+    def test_groupby_rollup_with_having(self):
+        """Test ROLLUP syntax with HAVING clause."""
+        self.assertParse(
+            "SELECT * GROUP BY ROLLUP (account, year) HAVING sum(position) > 100;",
+            Select(ast.Asterisk(),
+                   group_by=ast.GroupBy([
+                       {'columns': [ast.Column('account'), ast.Column('year')], 'type': 'rollup'}
+                   ],
+                   ast.Greater(
+                       ast.Function('sum', [ast.Column('position')]),
+                       ast.Constant(100)))))
 
 
 class TestSelectOrderBy(QueryParserTestBase):
