@@ -72,12 +72,15 @@ def render_location(text, pos, endpos, lineno, indent, strip, out):
 
 # FIXME: move the error formatting into the exception classes themselves
 def render_exception(exc, indent='| ', strip=True):
-    if isinstance(exc, (beanquery.CompilationError, beanquery.ParseError)) and exc.parseinfo:
+    if isinstance(exc, beanquery.ProgrammingError):
+        return str(exc)
+    if isinstance(exc, (beanquery.CompilationError, beanquery.ParseError)):
         out = [str(exc)]
-        pos = exc.parseinfo.pos
-        endpos = exc.parseinfo.endpos
-        lineno = exc.parseinfo.line
-        render_location(exc.parseinfo.tokenizer.text, pos, endpos, lineno, indent, strip, out)
+        if exc.parseinfo:
+            pos = exc.parseinfo.pos
+            endpos = exc.parseinfo.endpos
+            lineno = exc.parseinfo.line
+            render_location(exc.parseinfo.tokenizer.text, pos, endpos, lineno, indent, strip, out)
         return '\n'.join(out)
     return '\n' + traceback.format_exc()
 
