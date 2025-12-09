@@ -122,6 +122,11 @@ class Compiler:
             c_where = c_from_expr if c_where is None else EvalAnd([c_from_expr, c_where])
 
         # Process the GROUP BY clause.
+        # Returns, among others, `element_indexes`, which looks like
+        # list(dict(indexes, modifier), ...), where modifier relates to the 
+        # used GROUP BY modifer (ROLLUP, CUBE, GROUPING SETS) or is empty 
+        # if no keyword is used, indexes is a list of column indexes, or a 
+        # list of lists if type == 'grouping sets'
         new_targets, element_indexes, having_index = self._compile_group_by(node.group_by, c_targets)
         c_targets.extend(new_targets)
 
@@ -129,9 +134,11 @@ class Compiler:
         new_targets, order_spec = self._compile_order_by(node.order_by, c_targets)
         c_targets.extend(new_targets)
         
+        # For complex grouping, we have not just a list of column names, 
+        # but grouping elements, which must be compiled separately further below
         if node.group_by and node.group_by.elements:
-            if any(elem.get('type') in ('rollup', 'cube', 'sets')
-                    for elem in node.group_by.elements):
+            if any(elem['modifier'] in ('rollup', 'cube', 'grouping sets')
+                    for elem in element_indexes):
                 is_grouping = "complex"
             else:
                 is_grouping = "simple"
@@ -489,8 +496,8 @@ class Compiler:
            element_indexes: A list of dicts, one per grouping element:
              [{'indexes': [int, ...], 'modifier': str or None}, ...]
              Each dict represents one grouping element from the grammar.
-             'modifier' can be None, 'rollup', 'cube', or 'sets'.
-             Note: The 'type' field in the AST element is used to determine the modifier.
+             'modifier' can be None, 'rollup', 'cube', or 'grouping sets'.
+             Note: The 'type' property in the AST element is used to determine the modifier.
              
              Examples:
              - Non-aggregate query: None
@@ -498,15 +505,15 @@ class Compiler:
              - Regular GROUP BY account, year:
                [{'indexes': [0], 'modifier': None}, {'indexes': [1], 'modifier': None}]
              - Full ROLLUP: GROUP BY ROLLUP (account, year):
-               [{'indexes': [0, 1], 'modifier': 'rollup', 'grouping_sets': None}]
+               [{'indexes': [0, 1], 'modifier': 'rollup'}]
              - Full CUBE: GROUP BY CUBE (account, year):
-               [{'indexes': [0, 1], 'modifier': 'cube', 'grouping_sets': None}]
+               [{'indexes': [0, 1], 'modifier': 'cube'}]
              - GROUPING SETS: GROUP BY GROUPING SETS ((account, year), (account), ()):
-               [{'indexes': [[0, 1], [0], []], 'modifier': 'sets', 'grouping_sets': [...]}]
+               [{'indexes': [[0, 1], [0], []], 'modifier': 'grouping sets'}]
              - Mixed grouping: GROUP BY region, ROLLUP (year, month):
-               [{'indexes': [2], 'modifier': None, 'grouping_sets': None}, {'indexes': [0, 1], 'modifier': 'rollup', 'grouping_sets': None}]
+               [{'indexes': [2], 'modifier': None}, {'indexes': [0, 1], 'modifier': 'rollup'}]
              - Implicit GROUP BY (when SUPPORT_IMPLICIT_GROUPBY=True):
-               [{'indexes': [0], 'modifier': None, 'grouping_sets': None}, {'indexes': [2], 'modifier': None, 'grouping_sets': None}]
+               [{'indexes': [0], 'modifier': None}, {'indexes': [2], 'modifier': None}]
                
            having_index: Index of HAVING expression in targets, or None.
         """
@@ -535,45 +542,45 @@ class Compiler:
                 # Iterating over GROUP BY syntax elements, which are either a
                 # simple grouping column/expression, a ROLLUP (col1, ...)
                 # element, a CUBE (col1, ...) element, or a GROUPING SETS element.
-                if elem.get('type') == 'rollup':
+                if elem.type == 'rollup':
                     modifier = 'rollup'
-                elif elem.get('type') == 'cube':
+                elif elem.type == 'cube':
                     modifier = 'cube'
-                elif elem.get('type') == 'sets':
-                    modifier = 'sets'
+                elif elem.type == 'grouping sets':
+                    modifier = 'grouping sets'
                 else:
                     modifier = None
                 
                 # For GROUPING SETS, 'indexes' will be a list of lists
                 # For other modifiers, 'indexes' is a flat list
-                if modifier == 'sets':
+                if modifier == 'grouping sets':
                     element_indexes.append({
-                        'indexes': [[] for _ in elem['grouping_sets']],
-                        'modifier': modifier,
-                        'grouping_sets': elem.get('grouping_sets')
+                        'indexes': [[] for _ in elem.columns],
+                        'modifier': modifier
                     })
                 else:
                     element_indexes.append({
                         'indexes': [],
-                        'modifier': modifier,
-                        'grouping_sets': None
+                        'modifier': modifier
                     })
             
             # Collect all columns with their syntax element position
             # For GROUPING SETS, also track which set within the element
             columns_by_element = []
             for elem_idx, elem in enumerate(group_by.elements):
-                if elem.get('type') in ('rollup', 'cube'):
-                    columns = elem['columns']
+                if elem.type in ('rollup', 'cube'):
+                    columns = elem.columns
                     for column in columns:
                         columns_by_element.append((elem_idx, None, column))
-                elif elem.get('type') == 'sets':
+                elif elem.type == 'grouping sets':
                     # For GROUPING SETS, track which set each column belongs to
-                    for set_idx, grouping_set in enumerate(elem['grouping_sets']):
-                        for column in grouping_set['columns']:
+                    for set_idx, grouping_set in enumerate(elem.columns):
+                        for column in grouping_set.columns:
                             columns_by_element.append((elem_idx, set_idx, column))
                 else:
-                    columns_by_element.append((elem_idx, None, elem['column']))
+                    # Simple grouping (no modifier)
+                    assert elem.type == ''
+                    columns_by_element.append((elem_idx, None, elem.columns))
             
             # Compile all columns and add the indexes to element_indexes,
             # to return the same structure as in the parsed GROUP BY clause.
@@ -1134,11 +1141,11 @@ def _combine_grouping_sets(list_of_sets1, list_of_sets2):
 def _get_grouping_sets_for_element(element):
     """Generate grouping sets for a single GROUP BY element.
     This function isolates the logic for generating grouping sets based on
-    the element's modifier (`rollup`, `cube`, `sets`).
+    the element's modifier (`rollup`, `cube`, `grouping sets`).
     
     Args:
       element (dict): A dictionary representing a grouping element, which contains:
-        - 'modifier' (str): The type of grouping modifier ('rollup', 'cube', 'sets', or None).
+        - 'modifier' (str): The type of grouping modifier ('rollup', 'cube', 'grouping sets', or None).
         - 'indexes' (list): A list of integer indexes representing the grouping columns.
 
     Returns:
@@ -1162,7 +1169,7 @@ def _get_grouping_sets_for_element(element):
             for combo in itertools.combinations(indexes, i):
                 sets.append(list(combo))
         return sets
-    elif modifier == 'sets':
+    elif modifier == 'grouping sets':
         # User-defined sets
         return indexes
     else: # Regular column

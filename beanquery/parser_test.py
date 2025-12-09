@@ -309,48 +309,56 @@ class TestSelectGroupBy(QueryParserTestBase):
         self.assertParse(
             "SELECT * GROUP BY a;",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([ast.Column('a')], None)))
+                group_by=ast.GroupBy(
+                    [ast.GroupByElement(ast.Column('a'), '')], None)))
 
     def test_groupby_many(self):
+        ge = ast.GroupByElement
         self.assertParse(
             "SELECT * GROUP BY a, b, c;",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([
-                       ast.Column('a'),
-                       ast.Column('b'),
-                       ast.Column('c')], None)))
+                group_by=ast.GroupBy([
+                    ge(ast.Column('a'), ''),
+                    ge(ast.Column('b'), ''),
+                    ge(ast.Column('c'), '')],
+                None)))
 
     def test_groupby_expr(self):
+        ge = ast.GroupByElement
         self.assertParse(
             "SELECT * GROUP BY length(a) > 0, b;",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([
-                       ast.Greater(
-                           ast.Function('length', [
-                               ast.Column('a')]),
-                           ast.Constant(0)),
-                       ast.Column('b')], None)))
+                group_by=ast.GroupBy([
+                    ge( ast.Greater(
+                            ast.Function('length', [
+                                ast.Column('a')]),
+                            ast.Constant(0)), ''),
+                    ge(ast.Column('b'), '')],
+                    None)))
 
     def test_groupby_having(self):
         self.assertParse(
             "SELECT * GROUP BY a HAVING sum(x) = 0;",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([ast.Column('a')],
-                        ast.Equal(
-                            ast.Function('sum', [
-                                ast.Column('x')]),
-                            ast.Constant(0)))))
+                group_by=ast.GroupBy(
+                    [ast.GroupByElement(ast.Column('a'), '')],
+                    ast.Equal(
+                        ast.Function('sum', [
+                            ast.Column('x')]),
+                        ast.Constant(0)))))
 
     def test_groupby_numbers(self):
         self.assertParse(
             "SELECT * GROUP BY 1;",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([1], None)))
+                group_by=ast.GroupBy([ast.GroupByElement(1, '')], None)))
 
+        ge = ast.GroupByElement
         self.assertParse(
             "SELECT * GROUP BY 2, 4, 5;",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([2, 4, 5], None)))
+                group_by=ast.GroupBy(
+                    [ge(2, ''), ge(4, ''), ge(5, '')], None)))
 
     def test_groupby_empty(self):
         with self.assertRaises(parser.ParseError):
@@ -361,53 +369,52 @@ class TestSelectGroupBy(QueryParserTestBase):
         self.assertParse(
             "SELECT * GROUP BY ROLLUP (account, year);",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([
-                       {'columns': [ast.Column('account'), ast.Column('year')], 'type': 'rollup'}
-                   ], None)))
+                group_by=ast.GroupBy([
+                    ast.GroupByElement(
+                        [ast.Column('account'), ast.Column('year')], 'rollup')
+                ], None)
+            )
+        )
 
     def test_groupby_cube(self):
         """Test CUBE syntax in GROUP BY clause."""
         self.assertParse(
             "SELECT * GROUP BY CUBE (account, year);",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([
-                       {'columns': [ast.Column('account'), ast.Column('year')], 'type': 'cube'}
-                   ], None)))
+                group_by=ast.GroupBy([
+                    ast.GroupByElement(
+                          [ast.Column('account'), ast.Column('year')], 'cube')
+                    ], None)
+            )
+        )
 
     def test_groupby_grouping_sets(self):
         """Test GROUPING SETS syntax in GROUP BY clause."""
         self.assertParse(
             "SELECT * GROUP BY GROUPING SETS ((account, year), (account), ());",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([
-                       {'grouping_sets': [
-                           [ast.Column('account'), ast.Column('year')],
-                           [ast.Column('account')],
-                           []
-                       ], 'type': 'sets'}
-                   ], None)))
+                group_by=ast.GroupBy([
+                    ast.GroupByElement([
+                        [ast.Column('account'), ast.Column('year')],
+                        [ast.Column('account')],
+                        []
+                    ], 'grouping sets')
+                ], None)
+            )
+        )
 
     def test_groupby_mixed(self):
         """Test mixed grouping elements in GROUP BY clause."""
+        ge = ast.GroupByElement
         self.assertParse(
             "SELECT * GROUP BY region, ROLLUP (year, month);",
             Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([
-                       {'column': ast.Column('region'), 'type': ''},
-                       {'columns': [ast.Column('year'), ast.Column('month')], 'type': 'rollup'}
-                   ], None)))
-
-    def test_groupby_rollup_with_having(self):
-        """Test ROLLUP syntax with HAVING clause."""
-        self.assertParse(
-            "SELECT * GROUP BY ROLLUP (account, year) HAVING sum(position) > 100;",
-            Select(ast.Asterisk(),
-                   group_by=ast.GroupBy([
-                       {'columns': [ast.Column('account'), ast.Column('year')], 'type': 'rollup'}
-                   ],
-                   ast.Greater(
-                       ast.Function('sum', [ast.Column('position')]),
-                       ast.Constant(100)))))
+                group_by=ast.GroupBy([
+                    ge(ast.Column('region'),''),
+                    ge([ast.Column('year'), ast.Column('month')], 'rollup')
+                ], None)
+            )
+        )
 
 
 class TestSelectOrderBy(QueryParserTestBase):

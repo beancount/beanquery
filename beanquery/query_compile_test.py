@@ -656,10 +656,13 @@ class TestTranslationJournal(CompileSelectBase):
 
 class TestTranslationBalance(CompileSelectBase):
 
+    _ge = ast.GroupByElement # to shorten test cases
+
     group_by = ast.GroupBy([
-        ast.Column('account'),
-        ast.Function('account_sortkey', [
-            ast.Column(name='account')])], None)
+        _ge(ast.Column('account'), ''),
+        _ge(ast.Function('account_sortkey', [
+            ast.Column(name='account')]), '')
+    ], None)
 
     order_by = [ast.OrderBy(ast.Function('account_sortkey', [ast.Column('account')]), ast.Ordering.ASC)]
 

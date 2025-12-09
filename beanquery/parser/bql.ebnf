@@ -1,9 +1,9 @@
 @@grammar :: BQL
 @@parseinfo :: True
 @@ignorecase :: True
-@@keyword :: 'AND' 'AS' 'ASC' 'BY' 'DESC' 'DISTINCT' 'FALSE' 'FROM'
-    'GROUP' 'HAVING' 'IN' 'IS' 'LIMIT' 'NOT' 'OR' 'ORDER' 'PIVOT'
-    'ROLLUP' 'SELECT' 'TRUE' 'WHERE'
+@@keyword :: 'AND' 'AS' 'ASC' 'BY' 'CUBE' 'DESC' 'DISTINCT' 'FALSE' 'FROM'
+    'GROUP' 'GROUPING' 'HAVING' 'IN' 'IS' 'LIMIT' 'NOT' 'OR' 'ORDER' 'PIVOT'
+    'ROLLUP' 'SELECT' 'SETS' 'TRUE' 'WHERE'
 @@keyword :: 'CREATE' 'TABLE' 'USING' 'INSERT' 'INTO'
 @@keyword :: 'BALANCES' 'JOURNAL' 'PRINT'
 @@comments :: /(\/\*([^*]|[\r\n]|(\*+([^*\/]|[\r\n])))*\*+\/)/
@@ -76,15 +76,15 @@ groupby::GroupBy
     = elements:','.{ grouping_element }+ ['HAVING' having:expression]
     ;
 
-grouping_element
+grouping_element::GroupByElement
     = 'ROLLUP' '(' columns:','.{ (integer | expression) }+ ')' type:`rollup`
     | 'CUBE' '(' columns:','.{ (integer | expression) }+ ')' type:`cube`
-    | 'GROUPING' 'SETS' '(' grouping_sets:','.{ grouping_set }+ ')' type:`sets`
-    | column:(integer | expression) type:``
+    | 'GROUPING' 'SETS' '(' columns:','.{ grouping_set }+ ')' type:`grouping sets`
+    |  columns: (integer | expression) type:`` 
     ;
 
 grouping_set
-    = '(' columns:','.{ (integer | expression) }* ')'
+    = '(' @:','.{ (integer | expression) }* ')'
     ;
 
 order::OrderBy

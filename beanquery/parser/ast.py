@@ -148,12 +148,19 @@ class From(Node):
 # A GROUP BY clause.
 #
 # Attributes:
-#   elements: A list of grouping elements. Each element is a dict with:
-#     - 'column': A single column expression (for regular grouping), or
-#     - 'columns': A list of columns (for ROLLUP grouping)
-#     - 'rollup': True if this element is a ROLLUP, None otherwise
+#   elements: A list of grouping elements. See GroupByElement.
 #   having: An expression tree for the optional HAVING clause, or None.
 GroupBy = node('GroupBy', 'elements having')
+
+# A GROUP BY grouping element. 
+# Attributes:
+#   columns: If type == '': ast.Column() or an integer column index. If 
+#      type != '': A list of ast.Column() or integer column indexes.
+#   type: Distinguishes the grouping modes relating to the keywords 
+#     ROLLUP, CUBE, GROUPING SETS. 'type' has the keyword in lower case. For
+#     simple grouping (no keyword), 'type' is the empty string.
+#    
+GroupByElement = node('GroupByElement', 'columns type')
 
 # An ORDER BY clause.
 #

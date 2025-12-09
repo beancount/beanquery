@@ -29,11 +29,13 @@ KEYWORDS: set[str] = {
     'AS',
     'ASC',
     'BY',
+    'CUBE',
     'DESC',
     'DISTINCT',
     'FALSE',
     'FROM',
     'GROUP',
+    'GROUPING',
     'HAVING',
     'IN',
     'IS',
@@ -44,6 +46,7 @@ KEYWORDS: set[str] = {
     'PIVOT',
     'ROLLUP',
     'SELECT',
+    'SETS',
     'TRUE',
     'WHERE',
     'CREATE',
@@ -355,7 +358,7 @@ class BQLParser(Parser):
             self._define(['having'], [])
         self._define(['elements', 'having'], [])
 
-    @tatsumasu()
+    @tatsumasu('GroupByElement')
     def _grouping_element_(self):
         with self._choice():
             with self._option():
@@ -417,11 +420,11 @@ class BQLParser(Parser):
                 def block5():
                     self._grouping_set_()
                 self._positive_gather(block5, sep4)
-                self.name_last_node('grouping_sets')
+                self.name_last_node('columns')
                 self._token(')')
-                self._constant('sets')
+                self._constant('grouping sets')
                 self.name_last_node('type')
-                self._define(['grouping_sets', 'type'], [])
+                self._define(['columns', 'type'], [])
             with self._option():
                 with self._group():
                     with self._choice():
@@ -433,10 +436,10 @@ class BQLParser(Parser):
                             'expecting one of: '
                             '<expression> <integer>'
                         )
-                self.name_last_node('column')
+                self.name_last_node('columns')
                 self._constant('')
                 self.name_last_node('type')
-                self._define(['column', 'type'], [])
+                self._define(['columns', 'type'], [])
             self._error(
                 'expecting one of: '
                 "'CUBE' 'GROUPING' 'ROLLUP' <conjunction>"
@@ -463,9 +466,8 @@ class BQLParser(Parser):
                         '<expression> <integer>'
                     )
         self._gather(block1, sep0)
-        self.name_last_node('columns')
+        self.name_last_node('@')
         self._token(')')
-        self._define(['columns'], [])
 
     @tatsumasu('OrderBy')
     def _order_(self):
