@@ -158,12 +158,19 @@ class SetRenderer(ColumnRenderer):
     def __init__(self, ctx):
         super().__init__(ctx)
         self.sep = ctx.listsep
+        self.ctx = ctx
 
     def update(self, value):
-        self.maxwidth = max(self.maxwidth, sum(len(x) + len(self.sep) for x in value) - len(self.sep))
+        self.maxwidth = max(self.maxwidth, sum(len(str(x)) + len(self.sep) for x in value) - len(self.sep))
 
     def format(self, value):
-        return self.sep.join(str(x) for x in sorted(value))
+        """Format the value."""
+        if not value:
+            return ''
+        # Get the appropriate renderer for the first item's type
+        item = next(iter(value))
+        renderer = _get_renderer(type(item), self.ctx)
+        return self.sep.join(renderer.format(item) for item in sorted(value))
 
 
 class DateRenderer(ColumnRenderer):
