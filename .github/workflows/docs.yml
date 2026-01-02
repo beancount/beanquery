@@ -26,6 +26,6 @@ jobs:
     environment:
       name: github-pages
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/mlell'
     steps:
       - uses: actions/deploy-pages@v4

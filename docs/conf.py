@@ -13,7 +13,7 @@ extensions = [
     'sphinx.ext.autodoc',
     #'sphinx.ext.intersphinx',
     #'sphinx.ext.extlinks',
-    #'sphinx.ext.githubpages',
+    'sphinx.ext.githubpages',
 ]
 extlinks = {
     'issue': ('https://github.com/beancount/beanquery/issues/%s', '#'),
