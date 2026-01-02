@@ -9,6 +9,7 @@ __license__ = "GNU GPLv2"
 
 import datetime
 import decimal
+import inspect
 import re
 import textwrap
 
@@ -65,6 +66,27 @@ class ColumnsRegistry(dict):
         return decorator
 
 
+def _extract_param_names(func):
+    """Extract parameter names from a function. Used to generate function
+    documentation.
+
+    Args:
+        func: A function to extract parameter names from.
+        skip_self: If True, skip 'self' parameter (for class methods).
+
+    Returns:
+        A list of parameter names, optionally excluding 'self'
+    """
+    sig = inspect.signature(func)
+    param_names = list(sig.parameters.keys())
+
+    # Remove 'self' if present (for class methods)
+    if param_names and param_names[0] == 'self':
+        param_names = param_names[1:]
+
+    return param_names
+
+
 def _add_to_doc_groups(func_class, intypes, groups):
     """Add a function class to the appropriate documentation groups.
 
@@ -109,9 +131,15 @@ def function(intypes, outtype, pass_context=None, name=None, groups=None):
            TYPE_CATEGORIES for valid group names.
     """
     def decorator(func):
+        # Extract parameter names from the original function, excluding 'context' if present
+        param_names = _extract_param_names(func)
+        if pass_context:
+            param_names = param_names[1:]  # Remove 'context' from param names
+
         class Func(query_compile.EvalFunction):
             __intypes__ = intypes
             __outtype__ = outtype
+            __param_names__ = param_names
             pure = not pass_context
             def __init__(self, context, operands):
                 super().__init__(context, operands, outtype)
@@ -133,7 +161,8 @@ def function(intypes, outtype, pass_context=None, name=None, groups=None):
 def register(name=None, groups=None):
     """Decorator to register a function in the query environment with
     more fine-grained control. Expects to decorate a class that implements
-    the query_compile.EvalFunction interface.
+    the query_compile.EvalFunction interface. Setting __intypes__,
+    __outtype__ and __param_names__ is left to the decorated class.
 
     Args:
       name: Name of the function.
@@ -141,7 +170,6 @@ def register(name=None, groups=None):
            TYPE_CATEGORIES for valid group names.
     """
     def decorator(cls):
-
         if name is not None:
             cls.__name__ = name
         query_compile.FUNCTIONS[cls.__name__].append(cls)
@@ -153,6 +181,7 @@ def register(name=None, groups=None):
 class GetItem2(query_compile.EvalFunction):
     """Get one item from a dict object if it exists, otherwise a default value."""
     __intypes__ = [dict, str]
+    __param_names__ = ['d', 'key']
 
     def __init__(self, context, operands):
         super().__init__(context, operands, object)
@@ -169,6 +198,7 @@ class GetItem2(query_compile.EvalFunction):
 class GetItem3(query_compile.EvalFunction):
     """Get one item from a dict object if it exists, otherwise a default value."""
     __intypes__ = [dict, str, types.Any]
+    __param_names__ = ['d', 'key', 'default']
 
     def __init__(self, context, operands):
         super().__init__(context, operands, object)
@@ -896,6 +926,10 @@ def aggregator(intypes, outtype = None, name=None, groups = None):
     def decorator(cls):
         cls.__intypes__ = intypes
         cls.__outtype__ = outtype
+        # The decorated functions do not have explicit parameter names in the signature
+        # We use single lowercase letters a, b, c, ... as placeholders
+        cls.__param_names__ = "abcdefghijklmnopqrstuvwxyz"[:len(intypes)]
+
         if name is not None:
             cls.__name__ = name
         query_compile.FUNCTIONS[cls.__name__].append(cls)

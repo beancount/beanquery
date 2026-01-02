@@ -414,6 +414,9 @@ class EvalFunction(EvalNode):
     # Output type annotation
     __outtype__ = None
 
+    # Input argument names for documentation.
+    __param_names__ = []
+
     def __init__(self, context, operands, dtype):
         super().__init__(dtype)
         self.context = context
