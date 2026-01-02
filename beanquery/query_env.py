@@ -80,10 +80,6 @@ def _extract_param_names(func):
     sig = inspect.signature(func)
     param_names = list(sig.parameters.keys())
 
-    # Remove 'self' if present (for class methods)
-    if param_names and param_names[0] == 'self':
-        param_names = param_names[1:]
-
     return param_names
 
 
@@ -154,6 +150,8 @@ def function(intypes, outtype, pass_context=None, name=None, groups=None):
         Func.__name__ = name if name is not None else func.__name__
         Func.__doc__ = func.__doc__
         query_compile.FUNCTIONS[Func.__name__].append(Func)
+        _add_to_doc_groups(Func, intypes, groups)
+
         return func
     return decorator
 
@@ -173,6 +171,8 @@ def register(name=None, groups=None):
         if name is not None:
             cls.__name__ = name
         query_compile.FUNCTIONS[cls.__name__].append(cls)
+        _add_to_doc_groups(cls, cls.__intypes__, groups)
+
         return cls
     return decorator
 
@@ -857,11 +857,7 @@ def interval(x):
 
 @function([relativedelta, datetime.date, datetime.date], datetime.date, groups = ['date'])
 def date_bin(stride, source, origin):
-    """Bin a date into the specified stride aligned with the specified origin.
 
-    As an extension to the the SQL standard ``date_bin()`` function this
-    function also accepts strides containing units of months and years.
-    """
     if stride.months or stride.years:
         if origin + stride <= origin:
             # FIXME: this should raise and error: stride must be greater than zero
@@ -1067,3 +1063,47 @@ class Max(query_compile.EvalAggregator):
             cur = store[self.handle]
             if cur is None or value > cur:
                 store[self.handle] = value
+
+def _describe_functions(functions, aggregates=False, type_filter=None):
+    """Describe functions, optionally filtered by input type category.
+
+    Args:
+        functions: Dictionary of (function name: EvalFunction subclass),
+          the actual class, not an object, which would represent a particular
+          function call.
+        aggregates: If True, show aggregates; if False, show regular functions
+        type_filter: Optional filter by input type category (see TYPE_CATEGORIES)
+    """
+    # Determine which functions to iterate over
+    if type_filter:
+        # Use the pre-populated FUNCTION_DOC_GROUPS for filtering
+        funcs_to_process = FUNCTION_DOC_GROUPS.get(type_filter, [])
+    else:
+        # Collect all functions from all groups
+        funcs_to_process = []
+        for name, funcs in functions.items():
+            funcs_to_process.extend(funcs)
+
+    entries = []
+    for func in funcs_to_process:
+        # Filter by aggregate vs non-aggregate
+        if aggregates != issubclass(func, query_compile.EvalAggregator):
+            continue
+
+        # Get the function name
+        name = func.__name__.lower()
+
+        # Assemble function signature for output using parameter names
+        args = ', '.join(f'{param_name}: {types.name(dtype)}'
+                        for param_name, dtype in zip(func.__param_names__, func.__intypes__))
+
+        if func.__outtype__:
+            outtype = types.name(func.__outtype__)
+        else:
+            outtype = None
+
+        doc = func.__doc__ or ''
+        entries.append((name, doc, args, outtype))
+
+    entries.sort()
+    return entries

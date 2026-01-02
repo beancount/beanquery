@@ -42,6 +42,7 @@ dependencies = [
 docs = [
     'furo >= 2024.08.06',
     'sphinx ~= 8.1.0',
+    'jinja2 >= 3.0',
 ]
 
 [project.scripts]

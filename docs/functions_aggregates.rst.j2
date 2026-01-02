@@ -1,0 +1,9 @@
+Aggregation Functions
+=====================
+
+Functions that compute summary values across groups, as defined by the SELECT ... GROUP BY clause.
+
+{% for name, first_sentence in preprocess_function_summary(_describe_functions(FUNCTIONS, aggregates=True)) -%}
+* :func:`~fun.{{ name }}`{% if first_sentence %} - {{ first_sentence }}{% endif %}
+
+{% endfor %}

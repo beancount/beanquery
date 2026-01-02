@@ -1,0 +1,17 @@
+Date Functions
+==============
+
+.. type:: date
+
+  Enter dates in Beanquery by writing them in the format ``YYYY-MM-DD``. 
+  Example: ``SELECT account, amount FROM date >= 2022-01-01``.
+  Note: Do *not* enclose them in quotes. For historical reasons, 
+  dates in double quotes are accepted, but this is deprecated.
+
+The following functions are available for inspecting and
+manipulating dates:
+
+{% for name, first_sentence in preprocess_function_summary(_describe_functions(FUNCTIONS, aggregates=False, type_filter='date')) -%}
+* :func:`~fun.{{ name }}`{% if first_sentence %} - {{ first_sentence }}{% endif %}
+
+{% endfor %}

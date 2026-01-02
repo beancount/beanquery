@@ -1,0 +1,23 @@
+Amount and Commodity Functions
+===============================
+
+.. py:type:: amount
+
+   An amount is a value with a currency/commodity.
+
+   Examples: ``10.50 USD``, ``5 HOOL``.
+
+**Commodities** (synonymous to **currencies**) are not represented by their own type
+but are simply stated as all-caps :type:`strings<str>`.
+
+An amount is wrapped in a :type:`position` when it is registered in an account,
+potentially with the original cost attached.
+
+Amounts can be :func:`summed<sum>` up, resulting in :type:`inventories<inventory>`
+
+The following functions are available that involve amounts and currencies:
+
+{% for name, first_sentence in preprocess_function_summary(_describe_functions(FUNCTIONS, aggregates=False, type_filter='amount')) -%}
+* :func:`~fun.{{ name }}`{% if first_sentence %} - {{ first_sentence }}{% endif %}
+
+{% endfor %}

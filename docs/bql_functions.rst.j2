@@ -1,0 +1,58 @@
+List of all BQL Functions
+==========================
+
+This page documents all available BQL functions.
+
+..
+    Disambiguate functions and types by pretending they are in 
+    different modules (we are documenting BQL with the Sphinx Python
+    domain). We put functions in the virtual module "fun" (thus
+    functions must be explicitly linked like :func:`~fun.myfunction`).
+    Types have no module such that they are auto-linked by the 
+    `.. function:` directives.
+
+.. currentmodule:: fun
+
+{# Render documentation for all functions. This uses the function docstrings
+defined in beancount/query_env.py. There are multiple variants of many functions,
+differing in the type and number of arguments. We group the variants which
+have the same docstrings to render them en bloc. If all variants of a function
+of a certain name have the same docstring, we list all signatures directly in
+the RST function:: directive. Otherwise, we write .. function:: myfunction(...) 
+and render code blocks with the signatures, followed by the documentation for
+this group of variants.
+#}
+{% macro render_functions(functions) %}
+{% for name, args, has_multiple_docs, docs in preprocess_function_documentation(functions) %}
+{% if has_multiple_docs %}
+.. function:: {{ name }}(...)
+
+{% for variant in docs %}
+  ::
+
+    {{ variant.signatures }}
+
+{{ variant.doc_text | indent(2, first=True) }}
+
+{% endfor %}
+{% else %}
+.. function::
+{% for sig in args %}
+   {{ sig }}
+{% endfor %}
+
+{{ docs | indent(2, first=True) }}
+
+{% endif %}
+{% endfor %}
+{% endmacro %}
+
+Simple functions
+----------------
+
+{{ render_functions(_describe_functions(FUNCTIONS)) }}
+
+Aggregation functions
+---------------------
+
+{{ render_functions(_describe_functions(FUNCTIONS, aggregates=True)) }}

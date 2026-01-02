@@ -1,0 +1,14 @@
+Targets: Entry
+==============
+
+This is the list of all the fields you can use in the 
+SELECT ... clause and the FROM ... clause of a BQL query.
+
+For available functions and aggregates to use with these 
+columns, see :doc:`functions_index`.
+
+{% for name, type_name, doc in preprocess_targets(EntriesTable) -%}
+* **{{ name }}**: ({{ type_name }}) {{ doc }}
+
+{% endfor %}
+

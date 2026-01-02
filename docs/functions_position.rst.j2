@@ -1,0 +1,22 @@
+Position & Inventory Functions
+===============================
+.. py:type:: position
+
+   A position is a single amount held at cost.
+
+   Example: `10 HOOL {100.30 USD}`
+
+.. py:type:: inventory
+
+   A collection of multiple positions is an inventory. 
+
+Positions can be :func:`summed<func.sum>` up, resulting in 
+:type:`inventories<inventory>`.
+
+Functions to inspect or modify positions and inventories:
+
+{% for name, first_sentence in preprocess_function_summary(_describe_functions(FUNCTIONS, aggregates=False, type_filter='position')) -%}
+* :func:`~fun.{{ name }}` - {{ first_sentence | indent(2)}}
+
+{% endfor %}
+

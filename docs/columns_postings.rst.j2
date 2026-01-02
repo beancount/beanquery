@@ -1,0 +1,14 @@
+Fields: Posting
+===============
+
+This is the list of all the fields you can use in the 
+WHERE ... clause of a BQL query.
+
+For available functions and aggregates to use with these 
+columns, see :doc:`functions_index`.
+
+{% for name, type_name, doc in preprocess_targets(PostingsTable) -%}
+* **{{ name }}**: ({{ type_name }}) {{ doc }}
+
+{% endfor %}
+

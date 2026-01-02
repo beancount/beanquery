@@ -1,0 +1,9 @@
+Access metadata
+===============
+
+Access metadata from postings, transactions, and accounts.
+
+{% for name, first_sentence in preprocess_function_summary(_describe_functions(FUNCTIONS, aggregates=False, type_filter='metadata')) -%}
+* :func:`~fun.{{ name }}`{% if first_sentence %} - {{ first_sentence }}{% endif %}
+
+{% endfor %}

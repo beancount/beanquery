@@ -406,6 +406,14 @@ class EvalCoalesce(EvalNode):
 
 
 class EvalFunction(EvalNode):
+    """Base class for function evaluation nodes.
+
+    Class Attributes:
+        __intypes__: List of input parameter types for type checking.
+        __outtype__: Output type of the function. None means no type
+          annotation. To annotate that the function returns None, use
+          types.NoneType.
+    """
     __slots__ = ('operands',)
 
     # Type constraints on the input arguments.

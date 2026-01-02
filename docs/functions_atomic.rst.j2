@@ -1,0 +1,37 @@
+Atomic Functions
+================
+
+.. type:: str
+
+  Strings in Beanquery should be enclosed in *single* quotes.
+  Example: ``SELECT * FROM payee == 'Supermarket'``. 
+  
+  Note: For historical reasons, strings in double quotes can sometimes be used,
+  but if they match a column name, they will be interpreted as this column
+  name, not a string. Do not use them.
+
+.. type:: bool
+
+  This represents a logical value (yes/no). The acceptable values are ``TRUE``
+  or ``FALSE``.
+
+.. type:: set
+
+  This represents a set of values, for example all accounts that are touched
+  by a transaction. 
+
+.. type:: int
+
+  A whole number, -1, 0, 1, 2...
+
+.. type:: decimal
+
+  This is a decimal number, as used for example for amounts of currencies 
+  or commodities. Example: 1.25.
+
+The following functions can be used to work on basic types: 
+
+{% for name, first_sentence in preprocess_function_summary(_describe_functions(FUNCTIONS, aggregates=False, type_filter='atomic')) -%}
+* :func:`~fun.{{ name }}`{% if first_sentence %} - {{ first_sentence }}{% endif %}
+
+{% endfor %}
