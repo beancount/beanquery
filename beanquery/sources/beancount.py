@@ -359,20 +359,22 @@ class EntriesTable(_BeancountTable):
 
     @columns.register(set)
     def tags(entry):
-        """The set of tags of the transaction."""
+        """The set of tags (#abc) of the transaction."""
         return getattr(entry, 'tags', None)
 
     @columns.register(set)
     def links(entry):
-        """The set of links of the transaction."""
+        """The set of links (^abc) of the transaction."""
         return getattr(entry, 'links', None)
 
     @columns.register(dict)
     def meta(entry):
+        """The metadata of the transaction."""
         return entry.meta
 
     @columns.register(typing.Set[str])
     def accounts(entry):
+        """The set of accounts of the transaction."""
         return getters.get_entry_accounts(entry)
 
 _TABLES.append(EntriesTable)

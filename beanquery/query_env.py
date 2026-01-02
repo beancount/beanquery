@@ -78,6 +78,7 @@ def register(name=None):
 
 @register('getitem')
 class GetItem2(query_compile.EvalFunction):
+    """Get one item from a dict object if it exists, otherwise a default value."""
     __intypes__ = [dict, str]
 
     def __init__(self, context, operands):
@@ -93,6 +94,7 @@ class GetItem2(query_compile.EvalFunction):
 
 @register('getitem')
 class GetItem3(query_compile.EvalFunction):
+    """Get one item from a dict object if it exists, otherwise a default value."""
     __intypes__ = [dict, str, types.Any]
 
     def __init__(self, context, operands):
@@ -128,6 +130,7 @@ def bool_(x):
 @function([str], int, name='int')
 @function([object], int, name='int')
 def int_(x):
+    """Convert the object to an integer number."""
     try:
         return int(x)
     except (ValueError, TypeError):
@@ -140,6 +143,7 @@ def int_(x):
 @function([str], Decimal, name='decimal')
 @function([object], Decimal, name='decimal')
 def decimal_(x):
+    """Convert the object to a decimal number."""
     try:
         return Decimal(x)
     except (ValueError, TypeError, decimal.InvalidOperation):
@@ -148,6 +152,7 @@ def decimal_(x):
 
 @function([types.Any], str, name='str')
 def str_(x):
+    """Convert any object to a string."""
     if x is True:
         return 'TRUE'
     if x is False:
@@ -159,6 +164,9 @@ def str_(x):
 @function([str], datetime.date, name='date')
 @function([object], datetime.date, name='date')
 def date_(x):
+    """Convert the argument to a date. The argument should be
+    a string in the format YYYY-MM-DD. Date objects are passed
+    unchanged. Objects are converted to None."""
     if isinstance(x, datetime.date):
         return x
     if isinstance(x, str):
@@ -375,7 +383,9 @@ def close_date(context, acc):
 @function([str], dict, pass_context=True)
 @function([str, str], object, pass_context=True)
 def open_meta(context, account, key=None):
-    """Get the metadata dict of the open directive of the account."""
+    """Get the metadata dict of the open directive of the account.
+    With one argument, returns all metadata as a dict object. With two
+    arguments, returns the value of a specific metadata key."""
     open_entry, _ = context.tables['accounts'].accounts.get(account, NONENONE)
     if open_entry is None:
         return None
@@ -453,13 +463,14 @@ def has_account(context, pattern):
 
 @function([position.Position], amount.Amount, name='units')
 def position_units(pos):
-    """Get the number of units of a position (stripping cost)."""
+    """Get the number of units. Returns the amount, stripping cost."""
     return convert.get_units(pos)
 
 
 @function([inventory.Inventory], inventory.Inventory, name='units')
 def inventory_units(inv):
-    """Get the number of units of an inventory (stripping cost)."""
+    """For all position in the inventory, strip the information about
+    at which cost they were acquired. The result is another inventory."""
     return inv.reduce(convert.get_units)
 
 
@@ -471,7 +482,9 @@ def position_cost(pos):
 
 @function([inventory.Inventory], inventory.Inventory, name='cost')
 def inventory_cost(inv):
-    """Get the cost of an inventory."""
+    """Get the cost of all positions in an inventory. Returns an
+    inventory with as many positions as there were currencies by which
+    the positions in the original inventory were acquired."""
     return inv.reduce(convert.get_cost)
 
 
@@ -518,7 +531,8 @@ def inventory_value(context, inv, date=None):
 @function([str, str], Decimal, pass_context=True)
 @function([str, str, datetime.date], Decimal, pass_context=True, name='getprice')
 def getprice(context, base, quote, date=None):
-    """Fetch a price."""
+    """Fetch a price. Arguments: Base currency, e.g. 'EUR'; Commodity name (string);
+    Date: Price as of this date. Default: Latest price."""
     price_map = context.tables['prices'].price_map
     pair = (base.upper(), quote.upper())
     _, price = prices.get_price(price_map, pair, date)
@@ -614,7 +628,11 @@ types.ALIASES[datetime.date] = Date
 @function([str], datetime.date)
 @function([str, str], datetime.date)
 def parse_date(string, frmt=None):
-    """Parse date from string."""
+    """Parse date from string (first argument). Without second argument,
+    the 'dateutil' library is used to parse the string, and can deal with
+    several time stamp formats. The optional second argument specifies the
+    format as in the 'datetime' library, for example:
+    '%Y-%m-%d' to parse '2022-01-20'."""
     if frmt is None:
         return dateutil.parser.parse(string).date()
     return datetime.datetime.strptime(string, frmt).date()
@@ -634,7 +652,10 @@ def date_add(x, y):
 
 @function([str, datetime.date], datetime.date)
 def date_trunc(field, x):
-    """Truncate a date to the specified precision."""
+    """Truncate a date to the specified precision. Example: date_trunc('month',
+    date). Make sure to use single quotes in the first argument, as
+    double-quoted strings are parsed as column names for backwards compatibility
+    reasons."""
     if field == 'week':
         return x - relativedelta(weekday=weekday(0, -1))
     if field == 'month':
@@ -654,7 +675,25 @@ def date_trunc(field, x):
 
 @function([str, datetime.date], int)
 def date_part(field, x):
-    """Extract the specified field from a date."""
+    """Extract the specified field from a date.
+
+    Arguments:
+
+      field: Date part to extract, for example, 'year', 'month', 'week', 'day'. Details below.
+        since the UNIX epoch.
+      x: The date to extract the field from.
+
+    Details:
+        The 'field' argument can be any of
+
+        * 'weekday'/'dow', 'week', 'month', 'quarter', 'year', 'decade', 'century', 'millennium', or
+        * 'epoch': returns the number of seconds since the UNIX epoch.
+        * 'isoweekday'/'isodow', 'isoyear': The ISO 8601 week number or year, which
+          might differ from the conventional understanding around New Year's eve.
+
+        Make sure to use single quotes for 'field', as double-quoted strings are parsed
+        as column names for backwards compatibility reasons.
+    """
     if field == 'weekday' or field == 'dow':
         return x.weekday()
     if field == 'isoweekday' or field == 'isodow':
@@ -684,7 +723,12 @@ def date_part(field, x):
 
 @function([str], relativedelta)
 def interval(x):
-    """Construct a relative time interval."""
+    """Construct a relative time interval.
+
+    Arguments:
+      x: A string of the form 'N unit' where unit is one of 'day', 'month', 'year'
+        (Plural forms are also accepted). Examples: '1 month', '-20 days'.
+    """
     m = re.fullmatch(r'([-+]?[0-9]+)\s+(day|month|year)s?', x)
     if not m:
         return None
@@ -747,6 +791,19 @@ def date_bin(stride, source, origin):
 
 @function([str, datetime.date, datetime.date], datetime.date, name='date_bin')
 def date_bin_str(stride, source, origin):
+    """Bin a date into the specified stride aligned with the specified origin.
+
+    As an extension to the the SQL standard ``date_bin()`` function this
+    function also accepts strides containing units of months and years.
+
+    Arguments:
+      stride: A string representing a time interval, e.g. '1 day', '1 month',
+        '1 year'; Make sure to use single quotes in the first argument, as
+        double-quoted strings are parsed as column names for backwards
+        compatibility.
+      source: The date to bin; origin: The start of the binning interval.
+      relativedelta: Relative time interval, as generated by interval().
+    """
     return date_bin(interval(stride), source, origin)
 
 
