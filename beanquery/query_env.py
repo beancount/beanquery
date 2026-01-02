@@ -29,6 +29,26 @@ from beancount.core.account_types import get_account_sign, get_account_sort_key
 from beanquery import query_compile
 from beanquery import types
 
+# Type categories for function classification
+# These types are matched against the first input type of the function.
+# Functions can be force-assigned to one or more of these categories
+# by use of the group argument in the function decorators 'function',
+# 'register' or 'aggregate' in the 'query_env' module.
+TYPE_CATEGORIES = {
+    'amount': [amount.Amount],
+    'account': [],  # Must be manually assigned as account names are strings
+    'position': [position.Position, inventory.Inventory],
+    'metadata': [], # Must be manually assigned, signatures in query_env.py: 'object'
+    'date': [datetime.date],
+    'atomic': []  # fallback, default category
+}
+
+# Function groups for documentation. BQL functions are added to the appropriate
+# list inside this dictionary by the @function, @register and @aggregate
+# decorators.
+FUNCTION_DOC_GROUPS = {
+    x : [] for x in TYPE_CATEGORIES
+}
 
 class ColumnsRegistry(dict):
 
@@ -45,10 +65,53 @@ class ColumnsRegistry(dict):
         return decorator
 
 
-def function(intypes, outtype, pass_context=None, name=None):
+def _add_to_doc_groups(func_class, intypes, groups):
+    """Add a function class to the appropriate documentation groups.
+
+    If explicit groups are provided, use those. Otherwise, determine the group
+    based on the first input type using TYPE_CATEGORIES.
+
+    Args:
+        func_class: The function class to add to documentation groups.
+        intypes: List of input types for the function.
+        groups: Explicit groups specified by the decorator, or None.
+    """
+    target_groups = groups if groups else []
+
+    # If no explicit groups specified, determine from first input type
+    if not target_groups and intypes:
+        first_type = intypes[0]
+        for category, type_set in TYPE_CATEGORIES.items():
+            if first_type in type_set:
+                target_groups = [category]
+                break
+        # Default to 'atomic' if no match found
+        if not target_groups:
+            target_groups = ['atomic']
+
+    # Add to documentation groups
+    for group in target_groups:
+        if group in FUNCTION_DOC_GROUPS:
+            FUNCTION_DOC_GROUPS[group].append(func_class)
+
+
+def function(intypes, outtype, pass_context=None, name=None, groups=None):
+    """Decorator to register a function in the query environment. Expects
+    to decorate a function that takes operands as arguments.
+
+    Args:
+      intypes: List of input types.
+      outtype: Return value.
+      pass_context: Whether the function receives the context as first argument
+           or is pure.
+      name: Name of the function.
+      groups: In which group(s) the function in the help output (list). See
+           TYPE_CATEGORIES for valid group names.
+    """
     def decorator(func):
         class Func(query_compile.EvalFunction):
             __intypes__ = intypes
+            __outtype__ = outtype
             pure = not pass_context
             def __init__(self, context, operands):
                 super().__init__(context, operands, outtype)
@@ -67,8 +130,18 @@ def function(intypes, outtype, pass_context=None, name=None):
     return decorator
 
 
-def register(name=None):
+def register(name=None, groups=None):
+    """Decorator to register a function in the query environment with
+    more fine-grained control. Expects to decorate a class that implements
+    the query_compile.EvalFunction interface.
+
+    Args:
+      name: Name of the function.
+      groups: In which group(s) the function in the help output (list). See
+           TYPE_CATEGORIES for valid group names.
+    """
     def decorator(cls):
+
         if name is not None:
             cls.__name__ = name
         query_compile.FUNCTIONS[cls.__name__].append(cls)
@@ -160,9 +233,9 @@ def str_(x):
     return str(x)
 
 
-@function([datetime.date], datetime.date, name='date')
-@function([str], datetime.date, name='date')
-@function([object], datetime.date, name='date')
+@function([datetime.date], datetime.date, name = 'date', groups=['date'])
+@function([str], datetime.date, name='date', groups=['atomic', 'date'])
+@function([object], datetime.date, name='date', groups=['atomic', 'date'])
 def date_(x):
     """Convert the argument to a date. The argument should be
     a string in the format YYYY-MM-DD. Date objects are passed
@@ -177,7 +250,7 @@ def date_(x):
     return None
 
 
-@function([int, int, int], datetime.date, name='date')
+@function([int, int, int], datetime.date, name='date', groups=['date'])
 def date_from_ymd(year, month, day):
     """Construct a date with year, month, day arguments."""
     try:
@@ -295,7 +368,7 @@ def weekday_(x):
     return x.strftime('%a')
 
 
-@function([], datetime.date)
+@function([], datetime.date, groups=['date'])
 def today():
     """Today's date"""
     return datetime.date.today()
@@ -303,20 +376,20 @@ def today():
 
 # Operations on accounts.
 
-@function([str], str)
-@function([str, int], str)
+@function([str], str, groups=['account'])
+@function([str, int], str, groups=['account'])
 def root(acc, n=1):
     """Get the root name(s) of the account."""
     return account.root(n, acc)
 
 
-@function([str], str)
+@function([str], str, groups=['account'])
 def parent(acc):
     """Get the parent name of the account."""
     return account.parent(acc)
 
 
-@function([str], str)
+@function([str], str, groups=['account'])
 def leaf(acc):
     """Get the name of the leaf subaccount."""
     return account.leaf(acc)
@@ -362,7 +435,7 @@ def lower(string):
 NONENONE = None, None
 
 
-@function([str], datetime.date, pass_context=True)
+@function([str], datetime.date, pass_context=True, groups=['account', 'metadata'])
 def open_date(context, acc):
     """Get the date of the open directive of the account."""
     open_entry, _ = context.tables['accounts'].accounts.get(acc, NONENONE)
@@ -371,7 +444,7 @@ def open_date(context, acc):
     return open_entry.date
 
 
-@function([str], datetime.date, pass_context=True)
+@function([str], datetime.date, pass_context=True, groups=['account', 'metadata'])
 def close_date(context, acc):
     """Get the date of the close directive of the account."""
     _, close_entry = context.tables['accounts'].accounts.get(acc, NONENONE)
@@ -380,8 +453,8 @@ def close_date(context, acc):
     return close_entry.date
 
 
-@function([str], dict, pass_context=True)
-@function([str, str], object, pass_context=True)
+@function([str], dict, pass_context=True, groups=['account', 'metadata'])
+@function([str, str], object, pass_context=True, groups=['account', 'metadata'])
 def open_meta(context, account, key=None):
     """Get the metadata dict of the open directive of the account.
     With one argument, returns all metadata as a dict object. With two
@@ -395,30 +468,30 @@ def open_meta(context, account, key=None):
 
 
 # Stub kept only for function type checking and for generating documentation.
-@function([str], object)
+@function([str], object, pass_context = True, groups = ['metadata'])
 def meta(context, key):
     """Get some metadata key of the posting."""
     raise NotImplementedError
 
 
 # Stub kept only for function type checking and for generating documentation.
-@function([str], object)
+@function([str], object, pass_context = True, groups = ['metadata'])
 def entry_meta(context, key):
     """Get some metadata key of the transaction."""
     raise NotImplementedError
 
 
 # Stub kept only for function type checking and for generating documentation.
-@function([str], object)
+@function([str], object, pass_context=True, groups = ['metadata'])
 def any_meta(context, key):
     """Get metadata from the posting or its parent transaction if not present."""
     raise NotImplementedError
 
 
-@function([str], dict, pass_context=True)
-@function([str, str], object, pass_context=True)
-@function([str], dict, pass_context=True, name='commodity_meta')
-@function([str, str], object, pass_context=True, name='commodity_meta')
+@function([str], dict, pass_context=True, groups = ['amount', 'metadata'])
+@function([str, str], object, pass_context=True, groups = ['amount', 'metadata'])
+@function([str], dict, pass_context=True, name='commodity_meta', groups = ['amount', 'metadata'])
+@function([str, str], object, pass_context=True, name='commodity_meta', groups = ['amount', 'metadata'])
 def currency_meta(context, commodity, key=None):
     """Get the metadata dict of the commodity directive of the currency."""
     entry = context.tables['commodities'].commodities.get(commodity)
@@ -429,7 +502,7 @@ def currency_meta(context, commodity, key=None):
     return entry.meta.get(key)
 
 
-@function([str], str, pass_context=True)
+@function([str], str, pass_context=True, groups=['account'])
 def account_sortkey(context, acc):
     """Get a string to sort accounts in order taking into account the types."""
     account_types = context.tables['accounts'].types
@@ -438,7 +511,7 @@ def account_sortkey(context, acc):
 
 
 # Stub kept only for function type checking and for generating documentation.
-@function([str], bool)
+@function([str], bool, groups=['account'])
 def has_account(context, pattern):
     """True if the transaction has at least one posting matching the regular expression argument."""
     raise NotImplementedError
@@ -528,8 +601,8 @@ def inventory_value(context, inv, date=None):
     return inv.reduce(convert.get_value, price_map, date)
 
 
-@function([str, str], Decimal, pass_context=True)
-@function([str, str, datetime.date], Decimal, pass_context=True, name='getprice')
+@function([str, str], Decimal, pass_context=True, groups = ['position'])
+@function([str, str, datetime.date], Decimal, pass_context=True, name='getprice', groups = ['position'])
 def getprice(context, base, quote, date=None):
     """Fetch a price. Arguments: Base currency, e.g. 'EUR'; Commodity name (string);
     Date: Price as of this date. Default: Latest price."""
@@ -569,7 +642,8 @@ def joinstr(values):
     return ','.join(values)
 
 
-@function([str, inventory.Inventory], amount.Amount, name='only')
+@function([str, inventory.Inventory], amount.Amount, name='only',
+  groups=['amount'])
 def only_inventory(currency, inventory_):
     """Get one currency's amount from the inventory."""
     return inventory_.get_currency_units(currency)
@@ -625,8 +699,8 @@ class Date(types.Structure):
 types.ALIASES[datetime.date] = Date
 
 
-@function([str], datetime.date)
-@function([str, str], datetime.date)
+@function([str], datetime.date, groups=['atomic', 'date'])
+@function([str, str], datetime.date, groups=['atomic', 'date'])
 def parse_date(string, frmt=None):
     """Parse date from string (first argument). Without second argument,
     the 'dateutil' library is used to parse the string, and can deal with
@@ -650,7 +724,7 @@ def date_add(x, y):
     return x + datetime.timedelta(days=y)
 
 
-@function([str, datetime.date], datetime.date)
+@function([str, datetime.date], datetime.date, groups = ['date'])
 def date_trunc(field, x):
     """Truncate a date to the specified precision. Example: date_trunc('month',
     date). Make sure to use single quotes in the first argument, as
@@ -673,7 +747,7 @@ def date_trunc(field, x):
     return None
 
 
-@function([str, datetime.date], int)
+@function([str, datetime.date], int, groups = ['date'])
 def date_part(field, x):
     """Extract the specified field from a date.
 
@@ -721,7 +795,7 @@ def date_part(field, x):
     return None
 
 
-@function([str], relativedelta)
+@function([str], relativedelta, groups = ['date'])
 def interval(x):
     """Construct a relative time interval.
 
@@ -751,7 +825,7 @@ def interval(x):
     return None
 
 
-@function([relativedelta, datetime.date, datetime.date], datetime.date)
+@function([relativedelta, datetime.date, datetime.date], datetime.date, groups = ['date'])
 def date_bin(stride, source, origin):
     """Bin a date into the specified stride aligned with the specified origin.
 
@@ -789,7 +863,7 @@ def date_bin(stride, source, origin):
         return result
 
 
-@function([str, datetime.date, datetime.date], datetime.date, name='date_bin')
+@function([str, datetime.date, datetime.date], datetime.date, name='date_bin', groups = ['date'])
 def date_bin_str(stride, source, origin):
     """Bin a date into the specified stride aligned with the specified origin.
 
@@ -807,12 +881,25 @@ def date_bin_str(stride, source, origin):
     return date_bin(interval(stride), source, origin)
 
 
-def aggregator(intypes, name=None):
+def aggregator(intypes, outtype = None, name=None, groups = None):
+    """Decorator to register an aggregator function.
+
+    Args:
+      intypes: A list of types that the aggregator can accept.
+      outtype: The output type of the aggregator function. "None"
+        means no type annotation. To indicate that the function
+        returns None, use types.NoneType.
+      name: The name of the aggregator function.
+      groups: A list of groups that the aggregator belongs to. See
+           TYPE_CATEGORIES for valid group names.
+    """
     def decorator(cls):
         cls.__intypes__ = intypes
+        cls.__outtype__ = outtype
         if name is not None:
             cls.__name__ = name
         query_compile.FUNCTIONS[cls.__name__].append(cls)
+        _add_to_doc_groups(cls, intypes, groups)
 
         return cls
     return decorator
@@ -873,7 +960,7 @@ class SumAmount(query_compile.EvalAggregator):
             store[self.handle].add_amount(value)
 
 
-@aggregator([position.Position], name='sum')
+@aggregator([position.Position], inventory.Inventory, name='sum', groups = ['position'])
 class SumPosition(query_compile.EvalAggregator):
     """Calculate the sum of the position. The result is an Inventory."""
     def __init__(self, context, operands):
