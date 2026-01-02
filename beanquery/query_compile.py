@@ -411,6 +411,9 @@ class EvalFunction(EvalNode):
     # Type constraints on the input arguments.
     __intypes__ = []
 
+    # Output type annotation
+    __outtype__ = None
+
     def __init__(self, context, operands, dtype):
         super().__init__(dtype)
         self.context = context

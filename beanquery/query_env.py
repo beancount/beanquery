@@ -813,11 +813,12 @@ def aggregator(intypes, name=None):
         if name is not None:
             cls.__name__ = name
         query_compile.FUNCTIONS[cls.__name__].append(cls)
+
         return cls
     return decorator
 
 
-@aggregator([types.Asterisk], name='count')
+@aggregator([types.Asterisk], int, name='count')
 class Count(query_compile.EvalAggregator):
     """Count the number of input rows."""
     def __init__(self, context, operands):
@@ -827,7 +828,7 @@ class Count(query_compile.EvalAggregator):
         store[self.handle] += 1
 
 
-@aggregator([types.Any], name='count')
+@aggregator([types.Any], int, name='count')
 class CountArg(query_compile.EvalAggregator):
     """Count the number of non-NULL occurrences of the argument."""
     def __init__(self, context, operands):
@@ -839,7 +840,7 @@ class CountArg(query_compile.EvalAggregator):
             store[self.handle] += 1
 
 
-@aggregator([int], name='sum')
+@aggregator([int], int, name='sum')
 class SumInt(query_compile.EvalAggregator):
     """Calculate the sum of the numerical argument."""
     def __init__(self, context, operands):
@@ -851,7 +852,7 @@ class SumInt(query_compile.EvalAggregator):
             store[self.handle] += value
 
 
-@aggregator([Decimal], name='sum')
+@aggregator([Decimal], Decimal, name='sum')
 class SumDecimal(query_compile.EvalAggregator):
     """Calculate the sum of the numerical argument."""
     def update(self, store, context):
@@ -860,7 +861,7 @@ class SumDecimal(query_compile.EvalAggregator):
             store[self.handle] += value
 
 
-@aggregator([amount.Amount], name='sum')
+@aggregator([amount.Amount], inventory.Inventory, name='sum')
 class SumAmount(query_compile.EvalAggregator):
     """Calculate the sum of the amount. The result is an Inventory."""
     def __init__(self, context, operands):
@@ -884,7 +885,7 @@ class SumPosition(query_compile.EvalAggregator):
             store[self.handle].add_position(value)
 
 
-@aggregator([inventory.Inventory], name='sum')
+@aggregator([inventory.Inventory], inventory.Inventory, name='sum')
 class SumInventory(query_compile.EvalAggregator):
     """Calculate the sum of the inventories. The result is an Inventory."""
     def __init__(self, context, operands):
@@ -896,7 +897,7 @@ class SumInventory(query_compile.EvalAggregator):
             store[self.handle].add_inventory(value)
 
 
-@aggregator([types.Any], name='first')
+@aggregator([types.Any], types.Any, name='first')
 class First(query_compile.EvalAggregator):
     """Keep the first of the values seen."""
     def initialize(self, store):
@@ -908,7 +909,7 @@ class First(query_compile.EvalAggregator):
             store[self.handle] = value
 
 
-@aggregator([types.Any], name='last')
+@aggregator([types.Any], types.Any, name='last')
 class Last(query_compile.EvalAggregator):
     """Keep the last of the values seen."""
     def initialize(self, store):
@@ -919,7 +920,7 @@ class Last(query_compile.EvalAggregator):
         store[self.handle] = value
 
 
-@aggregator([types.Any], name='min')
+@aggregator([types.Any], types.Any, name='min')
 class Min(query_compile.EvalAggregator):
     """Compute the minimum of the values."""
     def initialize(self, store):
@@ -933,7 +934,7 @@ class Min(query_compile.EvalAggregator):
                 store[self.handle] = value
 
 
-@aggregator([types.Any], name='max')
+@aggregator([types.Any], types.Any, name='max')
 class Max(query_compile.EvalAggregator):
     """Compute the maximum of the values."""
     def initialize(self, store):
