@@ -41,10 +41,6 @@ except ImportError:
     readline = None
 
 
-HISTORY_FILENAME = '~/.config/beanquery/history'
-INIT_FILENAME = '~/.config/beanquery/init'
-
-
 class style:
     ERROR = '\033[31;1m'
     WARNING = '\033[31;1m'
@@ -160,6 +156,10 @@ class DispatchingShell(cmd.Cmd):
         self.color = interactive and os.environ.get('TERM', 'dumb') != 'dumb'
         self.add_help()
 
+        home_config = os.environ.get('XDG_CONFIG_HOME', '~/.config')
+        history_filename = path.expanduser(os.environ.get('BEANQUERY_HISTORY', path.join(home_config, 'beanquery/history')))
+        init_filename = path.expanduser(os.environ.get('BEANQUERY_INIT', path.join(home_config, 'beanquery/init')))
+
         if interactive and readline is not None:
 
             # Setup completion on ``tab``. This needs to be done differently
@@ -181,18 +181,18 @@ class DispatchingShell(cmd.Cmd):
             readline.set_completer_delims(" \t\n\"\\'`@$><=;|&{(")
 
             # Setup ``readline`` history handling.
-            history_filepath = path.expanduser(HISTORY_FILENAME)
-            os.makedirs(path.dirname(history_filepath), exist_ok=True)
-            with suppress(FileNotFoundError):
-                readline.read_history_file(history_filepath)
-                readline.set_history_length(2048)
-            atexit.register(readline.write_history_file, history_filepath)
+            if history_filename:
+                os.makedirs(path.dirname(history_filename), exist_ok=True)
+                with suppress(FileNotFoundError):
+                    readline.read_history_file(history_filename)
+                    readline.set_history_length(2048)
+                atexit.register(readline.write_history_file, history_filename)
 
         warnings.showwarning = self.warning
 
-        if runinit:
+        if runinit and init_filename:
             with suppress(FileNotFoundError):
-                with open(path.expanduser(INIT_FILENAME)) as f:
+                with open(init_filename) as f:
                     for line in f:
                         self.onecmd(line)
 
