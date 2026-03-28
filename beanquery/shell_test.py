@@ -326,18 +326,10 @@ class ClickTestCase(unittest.TestCase):
     """Base class for command-line program test cases."""
 
     def main(self, *args):
-        init_filename = shell.INIT_FILENAME
-        history_filename = shell.HISTORY_FILENAME
-        try:
-            shell.INIT_FILENAME = ''
-            shell.HISTORY_FILENAME = ''
-            runner = click.testing.CliRunner()
-            result = runner.invoke(shell.main, args, catch_exceptions=False)
-            self.assertEqual(result.exit_code, 0)
-            return result
-        finally:
-            shell.INIT_FILENAME = init_filename
-            shell.HISTORY_FILENAME = history_filename
+        runner = click.testing.CliRunner(env={'BEANQUERY_HISTORY': '', 'BEANQUERY_INIT': ''})
+        result = runner.invoke(shell.main, args, catch_exceptions=False)
+        self.assertEqual(result.exit_code, 0)
+        return result
 
 
 class TestShell(ClickTestCase):
