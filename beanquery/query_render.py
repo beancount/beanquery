@@ -248,9 +248,6 @@ class AmountRenderer(ColumnRenderer):
 
     def __init__(self, ctx):
         super().__init__(ctx)
-        # Use the display context inferred from the input ledger to
-        # determine the quantization of the column values.
-        self.quantize = ctx.dcontext.quantize
         # Use column specific display context for formatting.
         self.dcontext = _DisplayContext()
         # Maximum width of the commodity symbol.
@@ -259,8 +256,12 @@ class AmountRenderer(ColumnRenderer):
     def update(self, value):
         # Need to handle None to reuse this in PositionRenderer.
         if value is not None:
-            number = self.quantize(value.number, value.currency)
-            self.dcontext.update(number, value.currency)
+            # Update the column display context with the original number's
+            # precision, not the quantized precision. Using the quantized
+            # number here caused precision loss: if most amounts for a
+            # currency are integers (e.g., -1 USD), the quantized precision
+            # is 0, and amounts like 111.11 USD would display as 111 USD.
+            self.dcontext.update(value.number, value.currency)
             self.curwidth = max(self.curwidth, len(value.currency))
 
     def prepare(self):
