@@ -81,11 +81,20 @@ def node(name, fields):
 #   from_clause: An instance of 'From', or None if absent.
 #   where_clause: A root expression node, or None if absent.
 #   group_by: An instance of 'GroupBy', or None if absent.
-#   order_by: An instance of 'OrderBy', or None if absent.
-#   pivot_by: An instance of 'PivotBy', or None if absent.
-#   limit: An integer, or None is absent.
 #   distinct: A boolean value (True), or None if absent.
-Select = node('Select', 'targets from_clause where_clause group_by order_by pivot_by limit distinct')
+Select = node('Select', 'targets from_clause where_clause group_by distinct')
+
+# The top-level query node wrapping one or more SELECT bodies.
+#
+# A single SELECT is the degenerate case (len(queries) == 1).
+# In the future, UNION chain support will be added where len(queries) > 1.
+#
+# Attributes:
+#   queries:   List of Select nodes.
+#   order_by:  Optional list of OrderBy applied to the combined result.
+#   limit:     Optional integer limit applied to the combined result.
+#   pivot_by:  Optional PivotBy applied to the combined result.
+Query = node('Query', 'queries order_by limit pivot_by')
 
 # A select query that produces final balances for accounts.
 # This is equivalent to

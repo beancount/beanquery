@@ -15,7 +15,7 @@ bql
 
 statement
     =
-    | select
+    | query
     | balances
     | journal
     | print
@@ -23,18 +23,28 @@ statement
     | insert
     ;
 
-select::Select
-    = 'SELECT' ['DISTINCT' distinct:`True`] targets:(','.{ target }+ | asterisk)
-      ['FROM' from_clause:(_table | subselect | from)]
-      ['WHERE' where_clause:expression]
-      ['GROUP' 'BY' group_by:groupby]
+(* Wrapper for queries, currently a plain SELECT or a subquery. Future: UNION.
+   ORDER BY, LIMIT, and PIVOT BY after the last operand apply to the result set.
+*)
+query::Query
+    = queries+:( select | subquery )
       ['ORDER' 'BY' order_by:','.{order}+]
-      ['PIVOT' 'BY' pivot_by:pivotby]
       ['LIMIT' limit:integer]
+      ['PIVOT' 'BY' pivot_by:pivotby]
     ;
 
-subselect
-    = '(' @:select ')'
+(* SELECT body without ORDER BY / LIMIT / PIVOT BY so the enclosing query rule can claim
+   those tokens for the combined result set. *)
+select::Select
+    = 'SELECT' ['DISTINCT' distinct:`True`] targets:(','.{ target }+ | asterisk)
+      ['FROM' from_clause:(_table | subquery | from)]
+      ['WHERE' where_clause:expression]
+      ['GROUP' 'BY' group_by:groupby]
+    ;
+
+(* Parenthesised sub-query; uses query so ORDER BY / LIMIT are allowed inside. *)
+subquery
+    = '(' @:query ')'
     ;
 
 from::From
@@ -132,12 +142,20 @@ comparison
     | sum
     ;
 
+(* This operator is special in that it has parentheses. Avoid double parentheses
+with subquerys ALL( (SELECT ...) ) by &(...) look-ahead *)
 any::Any
-    = left:sum op:op 'any' '(' right:expression ')'
+    =
+    | left:sum op:op 'any' &('(' 'SELECT') right:subquery
+    | left:sum op:op 'any' '(' right:expression ')'
     ;
 
+(* This operator is special in that it has parentheses. Avoid double parentheses
+with subquerys ALL( (SELECT ...) ) by &(...) look-ahead *)
 all::All
-    = left:sum op:op 'all' '(' right:expression ')'
+    =
+    | left:sum op:op 'all' &('(' 'SELECT') right:subquery
+    | left:sum op:op 'all' '(' right:expression ')'
     ;
 
 op
@@ -282,7 +300,7 @@ subscript::Subscript
 
 atom
     =
-    | select
+    | subquery
     | function
     | constant
     | column
@@ -390,7 +408,7 @@ create_table::CreateTable
       (
       | '(' columns:','.{( identifier identifier )} ')' ['USING' using:string]
       | 'USING' using:string
-      | 'AS' query:select
+      | 'AS' query:query
       )
     ;
 

@@ -512,8 +512,8 @@ class TestFilterEntries(CommonInputBase, QueryBase):
     @staticmethod
     def filter_entries(query):
         entries = []
-        expr = query.c_where
-        for entry in query.table:
+        expr = query.select.c_where
+        for entry in query.select.table:
             if expr is None or expr(entry):
                 entries.append(entry)
         return entries

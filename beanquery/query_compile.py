@@ -604,7 +604,33 @@ class EvalConstantSubquery1D(EvalNode):
 EvalTarget = collections.namedtuple('EvalTarget', 'c_expr name is_aggregate')
 
 
-# A compiled query, ready for execution.
+# A compiled query wrapping a SELECT (or future UNION).
+#
+# This mirrors ast.Query which wraps ast.Select and owns ORDER BY, LIMIT.
+#
+# Attributes:
+#   select: The inner EvalSelect (or future EvalUnion).
+#   order_spec: A list of (integer indexes, sort order) tuples.
+#   limit: An optional integer used to cut off the number of result rows returned.
+@dataclasses.dataclass
+class EvalQuery:
+    select: EvalSelect
+    order_spec: list[tuple[int, ast.Ordering]]
+    limit: int
+
+    @property
+    def columns(self):
+        return self.select.columns
+
+    @property
+    def c_targets(self):
+        return self.select.c_targets
+
+    def __call__(self):
+        return query_execute.execute_query(self)
+
+
+# A compiled SELECT, ready for execution.
 #
 # Attributes:
 #   c_targets: A list of compiled targets (instancef of EvalTarget).
@@ -614,19 +640,14 @@ EvalTarget = collections.namedtuple('EvalTarget', 'c_expr name is_aggregate')
 #     this list of indexes should always cover all non-aggregates in 'c_targets'.
 #     And this list may well include some invisible columns if only specified in
 #     the GROUP BY clause.
-#   order_spec: A list of (integer indexes, sort order) tuples.
-#     This list may refer to either aggregates or non-aggregates.
-#   limit: An optional integer used to cut off the number of result rows returned.
 #   distinct: An optional boolean that requests we should uniquify the result rows.
 @dataclasses.dataclass
-class EvalQuery:
+class EvalSelect:
     table: tables.Table
     c_targets: list
     c_where: EvalNode
     group_indexes: list[int]
     having_index: int
-    order_spec: list[tuple[int, ast.Ordering]]
-    limit: int
     distinct: bool
 
     @property

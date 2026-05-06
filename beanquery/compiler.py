@@ -28,6 +28,7 @@ from .query_compile import (
     EvalOr,
     EvalPivot,
     EvalQuery,
+    EvalSelect,
     EvalConstantSubquery1D,
     EvalRow,
     EvalTarget,
@@ -97,6 +98,66 @@ class Compiler:
         raise NotImplementedError
 
     @_compile.register
+    def _query(self, node: ast.Query):
+        return self._compile_query_single_select(node)
+
+    def _compile_query_single_select(self, node: ast.Query):
+        # Compile the single SELECT body (UNION support comes later).
+        select = node.queries[0]
+        eval_select = self._select(select)
+
+        # ORDER BY belongs to the enclosing Query, not the Select.
+        new_targets, order_spec = self._compile_order_by(node.order_by, eval_select.c_targets)
+        eval_select.c_targets.extend(new_targets)
+
+        # DISTINCT with ORDER BY on columns not in SELECT produces non-deterministic
+        # results: when multiple rows have the same visible values but different
+        # ORDER BY values, which row survives DISTINCT is arbitrary.
+        # We allow ORDER BY f(x) if x is visible, since f(x) is computable from x.
+        if eval_select.distinct and new_targets:
+            visible_column_ids = set()
+            for t in eval_select.c_targets:
+                if t.name is not None:
+                    visible_column_ids.update(id(c) for c in _collect_columns(t.c_expr))
+
+            for target in new_targets:
+                for col in _collect_columns(target.c_expr):
+                    if id(col) not in visible_column_ids:
+                        raise CompilationError(
+                            f'When using DISTINCT, ORDER BY expressions must only '
+                            f'reference columns that appear in the SELECT list. '
+                            f'Offending ORDER BY expression: {node.order_by[0].column.text}')
+
+        # If this is an aggregate query (it groups, see list of indexes), check that
+        # the set of non-aggregates match exactly the group indexes. This should
+        # always be the case at this point, because we have added all the necessary
+        # targets to the list of group-by expressions and should have resolved all
+        # the indexes.
+        if eval_select.group_indexes is not None:
+            non_aggregate_indexes = {i for i, t in enumerate(eval_select.c_targets)
+                                     if not t.is_aggregate}
+            if non_aggregate_indexes != set(eval_select.group_indexes):
+                missing_names = ['"{}"'.format(eval_select.c_targets[i].name)
+                                 for i in non_aggregate_indexes - set(eval_select.group_indexes)]
+                raise CompilationError(
+                    'all non-aggregates must be covered by GROUP-BY clause in aggregate query: '
+                    'the following targets are missing: {}'.format(','.join(missing_names)))
+
+        # Wrap in EvalQuery with ORDER BY and LIMIT.
+        eval_query = EvalQuery(
+            select=eval_select,
+            order_spec=order_spec,
+            limit=node.limit,
+        )
+
+        # PIVOT applies to the final sorted/paged result set.
+        pivots = self._compile_pivot_by(node.pivot_by, eval_select.c_targets, eval_select.group_indexes)
+        if pivots:
+            return EvalPivot(eval_query, pivots)
+
+        return eval_query
+
+    @_compile.register
     def _select(self, node: ast.Select):
         self.stack.append(self.table)
 
@@ -123,47 +184,26 @@ class Compiler:
         new_targets, group_indexes, having_index = self._compile_group_by(node.group_by, c_targets)
         c_targets.extend(new_targets)
 
-        # Process the ORDER-BY clause.
-        new_targets, order_spec = self._compile_order_by(node.order_by, c_targets)
-        c_targets.extend(new_targets)
-
-        # If this is an aggregate query (it groups, see list of indexes), check that
-        # the set of non-aggregates match exactly the group indexes. This should
-        # always be the case at this point, because we have added all the necessary
-        # targets to the list of group-by expressions and should have resolved all
-        # the indexes.
-        if group_indexes is not None:
-            non_aggregate_indexes = {index for index, c_target in enumerate(c_targets)
-                                     if not c_target.is_aggregate}
-            if non_aggregate_indexes != set(group_indexes):
-                missing_names = ['"{}"'.format(c_targets[index].name)
-                                 for index in non_aggregate_indexes - set(group_indexes)]
-                raise CompilationError(
-                    'all non-aggregates must be covered by GROUP-BY clause in aggregate query: '
-                    'the following targets are missing: {}'.format(','.join(missing_names)))
-
-        query = EvalQuery(self.table,
-                          c_targets,
-                          c_where,
-                          group_indexes,
-                          having_index,
-                          order_spec,
-                          node.limit,
-                          node.distinct)
-
-        pivots = self._compile_pivot_by(node.pivot_by, c_targets, group_indexes)
-        if pivots:
-            return EvalPivot(query, pivots)
+        # ORDER BY and LIMIT are compiled by the enclosing _query handler,
+        # which also validates aggregate coverage after ORDER BY targets are added.
+        select = EvalSelect(
+            table=self.table,
+            c_targets=c_targets,
+            c_where=c_where,
+            group_indexes=group_indexes,
+            having_index=having_index,
+            distinct=node.distinct,
+        )
 
         self.stack.pop()
-        return query
+        return select
 
     def _compile_from(self, node):
         if node is None:
             return None
 
         # Subquery.
-        if isinstance(node, ast.Select):
+        if isinstance(node, ast.Query):
             self.table = SubqueryTable(self._compile(node))
             return None
 
@@ -735,7 +775,11 @@ class Compiler:
         self.table = self.context.tables.get('entries')
         expr = self._compile_from(node.from_clause)
         targets = [EvalTarget(EvalRow(), 'ROW(*)', False)]
-        return EvalQuery(self.table, targets, expr, None, None, None, None, False)
+        return EvalQuery(
+            select=EvalSelect(self.table, targets, expr, None, None, False),
+            order_spec=None,
+            limit=None,
+        )
 
     @_compile.register
     def _create_table(self, node: ast.CreateTable):
@@ -789,7 +833,7 @@ def transform_journal(journal):
     Returns:
       An instance of an uncompiled Select object.
     """
-    cooked_select = parser.parse("""
+    cooked = parser.parse("""
 
         SELECT
            date,
@@ -804,12 +848,15 @@ def transform_journal(journal):
     """.format(where=('WHERE account ~ "{}"'.format(journal.account)
                       if journal.account
                       else ''),
-               summary_func=journal.summary_func or ''))
+               summary_func=journal.summary_func or '')).queries[0]
 
-    return ast.Select(cooked_select.targets,
-                      journal.from_clause,
-                      cooked_select.where_clause,
-                      None, None, None, None, None)
+    select = ast.Select(
+        cooked.targets,
+        journal.from_clause,
+        cooked.where_clause,
+        None, None)
+
+    return ast.Query(queries=[select], order_by=None, limit=None, pivot_by=None)
 
 
 def transform_balances(balances):
@@ -826,20 +873,22 @@ def transform_balances(balances):
     ## the first or last sort-order value gets used, because it would simplify
     ## the input statement.
 
-    cooked_select = parser.parse("""
+    cooked_query = parser.parse("""
 
       SELECT account, SUM({}(position))
       GROUP BY account, ACCOUNT_SORTKEY(account)
       ORDER BY ACCOUNT_SORTKEY(account)
 
     """.format(balances.summary_func or ""))
+    cooked = cooked_query.queries[0]
 
-    return ast.Select(cooked_select.targets,
-                      balances.from_clause,
-                      balances.where_clause,
-                      cooked_select.group_by,
-                      cooked_select.order_by,
-                      None, None, None)
+    select = ast.Select(
+        cooked.targets,
+        balances.from_clause,
+        balances.where_clause,
+        cooked.group_by,
+        None)
+    return ast.Query(queries=[select], order_by=cooked_query.order_by, limit=None, pivot_by=None)
 
 
 def get_target_name(target):
@@ -907,6 +956,14 @@ def is_aggregate(node):
     # much. Performance of the query compilation matters very little overall.
     _, aggregates = get_columns_and_aggregates(node)
     return bool(aggregates)
+
+
+def _collect_columns(node):
+    """Recursively collect all EvalColumn nodes from an expression tree."""
+    if isinstance(node, EvalColumn):
+        yield node
+    for child in node.childnodes():
+        yield from _collect_columns(child)
 
 
 def compile(context, statement, parameters=None):

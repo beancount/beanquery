@@ -204,12 +204,12 @@ class CompileSelectBase(unittest.TestCase):
           AssertionError: if the check fails.
         """
         # Check that the group references cover all the simple indexes.
-        if query.group_indexes is not None:
+        if query.select.group_indexes is not None:
             non_aggregate_indexes = [index
                                      for index, c_target in enumerate(query.c_targets)
                                      if not compiler.is_aggregate(c_target.c_expr)]
 
-            self.assertEqual(set(non_aggregate_indexes), set(query.group_indexes),
+            self.assertEqual(set(non_aggregate_indexes), set(query.select.group_indexes),
                              "Invalid indexes: {}".format(query))
 
     def assertIndexes(self,
@@ -243,7 +243,7 @@ class CompileSelectBase(unittest.TestCase):
 
         self.assertEqual(
             set(expected_group_indexes) if expected_group_indexes is not None else None,
-            set(query.group_indexes) if query.group_indexes is not None else None)
+            set(query.select.group_indexes) if query.select.group_indexes is not None else None)
 
         self.assertEqual(
             set(expected_order_spec) if expected_order_spec is not None else None,
@@ -281,10 +281,10 @@ class TestCompileSelect(CompileSelectBase):
         # Test the compilation of from.
 
         query = self.compile("SELECT account FROM CLOSE;")
-        self.assertEqual(query.table.close, True)
+        self.assertEqual(query.select.table.close, True)
 
         query = self.compile("SELECT account FROM length(payee) != 0;")
-        self.assertTrue(isinstance(query.c_where, qc.EvalNode))
+        self.assertTrue(isinstance(query.select.c_where, qc.EvalNode))
 
         with self.assertRaises(CompilationError):
             query = self.compile("SELECT account FROM sum(payee) != 0;")
@@ -426,16 +426,16 @@ class TestCompileSelectGroupBy(CompileSelectBase):
     def test_compile_group_by_coverage(self):
         # Non-aggregates.
         query = self.compile("SELECT account, length(account);")
-        self.assertEqual(None, query.group_indexes)
+        self.assertEqual(None, query.select.group_indexes)
         self.assertEqual(None, query.order_spec)
 
         # Aggregates only.
         query = self.compile("SELECT first(account), last(account);")
-        self.assertEqual([], query.group_indexes)
+        self.assertEqual([], query.select.group_indexes)
 
         # Mixed with non-aggregates in group-by clause.
         query = self.compile("SELECT account, sum(number) GROUP BY account;")
-        self.assertEqual([0], query.group_indexes)
+        self.assertEqual([0], query.select.group_indexes)
 
         # Mixed with non-aggregates in group-by clause with non-aggregates a
         # strict subset of the group-by columns. 'account' is a subset of
@@ -443,7 +443,7 @@ class TestCompileSelectGroupBy(CompileSelectBase):
         query = self.compile("""
           SELECT account, sum(number) GROUP BY account, flag;
         """)
-        self.assertEqual([0, 2], query.group_indexes)
+        self.assertEqual([0, 2], query.select.group_indexes)
 
         # Non-aggregates not covered by group-by clause.
         with self.assertRaises(CompilationError):
@@ -467,7 +467,7 @@ class TestCompileSelectGroupBy(CompileSelectBase):
         query = self.compile("""
           SELECT date, flag, account GROUP BY date, flag, account;
         """)
-        self.assertEqual([0, 1, 2], query.group_indexes)
+        self.assertEqual([0, 1, 2], query.select.group_indexes)
 
     def test_compile_group_by_reconcile(self):
         # Check that no invisible column is created if redundant.
@@ -475,7 +475,7 @@ class TestCompileSelectGroupBy(CompileSelectBase):
           SELECT account, length(account), sum(number)
           GROUP BY account, length(account);
         """)
-        self.assertEqual([0, 1], query.group_indexes)
+        self.assertEqual([0, 1], query.select.group_indexes)
 
 
 class TestCompileSelectOrderBy(CompileSelectBase):
@@ -484,20 +484,20 @@ class TestCompileSelectOrderBy(CompileSelectBase):
         query = self.compile("""
           SELECT account, sum(number) GROUP BY account ORDER BY account;
         """)
-        self.assertEqual([0], query.group_indexes)
+        self.assertEqual([0], query.select.group_indexes)
         self.assertEqual([(0, False)], query.order_spec)
 
     def test_compile_order_by_simple_2(self):
         query = self.compile("""
           SELECT account, length(narration) GROUP BY account, 2 ORDER BY 1, 2;
         """)
-        self.assertEqual([0, 1], query.group_indexes)
+        self.assertEqual([0, 1], query.select.group_indexes)
         self.assertEqual([(0, False), (1, False)], query.order_spec)
 
         query = self.compile("""
           SELECT account, length(narration) as l GROUP BY account, l ORDER BY l;
         """)
-        self.assertEqual([0, 1], query.group_indexes)
+        self.assertEqual([0, 1], query.select.group_indexes)
         self.assertEqual([(1, False)], query.order_spec)
 
     def test_compile_order_by_create_non_agg(self):
@@ -514,7 +514,7 @@ class TestCompileSelectOrderBy(CompileSelectBase):
         query = self.compile("""
           SELECT account, year(date) GROUP BY 1, 2 ORDER BY 2;
         """)
-        self.assertEqual([0, 1], query.group_indexes)
+        self.assertEqual([0, 1], query.select.group_indexes)
         self.assertEqual([(1, False)], query.order_spec)
 
         # We detect similarity between order-by and targets yet.
@@ -543,33 +543,47 @@ class TestCompileSelectOrderBy(CompileSelectBase):
           GROUP BY length(account)
           ORDER BY length(account);
         """)
-        self.assertEqual([2], query.group_indexes)
+        self.assertEqual([2], query.select.group_indexes)
         self.assertEqual([(2, False)], query.order_spec)
 
     def test_compile_order_by_aggregate(self):
         query = self.compile("""
           SELECT account, first(narration) GROUP BY account ORDER BY 2;
         """)
-        self.assertEqual([0], query.group_indexes)
+        self.assertEqual([0], query.select.group_indexes)
         self.assertEqual([(1, False)], query.order_spec)
 
         query = self.compile("""
           SELECT account, first(narration) as f GROUP BY account ORDER BY f;
         """)
-        self.assertEqual([0], query.group_indexes)
+        self.assertEqual([0], query.select.group_indexes)
         self.assertEqual([(1, False)], query.order_spec)
 
         query = self.compile("""
           SELECT account, first(narration) GROUP BY account ORDER BY sum(number);
         """)
-        self.assertEqual([0], query.group_indexes)
+        self.assertEqual([0], query.select.group_indexes)
         self.assertEqual([(2, False)], query.order_spec)
 
         query = self.compile("""
           SELECT account GROUP BY account ORDER BY sum(number);
         """)
-        self.assertEqual([0], query.group_indexes)
+        self.assertEqual([0], query.select.group_indexes)
         self.assertEqual([(1, False)], query.order_spec)
+
+    def test_compile_distinct_order_by_invisible(self):
+        # DISTINCT with ORDER BY on a column not in SELECT is rejected.
+        # That would result in undefined ordering.
+        with self.assertRaises(CompilationError) as ctx:
+            self.compile("SELECT DISTINCT account ORDER BY date;")
+        self.assertIn('DISTINCT', str(ctx.exception))
+        self.assertIn('SELECT list', str(ctx.exception))
+        self.assertIn('date', str(ctx.exception))
+
+        # ORDER BY on a visible column is allowed.
+        self.compile("SELECT DISTINCT account, date ORDER BY date;")
+        self.compile("SELECT DISTINCT account ORDER BY account;")
+        self.compile("SELECT DISTINCT account ORDER BY 1;")
 
 
 class TestTranslationJournal(CompileSelectBase):
@@ -580,7 +594,7 @@ class TestTranslationJournal(CompileSelectBase):
         journal = parser.parse("JOURNAL;")
         select = compiler.transform_journal(journal)
         self.assertEqual(select,
-            ast.Select([
+            ast.Query(queries=[ast.Select([
                 ast.Target(ast.Column('date'), None),
                 ast.Target(ast.Column('flag'), None),
                 ast.Target(ast.Function('maxwidth', [
@@ -590,13 +604,12 @@ class TestTranslationJournal(CompileSelectBase):
                 ast.Target(ast.Column('account'), None),
                 ast.Target(ast.Column('position'), None),
                 ast.Target(ast.Column('balance'), None),
-            ],
-            None, None, None, None, None, None, None))
+            ], None, None, None, None)], order_by=None, limit=None, pivot_by=None))
 
     def test_journal_with_account(self):
         journal = parser.parse("JOURNAL 'liabilities';")
         select = compiler.transform_journal(journal)
-        self.assertEqual(select, ast.Select([
+        self.assertEqual(select, ast.Query(queries=[ast.Select([
             ast.Target(ast.Column('date'), None),
             ast.Target(ast.Column('flag'), None),
             ast.Target(ast.Function('maxwidth', [
@@ -608,15 +621,14 @@ class TestTranslationJournal(CompileSelectBase):
             ast.Target(ast.Column('account'), None),
             ast.Target(ast.Column('position'), None),
             ast.Target(ast.Column('balance'), None),
-        ],
-        None,
+        ], None,
         ast.Match(ast.Column('account'), ast.Constant('liabilities')),
-        None, None, None, None, None))
+        None, None, None)], order_by=None, limit=None, pivot_by=None))
 
     def test_journal_with_account_and_from(self):
         journal = parser.parse("JOURNAL 'liabilities' FROM year = 2014;")
         select = compiler.transform_journal(journal)
-        self.assertEqual(select, ast.Select([
+        self.assertEqual(select, ast.Query(queries=[ast.Select([
             ast.Target(ast.Column('date'), None),
             ast.Target(ast.Column('flag'), None),
             ast.Target(ast.Function('maxwidth', [
@@ -631,12 +643,12 @@ class TestTranslationJournal(CompileSelectBase):
         ],
         ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
         ast.Match(ast.Column('account'), ast.Constant('liabilities')),
-        None, None, None, None, None))
+        None, None, None)], order_by=None, limit=None, pivot_by=None))
 
     def test_journal_with_account_func_and_from(self):
         journal = parser.parse("JOURNAL 'liabilities' AT cost FROM year = 2014;")
         select = compiler.transform_journal(journal)
-        self.assertEqual(select, ast.Select([
+        self.assertEqual(select, ast.Query(queries=[ast.Select([
             ast.Target(ast.Column('date'), None),
             ast.Target(ast.Column('flag'), None),
             ast.Target(ast.Function('maxwidth', [
@@ -651,7 +663,7 @@ class TestTranslationJournal(CompileSelectBase):
         ],
         ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
         ast.Match(ast.Column('account'), ast.Constant('liabilities')),
-        None, None, None, None, None))
+        None, None, None)], order_by=None, limit=None, pivot_by=None))
 
 
 class TestTranslationBalance(CompileSelectBase):
@@ -666,31 +678,31 @@ class TestTranslationBalance(CompileSelectBase):
     def test_balance(self):
         balance = parser.parse("BALANCES;")
         select = compiler.transform_balances(balance)
-        self.assertEqual(select, ast.Select([
+        self.assertEqual(select, ast.Query(queries=[ast.Select([
             ast.Target(ast.Column('account'), None),
             ast.Target(ast.Function('sum', [
                 ast.Column('position')
             ]), None),
-        ],
-        None, None, self.group_by, self.order_by, None, None, None))
+        ], None, None, self.group_by, None, None)],
+        order_by=self.order_by, limit=None, pivot_by=None))
 
     def test_balance_with_units(self):
         balance = parser.parse("BALANCES AT cost;")
         select = compiler.transform_balances(balance)
-        self.assertEqual(select, ast.Select([
+        self.assertEqual(select, ast.Query(queries=[ast.Select([
             ast.Target(ast.Column('account'), None),
             ast.Target(ast.Function('sum', [
                 ast.Function('cost', [
                     ast.Column('position')
                 ])
             ]), None)
-        ],
-        None, None, self.group_by, self.order_by, None, None, None))
+        ], None, None, self.group_by, None, None)],
+        order_by=self.order_by, limit=None, pivot_by=None))
 
     def test_balance_with_units_and_from(self):
         balance = parser.parse("BALANCES AT cost FROM year = 2014;")
         select = compiler.transform_balances(balance)
-        self.assertEqual(select, ast.Select([
+        self.assertEqual(select, ast.Query(queries=[ast.Select([
             ast.Target(ast.Column('account'), None),
             ast.Target(ast.Function('sum', [
                 ast.Function('cost', [
@@ -699,26 +711,33 @@ class TestTranslationBalance(CompileSelectBase):
             ]), None),
         ],
         ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
-        None, self.group_by, self.order_by, None, None, None))
+        None, self.group_by, None, None)],
+        order_by=self.order_by, limit=None, pivot_by=None))
 
     def test_print(self):
         self.assertCompile(
             qc.EvalQuery(
-                Table('entries'),
-                [qc.EvalTarget(qc.EvalRow(), 'ROW(*)', False)],
-                None, None, None, None, None, False),
+                select=qc.EvalSelect(
+                    Table('entries'),
+                    [qc.EvalTarget(qc.EvalRow(), 'ROW(*)', False)],
+                    None, None, None, False),
+                order_spec=None,
+                limit=None),
             "PRINT;",
         )
 
     def test_print_from(self):
         self.assertCompile(
             qc.EvalQuery(
-                Table('entries'),
-                [qc.EvalTarget(qc.EvalRow(), 'ROW(*)', False)],
-                qc.Operator(ast.Equal, [
-                    Column('year', int),
-                    qc.EvalConstant(2014) ]),
-                None, None, None, None, False),
+                select=qc.EvalSelect(
+                    Table('entries'),
+                    [qc.EvalTarget(qc.EvalRow(), 'ROW(*)', False)],
+                    qc.Operator(ast.Equal, [
+                        Column('year', int),
+                        qc.EvalConstant(2014) ]),
+                    None, None, False),
+                order_spec=None,
+                limit=None),
             "PRINT FROM year = 2014;")
 
 
@@ -736,18 +755,24 @@ class TestCompileParameters(unittest.TestCase):
     def test_named_parameters(self):
         query = self.compile('''SELECT %(x)s + %(y)s''', {'x': 1, 'y': 2})
         self.assertEqual(query, qc.EvalQuery(
-            Table(''), [
-                # addition of constants is optimized away
-                qc.EvalTarget(qc.EvalConstant(3), '%(x)s + %(y)s', False)
-            ], None, None, None, None, None, None))
+            select=qc.EvalSelect(
+                Table(''), [
+                    # addition of constants is optimized away
+                    qc.EvalTarget(qc.EvalConstant(3), '%(x)s + %(y)s', False)
+                ], None, None, None, None),
+            order_spec=None,
+            limit=None))
 
     def test_positional_parameters(self):
         query = self.compile('''SELECT %s + %s''', (1, 2, ))
         self.assertEqual(query, qc.EvalQuery(
-            Table(''), [
-                # addition of constants is optimized away
-                qc.EvalTarget(qc.EvalConstant(3), '%s + %s', False)
-            ], None, None, None, None, None, None))
+            select=qc.EvalSelect(
+                Table(''), [
+                    # addition of constants is optimized away
+                    qc.EvalTarget(qc.EvalConstant(3), '%s + %s', False)
+                ], None, None, None, None),
+            order_spec=None,
+            limit=None))
 
     def test_mixing_parameters(self):
         with self.assertRaises(ProgrammingError):
@@ -780,7 +805,7 @@ class TestSelectFrom(unittest.TestCase):
 
     def test_select_from(self):
         query = self.compile('''SELECT x FROM foo''')
-        self.assertEqual(query.table, self.conn.tables['foo'])
+        self.assertEqual(query.select.table, self.conn.tables['foo'])
 
     def test_select_from_invalid(self):
         with self.assertRaisesRegex(beanquery.ProgrammingError, 'column "qux" not found in table "postings"'):
@@ -788,11 +813,11 @@ class TestSelectFrom(unittest.TestCase):
 
     def test_select_from_column(self):
         query = self.compile('''SELECT account FROM date''')
-        self.assertEqual(query.table, self.conn.tables['postings'])
+        self.assertEqual(query.select.table, self.conn.tables['postings'])
 
     def test_select_from_hash(self):
         query = self.compile('''SELECT x FROM #foo''')
-        self.assertEqual(query.table, self.conn.tables['foo'])
+        self.assertEqual(query.select.table, self.conn.tables['foo'])
 
     def test_select_from_hash_invalid(self):
         with self.assertRaisesRegex(beanquery.ProgrammingError, 'table "qux" does not exist'):
@@ -808,7 +833,7 @@ class TestSelectFrom(unittest.TestCase):
             del self.conn.tables['date']
         self.addCleanup(cleanup)
         query = self.compile('''SELECT year FROM #date''')
-        self.assertEqual(query.table, self.conn.tables['date'])
+        self.assertEqual(query.select.table, self.conn.tables['date'])
 
 
 class TestQuotedIdentifiers(unittest.TestCase):
@@ -825,9 +850,9 @@ class TestQuotedIdentifiers(unittest.TestCase):
 
     def test_from_quoted(self):
         query = self.compile('''SELECT * FROM postings''')
-        self.assertIs(query.table, self.conn.tables['postings'])
+        self.assertIs(query.select.table, self.conn.tables['postings'])
         query = self.compile('''SELECT * FROM "postings"''')
-        self.assertIs(query.table, self.conn.tables['postings'])
+        self.assertIs(query.select.table, self.conn.tables['postings'])
 
     def test_quoted_target(self):
         query = self.compile('''SELECT date FROM postings''')
