@@ -875,3 +875,44 @@ class TestQuotedIdentifiers(unittest.TestCase):
         # if the double quoted string is not a table name, it is a string literal ideed
         query = self.compile('''SELECT "a" + "b" FROM postings''')
         self.assertEqual(query.c_targets[0].c_expr.value, 'ab')
+
+
+class TestTryCoerceOperand(unittest.TestCase):
+    """Tests for Compiler._try_coerce_operand helper method.
+
+    Note: The following behaviors are tested via integration tests in
+    query_execute_test.py and do not have dedicated unit tests here:
+    - int to Decimal coercion (tested in test_operators: SELECT 2.0 * 2)
+    - Decimal to int coercion (tested in test_operators: SELECT 2 * 2.0)
+    - object to Decimal coercion (tested in test_operators_type_inference)
+    - Value preservation through coercion (tested in test_operators)
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.context = Connection()
+        cls.context.tables['test'] = test.Table(0)
+        cls.compiler = compiler.Compiler(cls.context)
+        cls.compiler.table = cls.context.tables['test']
+
+    def test_same_type_returns_operand(self):
+        """When operand type matches target type, return operand unchanged (fast path)."""
+        operand = qc.EvalConstant(D('42'), D)
+        result = self.compiler._try_coerce_operand(operand, D)
+        self.assertIs(result, operand)
+
+    def test_int_target_promotes_to_decimal(self):
+        """When target is int, promote to Decimal to avoid information loss."""
+        operand = qc.EvalConstant(D('42'), D)
+        result = self.compiler._try_coerce_operand(operand, int)
+        self.assertIsNotNone(result)
+        # Should be coerced to Decimal, not int
+        self.assertEqual(result.dtype, D)
+        self.assertEqual(result(None), D('42'))
+
+    def test_unsupported_coercion_returns_none(self):
+        """When coercion is not possible, return None."""
+        # Try to coerce to a type that's not in types.MAP
+        operand = qc.EvalConstant(42, int)
+        result = self.compiler._try_coerce_operand(operand, object)
+        self.assertIsNone(result)

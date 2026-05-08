@@ -693,6 +693,34 @@ class Compiler:
         op = OPERATORS[type(node)][0]
         return op(left, right)
 
+    def _try_coerce_operand(self, operand, target_type):
+        """Attempt to coerce an operand to a target type.
+
+        Args:
+          operand: An EvalNode to coerce.
+          target_type: The desired type to coerce to.
+
+        Returns:
+          Coerced EvalNode if coercion is possible, None otherwise.
+        """
+        if operand.dtype == target_type:
+            return operand
+
+        # The Beancount parser does not emit int typed values, thus casting to int
+        # is only going to loose information. Promote to decimal.
+        if target_type is int:
+            target_type = Decimal
+
+        name = types.MAP.get(target_type)
+        if name is None:
+            return None
+
+        func = types.function_lookup(FUNCTIONS, name, [operand])
+        if func is None:
+            return None
+
+        return func(self.context, [operand])
+
     @_compile.register
     def _binaryop(self, node: ast.BinaryOp):
         left = self._compile(node.left)
@@ -711,28 +739,16 @@ class Compiler:
 
             # Implement type inference when one of the operands is not strongly typed.
             if left.dtype is object and right.dtype is not object:
-                target = right.dtype
-                if target is int:
-                    # The Beancount parser does not emit int typed
-                    # values, thus casting to int is only going to
-                    # loose information. Promote to decimal.
-                    target = Decimal
-                name = types.MAP.get(target)
-                if name is None:
+                coerced = self._try_coerce_operand(left, right.dtype)
+                if coerced is None:
                     break
-                left = types.function_lookup(FUNCTIONS, name, [left])(self.context, [left])
+                left = coerced
                 continue
             if right.dtype is object and left.dtype is not object:
-                target = left.dtype
-                if target is int:
-                    # The Beancount parser does not emit int typed
-                    # values, thus casting to int is only going to
-                    # loose information. Promote to decimal.
-                    target = Decimal
-                name = types.MAP.get(target)
-                if name is None:
+                coerced = self._try_coerce_operand(right, left.dtype)
+                if coerced is None:
                     break
-                right = types.function_lookup(FUNCTIONS, name, [right])(self.context, [right])
+                right = coerced
                 continue
 
             # Failure.
