@@ -203,6 +203,12 @@ class DocumentsTable(Table):
     columns = _typed_namedtuple_to_columns(datatype)
 
 
+class CustomTable(Table):
+    name = 'custom'
+    datatype = data.Custom
+    columns = _typed_namedtuple_to_columns(datatype)
+
+
 class GetItemColumn(query_compile.EvalColumn):
     def __init__(self, key, dtype):
         super().__init__(dtype)

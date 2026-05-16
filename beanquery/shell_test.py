@@ -304,6 +304,7 @@ class TestCommands(unittest.TestCase):
             accounts
             balances
             commodities
+            custom
             documents
             entries
             events
