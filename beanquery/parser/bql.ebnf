@@ -23,11 +23,17 @@ statement
     | insert
     ;
 
-(* Wrapper for queries, currently a plain SELECT or a subquery. Future: UNION.
-   ORDER BY, LIMIT, and PIVOT BY after the last operand apply to the result set.
-*)
+(* Wrapper for queries, which can be either a plain SELECT or a chain of
+   SELECTs combined by set operators (UNION, UNION ALL).  ORDER BY, LIMIT,
+   and PIVOT BY after the last operand apply to the combined result set.
+   The list `operators` has one entry per inter-operand connector, always one
+   less than the number of queries. *)
 query::Query
     = queries+:( select | subquery )
+      { ( 'UNION' 'ALL' set_operators+:`'union_all'`
+        | 'UNION'       set_operators+:`'union'`
+        ) queries+:( select | subquery)
+      }*
       ['ORDER' 'BY' order_by:','.{order}+]
       ['LIMIT' limit:integer]
       ['PIVOT' 'BY' pivot_by:pivotby]

@@ -25,34 +25,34 @@ from tatsu.util import re, generic_main
 
 
 KEYWORDS: set[str] = {
-    'PRINT',
-    'LIMIT',
-    'USING',
-    'FROM',
-    'DESC',
-    'AS',
-    'BALANCES',
-    'GROUP',
-    'BY',
-    'IS',
-    'DISTINCT',
-    'TRUE',
-    'IN',
-    'NOT',
-    'WHERE',
-    'INTO',
-    'INSERT',
-    'JOURNAL',
-    'ASC',
-    'TABLE',
     'CREATE',
-    'HAVING',
-    'ORDER',
-    'FALSE',
-    'OR',
+    'AS',
+    'TABLE',
+    'PRINT',
     'PIVOT',
-    'SELECT',
+    'USING',
+    'ASC',
+    'JOURNAL',
+    'FROM',
     'AND',
+    'DESC',
+    'BALANCES',
+    'INSERT',
+    'HAVING',
+    'FALSE',
+    'SELECT',
+    'ORDER',
+    'NOT',
+    'INTO',
+    'IN',
+    'LIMIT',
+    'IS',
+    'BY',
+    'OR',
+    'TRUE',
+    'WHERE',
+    'GROUP',
+    'DISTINCT',
 }
 
 
@@ -137,16 +137,57 @@ class BQLParser(Parser):
                     '<select> <subquery>'
                 )
         self.add_last_node_to_name('queries')
+
+        def block0():
+            with self._group():
+                with self._choice():
+                    with self._option():
+                        self._token('UNION')
+                        self._token('ALL')
+                        self._constant('union_all')
+                        self.add_last_node_to_name('set_operators')
+                        self._define(
+                            [],
+                            ['set_operators'],
+                        )
+                    with self._option():
+                        self._token('UNION')
+                        self._constant('union')
+                        self.add_last_node_to_name('set_operators')
+                        self._define(
+                            [],
+                            ['set_operators'],
+                        )
+                    self._error(
+                        'expecting one of: '
+                        "'UNION'"
+                    )
+            with self._group():
+                with self._choice():
+                    with self._option():
+                        self._select_()
+                    with self._option():
+                        self._subquery_()
+                    self._error(
+                        'expecting one of: '
+                        '<select> <subquery>'
+                    )
+            self.add_last_node_to_name('queries')
+            self._define(
+                [],
+                ['queries', 'set_operators'],
+            )
+        self._closure(block0)
         with self._optional():
             self._token('ORDER')
             self._token('BY')
 
-            def sep0():
+            def sep1():
                 self._token(',')
 
-            def block1():
+            def block2():
                 self._order_()
-            self._positive_gather(block1, sep0)
+            self._positive_gather(block2, sep1)
             self.name_last_node('order_by')
             self._define(['order_by'], [])
         with self._optional():
@@ -162,7 +203,7 @@ class BQLParser(Parser):
             self._define(['pivot_by'], [])
         self._define(
             ['limit', 'order_by', 'pivot_by'],
-            ['queries'],
+            ['queries', 'set_operators'],
         )
 
     @tatsumasu('Select')

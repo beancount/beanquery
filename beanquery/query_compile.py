@@ -604,17 +604,101 @@ class EvalConstantSubquery1D(EvalNode):
 EvalTarget = collections.namedtuple('EvalTarget', 'c_expr name is_aggregate')
 
 
-# A compiled query wrapping a SELECT (or future UNION).
+@dataclasses.dataclass
+class EvalUnion:
+    """Execute a chain of SELECTs combined by set operators (UNION, UNION ALL).
+
+    This class has the same interface as EvalSelect: __call__ returns
+    (result_types, rows, visible_mask). It is wrapped by EvalQuery which
+    handles ORDER BY, LIMIT, and visible column extraction.
+
+    set_operators[i] is the set operator between queries[i] and queries[i+1].
+    Supported values: 'union' (deduplicate), 'union_all' (keep all rows).
+    """
+
+    queries: list
+    set_operators: list[str]
+
+    @property
+    def c_targets(self):
+        """Return targets from the first query (read-only view)."""
+        return self.queries[0].c_targets
+
+    @property
+    def columns(self):
+        return [t for t in self.c_targets if t.name is not None]
+
+    @property
+    def tables(self):
+        """Return list of tables from all operands."""
+        result = []
+        for q in self.queries:
+            result.extend(q.tables)
+        return result
+
+    def extend_targets(self, new_targets):
+        """Add invisible targets to all operands."""
+        for q in self.queries:
+            q.extend_targets(new_targets)
+
+    def __call__(self):
+        # Temporarily assign names to invisible targets so inner queries preserve them.
+        # Find a unique prefix by checking existing column names.
+        existing_names = {t.name for t in self.c_targets if t.name is not None}
+        col_num = 0
+        while f'col{col_num}' in existing_names:
+            col_num += 1
+
+        # Track which targets were originally invisible and give them temporary names.
+        invisible_indexes = []
+        for i, t in enumerate(self.c_targets):
+            if t.name is None:
+                invisible_indexes.append(i)
+                temp_name = f'col{col_num}'
+                col_num += 1
+                for q in self.queries:
+                    q.c_targets[i] = EvalTarget(q.c_targets[i].c_expr, temp_name, q.c_targets[i].is_aggregate)
+
+        # Accumulate rows, applying deduplication at each UNION boundary.
+        _, rows = self.queries[0]()
+        for op, query in zip(self.set_operators, self.queries[1:]):
+            _, next_rows = query()
+            if op == 'union_all':
+                rows = rows + next_rows
+            else:
+                # UNION: deduplicate the entire accumulated result, preserving
+                # first-seen order across all rows accumulated so far.
+                seen = set()
+                deduped = []
+                for r in rows + next_rows:
+                    if r not in seen:
+                        seen.add(r)
+                        deduped.append(r)
+                rows = deduped
+
+        # Restore invisible targets by removing temporary names.
+        for i in invisible_indexes:
+            for q in self.queries:
+                qt = q.c_targets[i]
+                q.c_targets[i] = EvalTarget(qt.c_expr, None, qt.is_aggregate)
+
+        # Return same interface as EvalSelect: (result_types, rows, visible_mask).
+        result_types = tuple(cursor.Column(t.name, t.c_expr.dtype) for t in self.c_targets)
+        visible_mask = [t.name is not None for t in self.c_targets]
+        return result_types, rows, visible_mask
+
+
+# A compiled query wrapping a SELECT or a UNION of multiple SELECTs.
 #
 # This mirrors ast.Query which wraps ast.Select and owns ORDER BY, LIMIT.
 #
 # Attributes:
-#   select: The inner EvalSelect (or future EvalUnion).
+#   select: The inner EvalSelect or EvalUnion.
 #   order_spec: A list of (integer indexes, sort order) tuples.
 #   limit: An optional integer used to cut off the number of result rows returned.
 @dataclasses.dataclass
 class EvalQuery:
-    select: EvalSelect
+    select: EvalSelect | EvalUnion
     order_spec: list[tuple[int, ast.Ordering]]
     limit: int
 
@@ -625,6 +709,23 @@ class EvalQuery:
     @property
     def c_targets(self):
         return self.select.c_targets
+
+    @property
+    def tables(self):
+        """Return list of tables from the inner select/union."""
+        assert isinstance(self.select, (EvalUnion, EvalSelect)), \
+            "Compiler must give us either an EvalUnion or an EvalSelect child"
+        if isinstance(self.select, EvalUnion):
+            return self.select.tables
+        elif isinstance(self.select, EvalSelect):
+            return [self.select.table]
+
+    def extend_targets(self, new_targets):
+        """Add invisible targets to the inner select/union."""
+        if isinstance(self.select, EvalUnion):
+            self.select.extend_targets(new_targets)
+        elif isinstance(self.select, EvalSelect):
+            self.select.c_targets.extend(new_targets)
 
     def __call__(self):
         return query_execute.execute_query(self)

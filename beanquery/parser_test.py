@@ -20,10 +20,11 @@ def Select(targets, from_clause=None, where_clause=None, **kwargs):
     return ast.Select(**defaults)
 
 
-def Query(queries=None, order_by=None, limit=None, pivot_by=None):
+def Query(queries=None, set_operators=None, order_by=None, limit=None, pivot_by=None):
     """Build an ast.Query wrapping a single Select, for test assertions."""
     return ast.Query(
         queries=queries or [],
+        set_operators=set_operators or [],
         order_by=order_by,
         limit=limit,
         pivot_by=pivot_by)
@@ -37,7 +38,7 @@ class QueryParserTestBase(unittest.TestCase):
     def assertParse(self, query, expected):
         # Convenience: a bare ast.Select expected is auto-wrapped in ast.Query.
         if isinstance(expected, ast.Select):
-            expected = ast.Query(queries=[expected], order_by=None, limit=None, pivot_by=None)
+            expected = ast.Query(queries=[expected], set_operators=[], order_by=None, limit=None, pivot_by=None)
         self.assertEqual(parser.parse(query), expected)
 
     def assertParseTarget(self, query, expected):
@@ -607,6 +608,8 @@ class TestRepr(unittest.TestCase):
                       name: 'a')
                     right: (constant
                       value: 42))))
+              set-operators: (
+              )
               order-by: (
                 (orderby
                   column: (column

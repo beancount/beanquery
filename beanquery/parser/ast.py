@@ -91,10 +91,12 @@ Select = node('Select', 'targets from_clause where_clause group_by distinct')
 #
 # Attributes:
 #   queries:   List of Select nodes.
+#   set_operators: List of set-operator names between adjacent queries, e.g.
+#              'union' or 'union_all'.  len == len(queries) - 1.
 #   order_by:  Optional list of OrderBy applied to the combined result.
 #   limit:     Optional integer limit applied to the combined result.
 #   pivot_by:  Optional PivotBy applied to the combined result.
-Query = node('Query', 'queries order_by limit pivot_by')
+Query = node('Query', 'queries set_operators order_by limit pivot_by')
 
 # A select query that produces final balances for accounts.
 # This is equivalent to

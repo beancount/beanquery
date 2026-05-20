@@ -604,7 +604,8 @@ class TestTranslationJournal(CompileSelectBase):
                 ast.Target(ast.Column('account'), None),
                 ast.Target(ast.Column('position'), None),
                 ast.Target(ast.Column('balance'), None),
-            ], None, None, None, None)], order_by=None, limit=None, pivot_by=None))
+            ], None, None, None, None)],
+            set_operators=[], order_by=None, limit=None, pivot_by=None))
 
     def test_journal_with_account(self):
         journal = parser.parse("JOURNAL 'liabilities';")
@@ -623,7 +624,8 @@ class TestTranslationJournal(CompileSelectBase):
             ast.Target(ast.Column('balance'), None),
         ], None,
         ast.Match(ast.Column('account'), ast.Constant('liabilities')),
-        None, None, None)], order_by=None, limit=None, pivot_by=None))
+        None, None, None)],
+        set_operators=[], order_by=None, limit=None, pivot_by=None))
 
     def test_journal_with_account_and_from(self):
         journal = parser.parse("JOURNAL 'liabilities' FROM year = 2014;")
@@ -643,7 +645,8 @@ class TestTranslationJournal(CompileSelectBase):
         ],
         ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
         ast.Match(ast.Column('account'), ast.Constant('liabilities')),
-        None, None, None)], order_by=None, limit=None, pivot_by=None))
+        None, None, None)],
+        set_operators=[], order_by=None, limit=None, pivot_by=None))
 
     def test_journal_with_account_func_and_from(self):
         journal = parser.parse("JOURNAL 'liabilities' AT cost FROM year = 2014;")
@@ -663,7 +666,8 @@ class TestTranslationJournal(CompileSelectBase):
         ],
         ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
         ast.Match(ast.Column('account'), ast.Constant('liabilities')),
-        None, None, None)], order_by=None, limit=None, pivot_by=None))
+        None, None, None)],
+        set_operators=[], order_by=None, limit=None, pivot_by=None))
 
 
 class TestTranslationBalance(CompileSelectBase):
@@ -684,7 +688,7 @@ class TestTranslationBalance(CompileSelectBase):
                 ast.Column('position')
             ]), None),
         ], None, None, self.group_by, None, None)],
-        order_by=self.order_by, limit=None, pivot_by=None))
+        set_operators=[], order_by=self.order_by, limit=None, pivot_by=None))
 
     def test_balance_with_units(self):
         balance = parser.parse("BALANCES AT cost;")
@@ -697,7 +701,7 @@ class TestTranslationBalance(CompileSelectBase):
                 ])
             ]), None)
         ], None, None, self.group_by, None, None)],
-        order_by=self.order_by, limit=None, pivot_by=None))
+        set_operators=[], order_by=self.order_by, limit=None, pivot_by=None))
 
     def test_balance_with_units_and_from(self):
         balance = parser.parse("BALANCES AT cost FROM year = 2014;")
@@ -712,7 +716,7 @@ class TestTranslationBalance(CompileSelectBase):
         ],
         ast.From(ast.Equal(ast.Column('year'), ast.Constant(2014)), None, None, None),
         None, self.group_by, None, None)],
-        order_by=self.order_by, limit=None, pivot_by=None))
+        set_operators=[], order_by=self.order_by, limit=None, pivot_by=None))
 
     def test_print(self):
         self.assertCompile(
@@ -916,3 +920,62 @@ class TestTryCoerceOperand(unittest.TestCase):
         operand = qc.EvalConstant(42, int)
         result = self.compiler._try_coerce_operand(operand, object)
         self.assertIsNone(result)
+
+
+class TestQueryStructure(CompileSelectBase):
+    """Structural assertions for _build_inner and the unified _query tail.
+
+    Verifies that the inner node type is correct and that ORDER BY / LIMIT
+    land on the outer EvalQuery regardless of whether the source is a single
+    SELECT or a UNION chain.
+    """
+
+    def test_single_select_inner_is_eval_select(self):
+        """A plain SELECT compiles to EvalQuery(EvalSelect)."""
+        q = self.compile("SELECT account;")
+        self.assertIsInstance(q, qc.EvalQuery)
+        self.assertIsInstance(q.select, qc.EvalSelect)
+
+    def test_union_inner_is_eval_union(self):
+        """A UNION chain compiles to EvalQuery(EvalUnion)."""
+        q = self.compile("SELECT account UNION SELECT account;")
+        self.assertIsInstance(q, qc.EvalQuery)
+        self.assertIsInstance(q.select, qc.EvalUnion)
+
+    def test_order_by_lands_on_eval_query_for_select(self):
+        """ORDER BY is stored on EvalQuery, not EvalSelect."""
+        q = self.compile("SELECT account ORDER BY account;")
+        self.assertIsInstance(q, qc.EvalQuery)
+        self.assertIsNotNone(q.order_spec)
+        self.assertTrue(len(q.order_spec) > 0)
+
+    def test_order_by_lands_on_eval_query_for_union(self):
+        """ORDER BY is stored on EvalQuery wrapping EvalUnion."""
+        q = self.compile("SELECT account UNION SELECT account ORDER BY 1;")
+        self.assertIsInstance(q, qc.EvalQuery)
+        self.assertIsInstance(q.select, qc.EvalUnion)
+        self.assertIsNotNone(q.order_spec)
+        self.assertTrue(len(q.order_spec) > 0)
+
+    def test_limit_lands_on_eval_query_for_select(self):
+        """LIMIT is stored on EvalQuery for a single SELECT."""
+        q = self.compile("SELECT account LIMIT 10;")
+        self.assertIsInstance(q, qc.EvalQuery)
+        self.assertEqual(q.limit, 10)
+
+    def test_limit_lands_on_eval_query_for_union(self):
+        """LIMIT is stored on EvalQuery wrapping EvalUnion."""
+        q = self.compile("SELECT account UNION SELECT account LIMIT 5;")
+        self.assertIsInstance(q, qc.EvalQuery)
+        self.assertIsInstance(q.select, qc.EvalUnion)
+        self.assertEqual(q.limit, 5)
+
+    def test_pivot_by_on_union_raises(self):
+        """PIVOT BY combined with UNION raises a CompilationError."""
+        with self.assertRaises(CompilationError) as cm:
+            self.compile(
+                "SELECT account, date GROUP BY account, date"
+                " UNION SELECT account, date GROUP BY account, date"
+                " PIVOT BY account, date"
+            )
+        self.assertIn('PIVOT BY is not supported with UNION', str(cm.exception))
