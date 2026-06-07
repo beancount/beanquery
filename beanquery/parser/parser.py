@@ -9,7 +9,7 @@
 #  Any changes you make to it will be overwritten the next time
 #  the file is generated.
 
-# ruff: noqa: C405, COM812, I001, F401, PLR1702, PLC2801, SIM117
+# ruff: noqa: RUF100, C405, COM812, I001, F401, PLR1702, PLC2801, SIM117
 
 from __future__ import annotations
 
@@ -25,34 +25,34 @@ from tatsu.util import re, generic_main
 
 
 KEYWORDS: set[str] = {
-    'AND',
-    'AS',
-    'ASC',
-    'BY',
-    'DESC',
-    'DISTINCT',
-    'FALSE',
-    'FROM',
-    'GROUP',
-    'HAVING',
-    'IN',
-    'IS',
-    'LIMIT',
-    'NOT',
-    'OR',
-    'ORDER',
-    'PIVOT',
-    'SELECT',
-    'TRUE',
-    'WHERE',
-    'CREATE',
-    'TABLE',
     'USING',
+    'GROUP',
     'INSERT',
-    'INTO',
+    'AND',
+    'WHERE',
+    'SELECT',
+    'FROM',
+    'DISTINCT',
     'BALANCES',
-    'JOURNAL',
+    'ORDER',
     'PRINT',
+    'DESC',
+    'INTO',
+    'IN',
+    'CREATE',
+    'OR',
+    'BY',
+    'LIMIT',
+    'FALSE',
+    'AS',
+    'HAVING',
+    'ASC',
+    'IS',
+    'TABLE',
+    'NOT',
+    'TRUE',
+    'PIVOT',
+    'JOURNAL',
 }
 
 
@@ -60,7 +60,6 @@ class BQLBuffer(Buffer):
     def __init__(self, text, /, config: ParserConfig | None = None, **settings):
         config = ParserConfig.new(
             config,
-            owner=self,
             whitespace=None,
             nameguard=None,
             ignorecase=True,
@@ -80,7 +79,6 @@ class BQLParser(Parser):
     def __init__(self, /, config: ParserConfig | None = None, **settings):
         config = ParserConfig.new(
             config,
-            owner=self,
             whitespace=None,
             nameguard=None,
             ignorecase=True,
@@ -614,13 +612,13 @@ class BQLParser(Parser):
     def _op_(self):
         with self._choice():
             with self._option():
-                self._token('<')
-            with self._option():
                 self._token('<=')
             with self._option():
-                self._token('>')
+                self._token('<')
             with self._option():
                 self._token('>=')
+            with self._option():
+                self._token('>')
             with self._option():
                 self._token('=')
             with self._option():
