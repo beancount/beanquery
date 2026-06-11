@@ -513,10 +513,10 @@ class PostingsTable(_BeancountTable):
         """The account of the posting."""
         return context.posting.account
 
-    @columns.register(set)
+    @columns.register(typing.Set[str])
     def other_accounts(context):
         """The list of other accounts in the transaction, excluding that of this posting."""
-        return sorted({posting.account for posting in context.entry.postings if posting is not context.posting})
+        return {posting.account for posting in context.entry.postings if posting is not context.posting}
 
     @columns.register(Decimal)
     def number(context):
