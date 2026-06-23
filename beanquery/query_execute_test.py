@@ -506,7 +506,7 @@ class TestFilterEntries(CommonInputBase, QueryBase):
     def compile(self, query):
         # use the ``entries`` table as default table for queries
         c = compiler.Compiler(self.ctx)
-        c.table = self.ctx.tables.get('entries')
+        self.ctx.tables[None] = self.ctx.tables.get('entries')
         return c.compile(self.ctx.parse(query))
 
     @staticmethod
@@ -1881,3 +1881,29 @@ class TestCSVSource(unittest.TestCase):
         self.assertEqual(names, ['id', 'name', 'check', 'date', 'value'])
         types = [column.dtype for column in conn.tables['test'].columns.values()]
         self.assertEqual(types, [int, str, bool, datetime.date, Decimal])
+
+
+class TestJoin(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        conn = beanquery.connect('')
+        conn.execute('''CREATE TABLE foo (x int, a str)''')
+        conn.execute('''CREATE TABLE qux (x int, b str)''')
+        conn.execute('''INSERT INTO foo (x, a) VALUES (1, 'one')''')
+        conn.execute('''INSERT INTO foo (x, a) VALUES (2, 'two')''')
+        conn.execute('''INSERT INTO foo (x, a) VALUES (2, 'two')''')
+        conn.execute('''INSERT INTO foo (x, a) VALUES (2, 'two')''')
+        conn.execute('''INSERT INTO foo (x, a) VALUES (3, 'three')''')
+        conn.execute('''INSERT INTO qux (x, b) VALUES (1, 'uno')''')
+        conn.execute('''INSERT INTO qux (x, b) VALUES (2, 'due')''')
+        conn.execute('''INSERT INTO qux (x, b) VALUES (3, 'tre')''')
+        cls.conn = conn
+
+    def test_join_on(self):
+        curs = self.conn.execute('''SELECT a + '=' + b FROM foo JOIN qux ON foo.x = qux.x + 1''')
+        self.assertEqual(curs.fetchall(), [('two=uno',), ('two=uno',), ('two=uno',), ('three=due',)])
+
+    def test_join_using(self):
+        curs = self.conn.execute('''SELECT a + '=' + b FROM foo JOIN qux USING x''')
+        self.assertEqual(curs.fetchall(), [('one=uno',), ('two=due',), ('two=due',), ('two=due',), ('three=tre',)])

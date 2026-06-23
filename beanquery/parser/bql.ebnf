@@ -25,7 +25,7 @@ statement
 
 select::Select
     = 'SELECT' ['DISTINCT' distinct:`True`] targets:(','.{ target }+ | asterisk)
-      ['FROM' from_clause:(_table | subselect | from)]
+      ['FROM' from_clause:(_table | join | subselect | from)]
       ['WHERE' where_clause:expression]
       ['GROUP' 'BY' group_by:groupby]
       ['ORDER' 'BY' order_by:','.{order}+]
@@ -43,6 +43,10 @@ from::From
     | 'CLOSE' ~ ('ON' close:date | {} close:`True`) ['CLEAR' clear:`True`]
     | 'CLEAR' ~ clear:`True`
     | expression:expression ['OPEN' 'ON' open:date] ['CLOSE' ('ON' close:date | {} close:`True`)] ['CLEAR' clear:`True`]
+    ;
+
+join::Join
+    = left:table 'JOIN' ~ right:table ('ON' constraint:expression | 'USING' using:name)
     ;
 
 _table::Table
@@ -68,7 +72,7 @@ ordering
     ;
 
 pivotby::PivotBy
-    = columns+:(integer | column) ',' columns+:(integer | column)
+    = columns+:(integer | name) ',' columns+:(integer | name)
     ;
 
 target::Target
@@ -301,8 +305,12 @@ function::Function
     | fname:identifier '(' operands+:asterisk ')'
     ;
 
-column::Column
+name::Name
     = name:identifier
+    ;
+
+column::Column
+    = ids:'.'.{ name }+
     ;
 
 literal
@@ -396,6 +404,6 @@ create_table::CreateTable
 
 insert::Insert
     = 'INSERT' 'INTO' ~ table:table
-      ['(' columns:','.{column} ')']
-      'VALUES' '(' values:','.{expression} ')'
+      ['(' columns:','.{ name } ')']
+      'VALUES' '(' values:','.{ expression } ')'
     ;
