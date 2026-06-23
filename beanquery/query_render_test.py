@@ -100,6 +100,13 @@ class TestRenderer(RendererTestBase):
             'bb  ccc',
         ])
 
+    def test_frozenset_str(self):
+        self.assertEqual(self.render(frozenset, [frozenset({}), frozenset({'aaaa'}), frozenset({'bb', 'ccc'})]), [
+            '       ',
+            'aaaa   ',
+            'bb  ccc',
+        ])
+
     def test_date(self):
         self.assertEqual(self.render(datetime.date, [datetime.date(2014, 10, 3)]), [
             '2014-10-03'

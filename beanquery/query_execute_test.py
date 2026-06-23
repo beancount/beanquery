@@ -1086,6 +1086,34 @@ class TestExecuteAggregatedQuery(QueryBase):
                 (2,),
                 ])
 
+    def test_aggregated_group_by_links(self):
+        self.check_query(
+            """
+            2010-02-21 * "doctor" "appointment" ^2010-reimbursement-doc1
+              Assets:Bank:Checking               -1000.00 USD
+              Assets:AccountsReceivable:Pending   1000.00 USD
+
+            2010-02-22 * "insurance" "partial reimbursement" ^2010-reimbursement-doc1
+              Assets:Bank:Checking                100.00 USD
+              Assets:AccountsReceivable:Pending  -100.00 USD
+            """,
+            """
+            SELECT FIRST(date) as date, FIRST(payee) AS payee, FIRST(narration) AS narration, links, SUM(position) AS balance
+            WHERE account ~ 'Assets:AccountsReceivable:Pending'
+            GROUP BY links
+            ORDER BY balance DESC
+            """,
+            [
+                ('date', datetime.date),
+                ('payee', str),
+                ('narration', str),
+                ('links', frozenset),
+                ('balance', inventory.Inventory),
+            ],
+            [
+                (datetime.date(2010, 2, 21), 'doctor', 'appointment', {'2010-reimbursement-doc1'}, I('900.00 USD')),
+            ])
+
     def test_aggregated_group_by_with_having(self):
         self.check_query(
             """
