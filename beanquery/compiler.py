@@ -113,7 +113,7 @@ class Compiler:
         # should never trigger if the compilation environment does not
         # contain any aggregate.
         if c_where is not None and is_aggregate(c_where):
-            raise CompilationError('aggregates are not allowed in WHERE clause')
+            raise CompilationError('aggregates are not allowed in WHERE clause', node = node.where_clause)
 
         # Combine FROM and WHERE clauses
         if c_from_expr is not None:
@@ -190,10 +190,10 @@ class Compiler:
 
             # Check that the FROM clause does not contain aggregates.
             if c_expression is not None and is_aggregate(c_expression):
-                raise CompilationError('aggregates are not allowed in FROM clause')
+                raise CompilationError('aggregates are not allowed in FROM clause', node)
 
             if node.open and node.close and node.open > node.close:
-                raise CompilationError('CLOSE date must follow OPEN date')
+                raise CompilationError('CLOSE date must follow OPEN date', node)
 
             # Apply OPEN, CLOSE, and CLEAR clauses.
             if node.open is not None or node.close is not None or node.clear is not None:
@@ -228,13 +228,13 @@ class Compiler:
 
             # Check for mixed aggregates and non-aggregates.
             if columns and aggregates:
-                raise CompilationError('mixed aggregates and non-aggregates are not allowed')
+                raise CompilationError('mixed aggregates and non-aggregates are not allowed', target)
 
             # Check for aggregates of aggregates.
             for aggregate in aggregates:
                 for child in aggregate.childnodes():
                     if is_aggregate(child):
-                        raise CompilationError('aggregates of aggregates are not allowed')
+                        raise CompilationError('aggregates of aggregates are not allowed', target)
 
         return c_targets
 
@@ -414,7 +414,8 @@ class Compiler:
                         # Check if the new expression is an aggregate.
                         aggregate = is_aggregate(c_expr)
                         if aggregate:
-                            raise CompilationError(f'GROUP-BY expressions may not be aggregates: "{column}"')
+                            _, agg = get_columns_and_aggregates(c_expr)
+                            raise CompilationError(f'GROUP-BY expressions may not be aggregates: "{column}"', column)
 
                         # Attempt to reconcile the expression with one of the existing
                         # target expressions.
