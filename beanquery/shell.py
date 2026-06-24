@@ -629,27 +629,22 @@ class BQLShell(DispatchingShell):
         template = textwrap.dedent("""
 
           The list of comma-separated target expressions may consist of columns,
-          simple functions and aggregate functions. If you use any aggregate
-          function, you must also provide a GROUP-BY clause.
+          simple functions and aggregate functions. You can use AS to determine
+          the output column name, for example:
 
-          Columns
-          -------
+              SELECT yearmonth(date) AS month ....
 
-          {columns}
+          If you use any aggregate function, you must also provide a GROUP-BY
+          clause.
 
-          Functions
-          ---------
+          See the online Beanquery documentation for the full list of columns,
+          functions, and aggregates:
 
-          {functions}
-
-          Aggregate functions
-          -------------------
-
-          {aggregates}
+              https://beancount.github.io/beanquery/
 
         """)
-        print(template.format(**_describe(self.context.tables['postings'],
-                                          query_compile.FUNCTIONS)), file=self.outfile)
+
+        print(template, file=self.outfile)
 
     def help_from(self):
         template = textwrap.dedent("""
@@ -657,20 +652,13 @@ class BQLShell(DispatchingShell):
           A logical expression that consist of columns on directives (mostly
           transactions) and simple functions.
 
-          Columns
-          -------
+          See the online Beanquery documentation for the full list of columns,
+          functions, and aggregates:
 
-          {columns}
-
-          Functions
-          ---------
-
-          {functions}
+              https://beancount.github.io/beanquery/
 
         """)
-        print(template.format(**_describe(self.context.tables['entries'],
-                                          query_compile.FUNCTIONS)),
-              file=self.outfile)
+        print(template, file=self.outfile)
 
     def help_where(self):
         template = textwrap.dedent("""
@@ -678,20 +666,13 @@ class BQLShell(DispatchingShell):
           A logical expression that consist of columns on postings and simple
           functions.
 
-          Columns
-          -------
+          See the online Beanquery documentation for the full list of columns,
+          functions, and aggregates:
 
-          {columns}
-
-          Functions
-          ---------
-
-          {functions}
+              https://beancount.github.io/beanquery/
 
         """)
-        print(template.format(**_describe(self.context.tables['postings'],
-                                          query_compile.FUNCTIONS)), file=self.outfile)
-
+        print(template, file=self.outfile)
 
 def _describe_columns(columns):
     out = io.StringIO()
@@ -701,35 +682,6 @@ def _describe_columns(columns):
         print(wrapper.fill(re.sub(r'[ \n\t]+', ' ', column.__doc__ or '')), file=out)
         print(file=out)
     return out.getvalue().rstrip()
-
-
-def _describe_functions(functions, aggregates=False):
-    entries = []
-    for name, funcs in functions.items():
-        if aggregates != issubclass(funcs[0], query_compile.EvalAggregator):
-            continue
-        name = name.lower()
-        for func in funcs:
-            args = ', '.join(types.name(d) for d in func.__intypes__)
-            doc = re.sub(r'[ \n\t]+', ' ', func.__doc__ or '')
-            entries.append((name, doc, args))
-    entries.sort()
-    out = io.StringIO()
-    wrapper = textwrap.TextWrapper(initial_indent='  ', subsequent_indent='  ', width=80)
-    for key, entries in itertools.groupby(entries, key=lambda x: x[:2]):  # noqa: B020
-        for name, doc, args in entries:
-            print(f'{name}({args})', file=out)
-        print(wrapper.fill(doc), file=out)
-        print(file=out)
-    return out.getvalue().rstrip()
-
-
-def _describe(table, functions):
-    return dict(
-        columns=_describe_columns(table.columns),
-        functions=_describe_functions(functions, aggregates=False),
-        aggregates=_describe_functions(functions, aggregates=True))
-
 
 def summary_statistics(entries):
     """Calculate basic summary statistics to output a brief welcome message.

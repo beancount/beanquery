@@ -104,6 +104,13 @@ class Position(types.Structure):
 
 
 class Cost(types.Structure):
+    """The amount which was payed for a position. This object
+    saves besides the amount also the date and label (if assigned).
+    This serves to identify the position to sell according to
+    a `given booking rule`__.
+
+    __ https://beancount.github.io/docs/beancount_language_syntax.html#reducing-positions
+    """
     name = 'cost'
     columns = _typed_namedtuple_to_columns(data.Cost)
 
@@ -296,7 +303,8 @@ class EntriesTable(_BeancountTable):
 
     @columns.register(str)
     def type(entry):
-        """The data type of the directive."""
+        """The data type of the directive. Currently, beanquery only can list
+        the directives of type 'transaction'."""
         return type(entry).__name__.lower()
 
     @columns.register(str)
@@ -359,20 +367,22 @@ class EntriesTable(_BeancountTable):
 
     @columns.register(set)
     def tags(entry):
-        """The set of tags of the transaction."""
+        """The set of tags (#abc) of the transaction."""
         return getattr(entry, 'tags', None)
 
     @columns.register(set)
     def links(entry):
-        """The set of links of the transaction."""
+        """The set of links (^abc) of the transaction."""
         return getattr(entry, 'links', None)
 
     @columns.register(dict)
     def meta(entry):
+        """The metadata of the transaction."""
         return entry.meta
 
     @columns.register(typing.Set[str])
     def accounts(entry):
+        """The set of accounts of the transaction."""
         return getters.get_entry_accounts(entry)
 
 _TABLES.append(EntriesTable)

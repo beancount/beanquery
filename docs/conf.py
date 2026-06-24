@@ -1,16 +1,18 @@
+import beanquery 
+
 project = 'beanquery'
 copyright = '2014-2022, beanquery Contributors'
 author = 'beanquery Contributors'
-version = '0.1'
+version = beanquery.__version__
 language = 'en'
 html_theme = 'furo'
 html_title = f'{project} {version}'
 html_logo = 'logo.svg'
 extensions = [
-    'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.extlinks',
+    'sphinx.ext.autodoc',
+    #'sphinx.ext.intersphinx',
+    #'sphinx.ext.extlinks',
     'sphinx.ext.githubpages',
 ]
 extlinks = {
@@ -25,3 +27,5 @@ napoleon_google_docstring = True
 napoleon_use_param = False
 autodoc_typehints = 'none'
 autodoc_member_order = 'bysource'
+# see make_bql_doc.py, we use virtual module "fun" for BQL functions
+add_module_names = False  
