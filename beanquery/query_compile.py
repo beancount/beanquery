@@ -448,13 +448,14 @@ class EvalGetter(EvalNode):
 
 
 class EvalAny(EvalNode):
-    __slots__ = ('op', 'left', 'right')
+    __slots__ = ('op', 'left', 'right', 'collection_side')
 
-    def __init__(self, op, left, right):
+    def __init__(self, op, left, right, collection_side):
         super().__init__(bool)
         self.op = op
         self.left = left
         self.right = right
+        self.collection_side = collection_side
 
     def __call__(self, row):
         left = self.left(row)
@@ -463,26 +464,45 @@ class EvalAny(EvalNode):
         right = self.right(row)
         if right is None:
             return None
-        return any(self.op(left, x) for x in right)
+
+        if self.collection_side == 'right':
+            # Original form: value op ANY(collection)
+            return any(self.op(left, x) for x in right)
+        else:  # collection_side == 'left'
+            # New form: ANY(collection) op value
+            return any(self.op(x, right) for x in left)
 
 
 class EvalAll(EvalNode):
-    __slots__ = ('op', 'left', 'right')
+    __slots__ = ('op', 'collection', 'value', 'side')
 
-    def __init__(self, op, left, right):
+    def __init__(self, op, collection, value, side):
+        """
+        Either: ALL(<collection>) <op> <value>  (side == 'lhs')
+        Or:     <value> <op> ALL(<collection>)  (side == 'rhs')
+        """
         super().__init__(bool)
         self.op = op
-        self.left = left
-        self.right = right
+        self.collection = collection
+        self.value = value
+        if side not in ['lhs', 'rhs']:
+            raise ValueError('EvalAll: Parameter "side" must be one of "lhs", "rhs"')
+        self.side = side
 
     def __call__(self, row):
-        left = self.left(row)
-        if left is None:
+        collection = self.collection(row)
+        if collection is None:
             return None
-        right = self.right(row)
-        if right is None:
+        value = self.value(row)
+        if value is None:
             return None
-        return all(self.op(left, x) for x in right)
+
+        if self.side == 'rhs':
+            # Syntax form: value op ALL(collection)
+            return all(self.op(value, x) for x in collection)
+        else:  # side == 'lhs'
+            # Syntax form: ALL(collection) op value
+            return all(self.op(x, value) for x in collection)
 
 
 class EvalRow(EvalNode):

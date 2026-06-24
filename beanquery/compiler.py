@@ -506,40 +506,69 @@ class Compiler:
     @_compile.register(ast.All)
     @_compile.register(ast.Any)
     def _all(self, node):
+        # This parses a node of the form
+        #    All(left, op, right, side), which arises from the syntax:
+        #
+        #        ALL( ... ) <op> <val>    (side == 'lhs')
+        #        <val> <op> ALL( ... )    (side == 'rhs')
+        #
+        # Example:   ANY(accounts) = "Assets:Checking"
+        #
+        left = self._compile(node.left)
         right = self._compile(node.right)
 
-        if isinstance(right, EvalQuery):
-            if len(right.columns) != 1:
-                raise CompilationError('subquery has too many columns', node.right)
-            right = EvalConstantSubquery1D(right)
+        if node.side == 'lhs':
+            collection = left
+            collection_node = node.left
+            value = right
+        elif node.side == 'rhs':
+            collection = right
+            collection_node = node.right
+            value = left
 
-        right_dtype = typing.get_origin(right.dtype) or right.dtype
-        if right_dtype not in {list, set}:
-            raise CompilationError(f'not a list or set but {right_dtype}', node.right)
-        args = typing.get_args(right.dtype)
+        if isinstance(collection, EvalQuery):
+            if len(collection.columns) != 1:
+                raise CompilationError('subquery has too many columns', collection_node)
+            collection = EvalConstantSubquery1D(collection)
+
+        collection_dtype = typing.get_origin(collection.dtype) or collection.dtype
+
+        if collection_dtype not in {list, set, EvalConstantSubquery1D}:
+            raise CompilationError(
+                f'ANY/ALL requires a collection (list, set, or subquery), got {types.name(collection.dtype)}',
+                node)
+
+        collection_dtype = typing.get_origin(collection.dtype) or collection.dtype
+        if collection_dtype not in {list, set}:
+            raise CompilationError(f'not a list or set but {collection_dtype}', collection_node)
+        args = typing.get_args(collection.dtype)
         if args:
             assert len(args) == 1
-            right_element_dtype = args[0]
+            collection_element_dtype = args[0]
         else:
-            right_element_dtype = object
+            collection_element_dtype = object
 
-        left = self._compile(node.left)
-
-        # lookup operator implementaton and check typing
+        # Lookup operator implementation and check typing.
         op = self._OPERATORS[node.op]
-        for func in OPERATORS[op]:
-            if func.__intypes__ == [right_element_dtype, left.dtype]:
-                break
-        else:
+        if node.side == 'rhs':
+            # value op ANY(collection) -> operator(value, element)
+            func = types.operator_lookup(OPERATORS[op], [value.dtype, collection_element_dtype])
+            left_type, right_type = value.dtype, collection_element_dtype
+        else:  # node.side == 'lhs'
+            # ANY(collection) op value -> operator(element, value)
+            func = types.operator_lookup(OPERATORS[op], [collection_element_dtype, value.dtype])
+            left_type, right_type = collection_element_dtype, value.dtype
+
+        if func is None:
             raise CompilationError(
                 f'operator "{op.__name__.lower()}('
-                f'{left.dtype.__name__}, {right_element_dtype.__name__})" not supported', node)
+                f'{types.name(left_type)}, {types.name(right_type)})" not supported', node)
 
         # need to instantiate the operaotr implementation to get to the underlying function
         operator = func(None, None).operator
 
         cls = EvalAll if type(node) is ast.All else EvalAny
-        return cls(operator, left, right)
+        return cls(operator, collection, value, node.side)
 
     @_compile.register
     def _function(self, node: ast.Function):
@@ -583,9 +612,9 @@ class Compiler:
                 ast.Attribute(ast.Column('entry', parseinfo=node.parseinfo), 'meta'), key])])
             return self._compile(node)
 
-        # Replace ``has_account(regexp)`` with ``('(?i)' + regexp) ~? any (accounts)``.
+        # Replace ``has_account(regexp)`` with ``any (accounts) ~ ('(?i)' + regexp) ``.
         if node.fname == 'has_account':
-            node = ast.Any(ast.Add(ast.Constant('(?i)'), node.operands[0]), '?~', ast.Column('accounts'))
+            node = ast.Any(ast.Column('accounts'), '~', ast.Add(ast.Constant('(?i)'), node.operands[0]), side = 'lhs')
             return self._compile(node)
 
         function = function(self.context, operands)

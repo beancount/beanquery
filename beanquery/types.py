@@ -42,15 +42,43 @@ class Structure:
 
 
 def _bases(t):
+    """Return the type hierarchy for a given type, excluding ``object``.
+
+    This function extracts the Method Resolution Order (MRO) for a type,
+    which includes the type itself and all its base classes. The ``object``
+    type is excluded from the hierarchy (except when the type IS ``object``)
+    because BQL uses ``object`` to represent untyped values, not as a universal
+    base type. This prevents functions registered for untyped values from
+    matching all typed values.
+
+    For generic types like ``typing.Set[str]``, the origin type (``set``) is
+    extracted and its MRO is returned, allowing parameterized types to match
+    functions/operators registered with unparameterized types.
+
+    Args:
+      t: A type object, which can be a plain type (str, int, set) or a
+        generic type (typing.Set[str], typing.List[int]).
+
+    Returns:
+      A tuple of types representing the type hierarchy, with ``object`` excluded
+      unless the input type is ``object`` itself or ``NoneType``.
+    """
     if t is NoneType:
         return (object,)
+
+    # Handle generic types like typing.Set[str], typing.List[int], etc.
+    # Extract the origin type (e.g., set from Set[str]) and include it
+    # in the bases so that functions registered with unparameterized types
+    # (e.g., @function([set], ...)) can match parameterized types (Set[str])
+    origin = typing.get_origin(t)
+    if origin is not None:
+        origin_bases = origin.__mro__
+        if len(origin_bases) > 1 and origin_bases[-1] is object:
+            return origin_bases[:-1]
+        return origin_bases
+
     bases = t.__mro__
     if len(bases) > 1 and bases[-1] is object:
-        # All types that are not ``object`` have more than one class
-        # in their ``__mro__``. BQL uses ``object`` for untypes
-        # values. Do not return ``object`` as base for strict types,
-        # to avoid functions taking untyped onjects to accept all
-        # values.
         return bases[:-1]
     return bases
 
@@ -59,9 +87,11 @@ def function_lookup(functions, name, operands):
     """Lookup a BQL function implementation.
 
     Args:
-      functions: The functions registry to interrogate.
-      name: The function name.
-      operands: Function operands.
+      functions: A dict mapping function names (str) to lists of function
+        implementations. Each implementation has an __intypes__ attribute
+        specifying the expected operand types.
+      name: The function name (str).
+      operands: Function operands, each with a .dtype attribute.
 
     Returns:
       A EvalNode (or subclass) instance or None if the function was not found.
@@ -70,6 +100,25 @@ def function_lookup(functions, name, operands):
         for func in functions[name]:
             if func.__intypes__ == list(signature):
                 return func
+    return None
+
+
+def operator_lookup(operators, operand_types):
+    """Lookup an operator implementation by matching operand types.
+
+    Args:
+      operators: A list of operator implementations. Each implementation has
+        an __intypes__ attribute specifying the expected operand types as a
+        list (e.g., [str, str] for a binary operator on strings).
+      operand_types: Sequence of types for the operands (e.g., [str, str]).
+
+    Returns:
+      An operator implementation or None if not found.
+    """
+    for signature in itertools.product(*(_bases(t) for t in operand_types)):
+        for op in operators:
+            if op.__intypes__ == list(signature):
+                return op
     return None
 
 

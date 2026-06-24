@@ -133,11 +133,15 @@ comparison
     ;
 
 any::Any
-    = left:sum op:op 'any' '(' right:expression ')'
+    =
+    | left:sum op:op 'any' '(' right:expression ')' side:`rhs`
+    | 'any' '(' left:expression ')' op:op right:sum side:`lhs`
     ;
 
 all::All
-    = left:sum op:op 'all' '(' right:expression ')'
+    =
+    | left:sum op:op 'all' '(' right:expression ')' side:`rhs`
+    | 'all' '(' left:expression ')' op:op right:sum side:`lhs`
     ;
 
 op

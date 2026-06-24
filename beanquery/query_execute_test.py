@@ -1667,11 +1667,11 @@ class TestArrayOps(QueryBase):
             ]
         )
 
-    def test_mathes_any_accounts_transactions(self):
+    def test_matches_any_accounts_transactions(self):
         self.check_query(self.data, """
             SELECT date, narration
             FROM #transactions
-            WHERE ':Two' ?~ ANY(accounts)
+            WHERE ANY(accounts) ~ ':Two'
             """,
             (('date', datetime.date), ('narration', str)),
             [
@@ -1679,11 +1679,11 @@ class TestArrayOps(QueryBase):
             ]
         )
 
-    def test_mathes_all_accounts_transactions(self):
+    def test_matches_all_accounts_transactions(self):
         self.check_query(self.data, """
             SELECT date, narration
             FROM #transactions
-            WHERE '(?i):two|:cash' ?~ ALL(accounts)
+            WHERE ALL(accounts) ~ '(?i):two|:cash'
             """,
             (('date', datetime.date), ('narration', str)),
             [
