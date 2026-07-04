@@ -14,15 +14,28 @@ from . import cursor
 
 
 class Unique:
-    def __init__(self, columns):
+    """Generator that yields only the first occurrence of each unique row.
+
+    Handles non-hashable column types (e.g., Inventory) by wrapping values
+    into hashable representations via hashable.make().
+
+    Args:
+      columns: Column types for hashable wrapping.
+      key: Optional function to extract the value to hash from each row.
+    """
+
+    def __init__(self, columns, key=None):
         self.wrap = hashable.make(columns)
+        self.key = key
 
     def __call__(self, iterable):
         wrap = self.wrap
+        key = self.key
         seen = set()
         add = seen.add
         for obj in iterable:
-            h = wrap(obj)
+            k = key(obj) if key else obj
+            h = wrap(k)
             if h not in seen:
                 add(h)
                 yield obj
@@ -101,34 +114,57 @@ def nullitemgetter(item, *items):
     return func
 
 
+def execute_query(query):
+    """Execute a compiled query with ORDER BY and LIMIT.
+
+    Args:
+      query: An instance of EvalQuery wrapping an EvalSelect.
+    Returns:
+      A pair of (result_types, result_rows).
+    """
+    result_types, rows, visible_mask = query.select()
+
+    # ORDER BY requires materialization.
+    if query.order_spec:
+        rows = list(rows)
+        for reverse, spec in itertools.groupby(reversed(query.order_spec), key=operator.itemgetter(1)):
+            indexes = reversed([i[0] for i in spec])
+            rows.sort(key=nullitemgetter(*indexes), reverse=reverse)
+
+    # Extract visible columns.
+    visible_indexes = [i for i, v in enumerate(visible_mask) if v]
+    result_types = tuple(result_types[i] for i in visible_indexes)
+    rows = (tuple(row[i] for i in visible_indexes) for row in rows)
+
+    # Apply LIMIT.
+    if query.limit is not None:
+        rows = itertools.islice(rows, query.limit)
+
+    return result_types, list(rows)
+
+
 def execute_select(query):
     """Given a compiled select statement, execute the query.
 
     Args:
-      query: An instance of a query_compile.Query
-      entries: A list of directives.
-      options_map: A parser's option_map.
+      query: An instance of EvalSelect.
     Returns:
-      A pair of:
-        result_types: A list of (name, data-type) item pairs.
-        result_rows: A list of ResultRow tuples of length and types described by
-          'result_types'.
+      A tuple of:
+        result_types: A list of Column(name, dtype) for ALL columns.
+        result_rows: A list of tuples with ALL columns (including invisible).
+        visible_mask: A list of bools, True if column is visible.
     """
-    # Figure out the result types that describe what we return.
+    # Figure out the result types for ALL columns.
     result_types = tuple(cursor.Column(target.name, target.c_expr.dtype)
-                         for target in query.c_targets
-                         if target.name is not None)
+                         for target in query.c_targets)
+
+    # Track which columns are visible (have a name).
+    visible_mask = [target.name is not None for target in query.c_targets]
 
     # Pre-compute lists of the expressions to evaluate.
     group_indexes = (set(query.group_indexes)
                      if query.group_indexes is not None
                      else query.group_indexes)
-
-    # Indexes of the columns for result rows and order rows.
-    result_indexes = [index
-                      for index, c_target in enumerate(query.c_targets)
-                      if c_target.name]
-    order_spec = query.order_spec
 
     # Dispatch between the non-aggregated queries and aggregated queries.
     c_where = query.c_where
@@ -143,7 +179,7 @@ def execute_select(query):
         # Iterate over all the postings once.
         for context in query.table:
             if c_where is None or c_where(context):
-                values = [c_expr(context) for c_expr in c_target_exprs]
+                values = tuple(c_expr(context) for c_expr in c_target_exprs)
                 rows.append(values)
 
     else:
@@ -213,28 +249,15 @@ def execute_select(query):
                 if not values[query.having_index]:
                     continue
 
-            rows.append(values)
+            rows.append(tuple(values))
 
-    # Apply ORDER BY.
-    if order_spec is not None:
-        # Process the order-by clauses grouped by their ordering direction.
-        for reverse, spec in itertools.groupby(reversed(order_spec), key=operator.itemgetter(1)):
-            indexes = reversed([i[0] for i in spec])
-            # The rows may contain None values: nullitemgetter()
-            # replaces these with a special value that compares
-            # smaller than anything else.
-            rows.sort(key=nullitemgetter(*indexes), reverse=reverse)
-
-    # Extract results set and convert into tuples.
-    rows = (tuple(row[i] for i in result_indexes) for row in rows)
-
-    # Apply DISTINCT.
+    # DISTINCT must operate on visible columns only, ignoring columns that were
+    # auto-added for GROUP BY or ORDER BY. Unique returns a generator to create
+    # a lazy pipeline so LIMIT can cut off early.
     if query.distinct:
-        unique = Unique(result_types)
+        visible_indexes = [i for i, v in enumerate(visible_mask) if v]
+        visible_types = tuple(result_types[i] for i in visible_indexes)
+        unique = Unique(visible_types, key=lambda row: tuple(row[i] for i in visible_indexes))
         rows = unique(rows)
 
-    # Apply LIMIT.
-    if query.limit is not None:
-        rows = itertools.islice(rows, query.limit)
-
-    return result_types, list(rows)
+    return result_types, rows, visible_mask

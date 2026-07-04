@@ -12,6 +12,7 @@ from beancount.core.amount import from_string as A
 from beancount.core.number import D
 from beancount.core import inventory
 from beancount.core.inventory import from_string as I
+from beanquery.parser import ast
 from beancount.parser import cmptest
 from beancount.utils.test_utils import docfile
 from beancount import loader
@@ -512,8 +513,8 @@ class TestFilterEntries(CommonInputBase, QueryBase):
     @staticmethod
     def filter_entries(query):
         entries = []
-        expr = query.c_where
-        for entry in query.table:
+        expr = query.select.c_where
+        for entry in query.select.table:
             if expr is None or expr(entry):
                 entries.append(entry)
         return entries
@@ -1881,3 +1882,364 @@ class TestCSVSource(unittest.TestCase):
         self.assertEqual(names, ['id', 'name', 'check', 'date', 'value'])
         types = [column.dtype for column in conn.tables['test'].columns.values()]
         self.assertEqual(types, [int, str, bool, datetime.date, Decimal])
+
+
+class FakeQuery:
+    """Minimal query stub that returns fixed (columns, rows) without any SQL."""
+
+    def __init__(self, columns, rows):
+        self._columns = columns
+        self._rows = rows
+
+    @property
+    def columns(self):
+        return self._columns
+
+    @property
+    def c_targets(self):
+        return self._columns
+
+    def __call__(self):
+        return self._columns, list(self._rows)
+
+
+class TestEvalUnion(unittest.TestCase):
+    """Unit tests for EvalUnion.__call__ in isolation from the parser/compiler.
+
+    EvalUnion returns (result_types, rows, visible_mask) like EvalSelect.
+    ORDER BY and LIMIT are handled by wrapping EvalUnion in EvalQuery.
+    """
+
+    COL_N = qc.EvalTarget(qc.EvalConstant(None, int), 'n', False)
+    COL_A = qc.EvalTarget(qc.EvalConstant(None, int), 'a', False)
+    COL_B = qc.EvalTarget(qc.EvalConstant(None, str), 'b', False)
+
+    def _union(self, queries, set_operators, c_targets=None):
+        """Create an EvalUnion. For ORDER BY/LIMIT tests, wrap in EvalQuery."""
+        if c_targets is None:
+            c_targets = [self.COL_N]
+        return qc.EvalUnion(
+            queries=queries,
+            set_operators=set_operators,
+        )
+
+    def _query(self, queries, set_operators, c_targets=None, order_spec=None, limit=None):
+        """Create an EvalQuery wrapping an EvalUnion for ORDER BY/LIMIT tests."""
+        union = self._union(queries, set_operators, c_targets)
+        return qc.EvalQuery(
+            select=union,
+            order_spec=order_spec or [],
+            limit=limit,
+        )
+
+    # -- columns property --
+
+    def test_columns_returns_visible_targets(self):
+        """EvalUnion.columns should return targets with non-None names."""
+        invisible = qc.EvalTarget(qc.EvalConstant(None, int), None, False)
+        visible = qc.EvalTarget(qc.EvalConstant(None, int), 'n', False)
+        q1 = FakeQuery([visible], [(1,)])
+        u = self._union([q1], [], c_targets=[invisible, visible])
+        self.assertEqual(u.columns, [visible])
+
+    # -- row concatenation and deduplication --
+
+    def test_union_all_concatenates_without_deduplication(self):
+        """Given two queries sharing a duplicate row,
+        UNION ALL should return all rows from both queries
+        including the duplicate."""
+        q1 = FakeQuery([self.COL_N], [(1,), (2,)])
+        q2 = FakeQuery([self.COL_N], [(2,), (3,)])
+        _, rows, _ = self._union([q1, q2], ['union_all'])()
+        self.assertEqual(rows, [(1,), (2,), (2,), (3,)])
+
+    def test_union_removes_duplicates_preserving_first_seen_order(self):
+        """Given two queries sharing a duplicate row,
+        UNION should deduplicate while keeping
+        the order in which rows were first encountered."""
+        q1 = FakeQuery([self.COL_N], [(1,), (2,)])
+        q2 = FakeQuery([self.COL_N], [(2,), (3,)])
+        _, rows, _ = self._union([q1, q2], ['union'])()
+        self.assertEqual(rows, [(1,), (2,), (3,)])
+
+    # -- mixed UNION / UNION ALL chains --
+
+    def test_union_then_union_all_deduplicates_first_pair_only(self):
+        """Given A UNION B UNION ALL C where A=B=C=(1,),
+        the UNION between A and B should collapse them to one row,
+        then UNION ALL should append C's row unchanged,
+        yielding two rows of (1,)."""
+        q1 = FakeQuery([self.COL_N], [(1,)])
+        q2 = FakeQuery([self.COL_N], [(1,)])
+        q3 = FakeQuery([self.COL_N], [(1,)])
+        _, rows, _ = self._union([q1, q2, q3], ['union', 'union_all'])()
+        self.assertEqual(rows, [(1,), (1,)])
+
+    def test_union_all_then_union_deduplicates_all_accumulated_rows(self):
+        """Given A UNION ALL B UNION C where A=B=(1,) and C=(2,),
+        UNION ALL should keep the duplicate (1,) from A and B,
+        then the final UNION should deduplicate the entire accumulated set,
+        yielding one (1,) and one (2,)."""
+        q1 = FakeQuery([self.COL_N], [(1,)])
+        q2 = FakeQuery([self.COL_N], [(1,)])
+        q3 = FakeQuery([self.COL_N], [(2,)])
+        _, rows, _ = self._union([q1, q2, q3], ['union_all', 'union'])()
+        self.assertEqual(rows, [(1,), (2,)])
+
+    # -- ORDER BY (via EvalQuery wrapper) --
+
+    def test_order_by_asc_sorts_ascending(self):
+        """Given unsorted rows and order_spec [(0, ASC)],
+        EvalQuery wrapping EvalUnion should return rows sorted ascending."""
+        q1 = FakeQuery([self.COL_N], [(3,), (1,), (2,)])
+        _, rows = self._query([q1], [], order_spec=[(0, ast.Ordering.ASC)])()
+        self.assertEqual(rows, [(1,), (2,), (3,)])
+
+    def test_order_by_desc_sorts_descending(self):
+        """Given unsorted rows and order_spec [(0, DESC)],
+        EvalQuery wrapping EvalUnion should return rows sorted descending."""
+        q1 = FakeQuery([self.COL_N], [(1,), (3,), (2,)])
+        _, rows = self._query([q1], [], order_spec=[(0, ast.Ordering.DESC)])()
+        self.assertEqual(rows, [(3,), (2,), (1,)])
+
+    def test_order_by_non_first_column(self):
+        """Given two-column rows and order_spec [(1, ASC)],
+        EvalQuery should sort by the second column."""
+        q1 = FakeQuery([self.COL_A, self.COL_B], [(1, 'b'), (2, 'a')])
+        _, rows = self._query([q1], [], c_targets=[self.COL_A, self.COL_B],
+                              order_spec=[(1, ast.Ordering.ASC)])()
+        self.assertEqual(rows, [(2, 'a'), (1, 'b')])
+
+    # -- LIMIT (via EvalQuery wrapper) --
+
+    def test_limit_truncates_result(self):
+        """Given three rows and limit=2,
+        EvalQuery wrapping EvalUnion should return only the first two rows."""
+        q1 = FakeQuery([self.COL_N], [(1,), (2,), (3,)])
+        _, rows = self._query([q1], [], limit=2)()
+        self.assertEqual(rows, [(1,), (2,)])
+
+    def test_limit_none_returns_all_rows(self):
+        """Given limit=None, EvalQuery should not truncate the result."""
+        q1 = FakeQuery([self.COL_N], [(1,), (2,), (3,)])
+        _, rows = self._query([q1], [], limit=None)()
+        self.assertEqual(len(rows), 3)
+
+    def test_order_by_desc_with_limit_returns_top_n(self):
+        """Given three queries yielding 1, 2, 3, ORDER BY 1 DESC LIMIT 2
+        should return the two largest values in descending order."""
+        q1 = FakeQuery([self.COL_N], [(1,)])
+        q2 = FakeQuery([self.COL_N], [(2,)])
+        q3 = FakeQuery([self.COL_N], [(3,)])
+        _, rows = self._query(
+            [q1, q2, q3], ['union_all', 'union_all'],
+            order_spec=[(0, ast.Ordering.DESC)],
+            limit=2,
+        )()
+        self.assertEqual(rows, [(3,), (2,)])
+
+    # -- result_types passthrough --
+
+    def test_call_returns_result_types_from_c_targets(self):
+        """__call__ should return result_types derived from c_targets."""
+        q1 = FakeQuery([self.COL_A, self.COL_B], [(1, 'x')])
+        q2 = FakeQuery([self.COL_A, self.COL_B], [(2, 'y')])
+        result_types, _, _ = self._union([q1, q2], ['union_all'],
+                                          c_targets=[self.COL_A, self.COL_B])()
+        self.assertEqual(len(result_types), 2)
+        self.assertEqual(result_types[0].name, 'a')
+        self.assertEqual(result_types[1].name, 'b')
+
+    # -- edge cases --
+
+    def test_empty_subquery_contributes_no_rows(self):
+        """Given one empty and one non-empty sub-query joined by UNION ALL,
+        the empty sub-query should contribute nothing to the result."""
+        q1 = FakeQuery([self.COL_N], [])
+        q2 = FakeQuery([self.COL_N], [(1,)])
+        _, rows, _ = self._union([q1, q2], ['union_all'])()
+        self.assertEqual(rows, [(1,)])
+
+
+class TestUnion(QueryBase):
+    INPUT = """
+        2022-01-01 open Assets:Bank
+        2022-01-01 open Expenses:Food
+        2022-01-01 open Expenses:Transport
+
+        2022-01-15 * "Lunch"
+          Assets:Bank       -10.00 USD
+          Expenses:Food      10.00 USD
+
+        2022-01-20 * "Dinner"
+          Assets:Bank       -20.00 USD
+          Expenses:Food      20.00 USD
+
+        2022-02-01 * "Bus"
+          Assets:Bank       -5.00 USD
+          Expenses:Transport 5.00 USD
+    """
+
+    def test_basic_union(self):
+        """Given three SELECTs returning the same constant value from the postings table,
+        UNION should deduplicate the combined result, returning only unique values."""
+        curs = self.ctx.execute(
+            """SELECT 1 AS n
+               UNION
+               SELECT 1 AS n
+               UNION
+               SELECT 2 AS n"""
+        )
+        self.assertEqual(curs.fetchall(), [(1,), (2,)])
+
+    def test_union_all(self):
+        """Given two SELECTs returning the same constant value from the postings table,
+        UNION ALL should concatenate all rows from both SELECTs without deduplication."""
+        curs = self.ctx.execute(
+            """SELECT 1 AS n
+            UNION ALL
+            SELECT 1 AS n"""
+        )
+        self.assertEqual(curs.fetchall(), [(1,)] * 12)
+
+    def test_union_mixed(self):
+        """Given three SELECTs combined by UNION then UNION ALL,
+        the first UNION should deduplicate (yielding 1 row), then UNION ALL
+        should append all 6 rows from the third SELECT without deduplication,
+        resulting in 7 rows"""
+        curs = self.ctx.execute(
+            """SELECT 1 AS n
+            UNION
+            SELECT 1 AS n
+            UNION ALL
+            SELECT 1 AS n"""
+        )
+        self.assertEqual(curs.fetchall(), [(1,)] * 7)
+
+    def test_union_order_by(self):
+        """Given three SELECTs returning different constant values combined by UNION,
+        ORDER BY should sort the deduplicated combined result in ascending order."""
+        curs = self.ctx.execute(
+            """SELECT 2 AS n
+            UNION
+            SELECT 1 AS n
+            UNION
+            SELECT 3 AS n
+            ORDER BY 1"""
+        )
+        self.assertEqual(curs.fetchall(), [(1,), (2,), (3,)])
+
+    def test_union_limit(self):
+        """Given three SELECTs returning different constant values combined by UNION,
+        LIMIT should truncate the deduplicated combined result to the specified number of rows."""
+        curs = self.ctx.execute(
+            """SELECT 1 AS n
+            UNION
+            SELECT 2 AS n
+            UNION SELECT 3 AS n
+            LIMIT 2"""
+        )
+        self.assertEqual(curs.fetchall(), [(1,), (2,)])
+
+    def test_union_order_by_desc_limit(self):
+        """Given three SELECTs returning different constant values combined by UNION,
+        ORDER BY DESC should sort the deduplicated combined result in descending order,
+        and LIMIT should then truncate to the specified number of rows."""
+        curs = self.ctx.execute(
+            """SELECT 1 AS n
+            UNION
+            SELECT 2 AS n
+            UNION
+            SELECT 3 AS n
+            ORDER BY 1 DESC
+            LIMIT 2"""
+        )
+        self.assertEqual(curs.fetchall(), [(3,), (2,)])
+
+    def test_union_column_count_mismatch(self):
+        """Given two SELECTs with different column counts,
+        compilation should raise an error indicating column count mismatch."""
+        with self.assertRaises(CompilationError) as cm:
+            self.ctx.execute("SELECT 1, 2 UNION SELECT 1")
+        self.assertIn('same number of columns', str(cm.exception))
+
+    def test_union_type_mismatch(self):
+        """Given two SELECTs with incompatible column types,
+        compilation should raise an error indicating type mismatch."""
+        with self.assertRaises(CompilationError) as cm:
+            self.ctx.execute("SELECT 'a' UNION SELECT 2022-01-01")
+        self.assertIn('type mismatch', str(cm.exception))
+
+    def test_union_compatible_numeric_types(self):
+        """Given two SELECTs returning compatible numeric types (int and Decimal),
+        UNION should deduplicate the combined result, returning unique values."""
+        curs = self.ctx.execute("SELECT 1 UNION SELECT 1.5")
+        rows = curs.fetchall()
+        self.assertEqual(len(rows), 2)
+
+    def test_union_with_from(self):
+        """Given two SELECTs with explicit FROM clauses selecting different accounts,
+        UNION should combine the results, returning unique account names."""
+        curs = self.ctx.execute("""
+            SELECT account FROM OPEN ON 2022-01-01 WHERE account ~ 'Food'
+            UNION
+            SELECT account FROM OPEN ON 2022-01-01 WHERE account ~ 'Transport'
+        """)
+        rows = curs.fetchall()
+        self.assertEqual(len(rows), 2)
+        accounts = {row[0] for row in rows}
+        self.assertIn('Expenses:Food', accounts)
+        self.assertIn('Expenses:Transport', accounts)
+
+    def test_union_subquery(self):
+        """UNION with parenthesized subqueries."""
+        curs = self.ctx.execute("""
+            (SELECT 3 AS n ORDER BY 1 LIMIT 1)
+            UNION
+            (SELECT 1 AS n)
+        """)
+        rows = curs.fetchall()
+        self.assertEqual(set(rows), {(3,), (1,)})
+
+    def test_union_column_names_from_first(self):
+        """Column names come from first query."""
+        curs = self.ctx.execute("SELECT 1 AS first_name UNION SELECT 2 AS second_name")
+        self.assertEqual(curs.description[0].name, 'first_name')
+
+    def test_union_order_by_invisible_column_same_table(self):
+        """UNION ORDER BY on invisible column is allowed when all operands share the same table."""
+        curs = self.ctx.execute("""
+            SELECT account FROM OPEN ON 2022-01-01 WHERE account ~ 'Expenses'
+            UNION
+            SELECT account FROM OPEN ON 2022-01-01 WHERE account ~ 'Assets'
+            ORDER BY length(account)
+        """)
+        # Sorted by length: Assets:Bank (11), Expenses:Food (13), Expenses:Transport (18)
+        self.assertEqual(curs.fetchall(), [
+            ('Assets:Bank',),
+            ('Expenses:Food',),
+            ('Expenses:Transport',),
+        ])
+
+    def test_union_order_by_invisible_column_different_tables_rejected(self):
+        """UNION ORDER BY on invisible column is rejected when operands have different tables."""
+        with self.assertRaises(CompilationError) as cm:
+            # Use #accounts to reference the accounts table (not the accounts column)
+            self.ctx.execute("""
+                SELECT account FROM postings
+                UNION
+                SELECT account FROM #accounts
+                ORDER BY length(account)
+            """)
+        self.assertIn('SELECT list', str(cm.exception))
+
+    def test_union_pivot_by_raises(self):
+        """PIVOT BY on a UNION raises an explicit CompilationError instead of silently dropping it."""
+        with self.assertRaises(CompilationError) as cm:
+            self.ctx.execute("""
+                SELECT account, date GROUP BY account, date
+                UNION
+                SELECT account, date GROUP BY account, date
+                PIVOT BY account, date
+            """)
+        self.assertIn('PIVOT BY is not supported with UNION', str(cm.exception))

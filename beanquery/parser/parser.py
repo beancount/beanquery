@@ -25,34 +25,34 @@ from tatsu.util import re, generic_main
 
 
 KEYWORDS: set[str] = {
-    'USING',
-    'GROUP',
-    'INSERT',
-    'AND',
-    'WHERE',
-    'SELECT',
-    'FROM',
-    'DISTINCT',
-    'BALANCES',
-    'ORDER',
+    'CREATE',
+    'AS',
+    'TABLE',
     'PRINT',
+    'PIVOT',
+    'USING',
+    'ASC',
+    'JOURNAL',
+    'FROM',
+    'AND',
     'DESC',
+    'BALANCES',
+    'INSERT',
+    'HAVING',
+    'FALSE',
+    'SELECT',
+    'ORDER',
+    'NOT',
     'INTO',
     'IN',
-    'CREATE',
-    'OR',
-    'BY',
     'LIMIT',
-    'FALSE',
-    'AS',
-    'HAVING',
-    'ASC',
     'IS',
-    'TABLE',
-    'NOT',
+    'BY',
+    'OR',
     'TRUE',
-    'PIVOT',
-    'JOURNAL',
+    'WHERE',
+    'GROUP',
+    'DISTINCT',
 }
 
 
@@ -105,7 +105,7 @@ class BQLParser(Parser):
     def _statement_(self):
         with self._choice():
             with self._option():
-                self._select_()
+                self._query_()
             with self._option():
                 self._balances_()
             with self._option():
@@ -119,10 +119,92 @@ class BQLParser(Parser):
             self._error(
                 'expecting one of: '
                 "'BALANCES' 'CREATE' 'INSERT' 'JOURNAL'"
-                "'PRINT' 'SELECT' <balances>"
-                '<create_table> <insert> <journal>'
-                '<print> <select>'
+                "'PRINT' <balances> <create_table>"
+                '<insert> <journal> <print> <query>'
+                '<select> <subquery>'
             )
+
+    @tatsumasu('Query')
+    def _query_(self):
+        with self._group():
+            with self._choice():
+                with self._option():
+                    self._select_()
+                with self._option():
+                    self._subquery_()
+                self._error(
+                    'expecting one of: '
+                    '<select> <subquery>'
+                )
+        self.add_last_node_to_name('queries')
+
+        def block0():
+            with self._group():
+                with self._choice():
+                    with self._option():
+                        self._token('UNION')
+                        self._token('ALL')
+                        self._constant('union_all')
+                        self.add_last_node_to_name('set_operators')
+                        self._define(
+                            [],
+                            ['set_operators'],
+                        )
+                    with self._option():
+                        self._token('UNION')
+                        self._constant('union')
+                        self.add_last_node_to_name('set_operators')
+                        self._define(
+                            [],
+                            ['set_operators'],
+                        )
+                    self._error(
+                        'expecting one of: '
+                        "'UNION'"
+                    )
+            with self._group():
+                with self._choice():
+                    with self._option():
+                        self._select_()
+                    with self._option():
+                        self._subquery_()
+                    self._error(
+                        'expecting one of: '
+                        '<select> <subquery>'
+                    )
+            self.add_last_node_to_name('queries')
+            self._define(
+                [],
+                ['queries', 'set_operators'],
+            )
+        self._closure(block0)
+        with self._optional():
+            self._token('ORDER')
+            self._token('BY')
+
+            def sep1():
+                self._token(',')
+
+            def block2():
+                self._order_()
+            self._positive_gather(block2, sep1)
+            self.name_last_node('order_by')
+            self._define(['order_by'], [])
+        with self._optional():
+            self._token('LIMIT')
+            self._integer_()
+            self.name_last_node('limit')
+            self._define(['limit'], [])
+        with self._optional():
+            self._token('PIVOT')
+            self._token('BY')
+            self._pivotby_()
+            self.name_last_node('pivot_by')
+            self._define(['pivot_by'], [])
+        self._define(
+            ['limit', 'order_by', 'pivot_by'],
+            ['queries', 'set_operators'],
+        )
 
     @tatsumasu('Select')
     def _select_(self):
@@ -156,12 +238,12 @@ class BQLParser(Parser):
                     with self._option():
                         self.__table_()
                     with self._option():
-                        self._subselect_()
+                        self._subquery_()
                     with self._option():
                         self._from_()
                     self._error(
                         'expecting one of: '
-                        '<_table> <from> <subselect>'
+                        '<_table> <from> <subquery>'
                     )
             self.name_last_node('from_clause')
             self._define(['from_clause'], [])
@@ -176,35 +258,12 @@ class BQLParser(Parser):
             self._groupby_()
             self.name_last_node('group_by')
             self._define(['group_by'], [])
-        with self._optional():
-            self._token('ORDER')
-            self._token('BY')
-
-            def sep2():
-                self._token(',')
-
-            def block3():
-                self._order_()
-            self._positive_gather(block3, sep2)
-            self.name_last_node('order_by')
-            self._define(['order_by'], [])
-        with self._optional():
-            self._token('PIVOT')
-            self._token('BY')
-            self._pivotby_()
-            self.name_last_node('pivot_by')
-            self._define(['pivot_by'], [])
-        with self._optional():
-            self._token('LIMIT')
-            self._integer_()
-            self.name_last_node('limit')
-            self._define(['limit'], [])
-        self._define(['distinct', 'from_clause', 'group_by', 'limit', 'order_by', 'pivot_by', 'targets', 'where_clause'], [])
+        self._define(['distinct', 'from_clause', 'group_by', 'targets', 'where_clause'], [])
 
     @tatsumasu()
-    def _subselect_(self):
+    def _subquery_(self):
         self._token('(')
-        self._select_()
+        self._query_()
         self.name_last_node('@')
         self._token(')')
 
@@ -584,29 +643,67 @@ class BQLParser(Parser):
     @tatsumasu('Any')
     @nomemo
     def _any_(self):
-        self._sum_()
-        self.name_last_node('left')
-        self._op_()
-        self.name_last_node('op')
-        self._token('any')
-        self._token('(')
-        self._expression_()
-        self.name_last_node('right')
-        self._token(')')
-        self._define(['left', 'op', 'right'], [])
+        with self._choice():
+            with self._option():
+                self._sum_()
+                self.name_last_node('left')
+                self._op_()
+                self.name_last_node('op')
+                self._token('any')
+                with self._if():
+                    with self._group():
+                        self._token('(')
+                        self._token('SELECT')
+                self._subquery_()
+                self.name_last_node('right')
+                self._define(['left', 'op', 'right'], [])
+            with self._option():
+                self._sum_()
+                self.name_last_node('left')
+                self._op_()
+                self.name_last_node('op')
+                self._token('any')
+                self._token('(')
+                self._expression_()
+                self.name_last_node('right')
+                self._token(')')
+                self._define(['left', 'op', 'right'], [])
+            self._error(
+                'expecting one of: '
+                '<add> <sub> <sum> <term>'
+            )
 
     @tatsumasu('All')
     def _all_(self):
-        self._sum_()
-        self.name_last_node('left')
-        self._op_()
-        self.name_last_node('op')
-        self._token('all')
-        self._token('(')
-        self._expression_()
-        self.name_last_node('right')
-        self._token(')')
-        self._define(['left', 'op', 'right'], [])
+        with self._choice():
+            with self._option():
+                self._sum_()
+                self.name_last_node('left')
+                self._op_()
+                self.name_last_node('op')
+                self._token('all')
+                with self._if():
+                    with self._group():
+                        self._token('(')
+                        self._token('SELECT')
+                self._subquery_()
+                self.name_last_node('right')
+                self._define(['left', 'op', 'right'], [])
+            with self._option():
+                self._sum_()
+                self.name_last_node('left')
+                self._op_()
+                self.name_last_node('op')
+                self._token('all')
+                self._token('(')
+                self._expression_()
+                self.name_last_node('right')
+                self._token(')')
+                self._define(['left', 'op', 'right'], [])
+            self._error(
+                'expecting one of: '
+                '<add> <sub> <sum> <term>'
+            )
 
     @tatsumasu()
     def _op_(self):
@@ -909,9 +1006,9 @@ class BQLParser(Parser):
                 self._atom_()
             self._error(
                 'expecting one of: '
-                "'SELECT' <atom> <attribute> <column>"
+                "'(' <atom> <attribute> <column>"
                 '<constant> <function> <placeholder>'
-                '<primary> <select> <subscript>'
+                '<primary> <subquery> <subscript>'
             )
 
     @tatsumasu('Attribute')
@@ -939,7 +1036,7 @@ class BQLParser(Parser):
     def _atom_(self):
         with self._choice():
             with self._option():
-                self._select_()
+                self._subquery_()
             with self._option():
                 self._function_()
             with self._option():
@@ -950,10 +1047,10 @@ class BQLParser(Parser):
                 self._placeholder_()
             self._error(
                 'expecting one of: '
-                "'%(' '%s' 'SELECT' <boolean> <column>"
+                "'%(' '%s' '(' <boolean> <column>"
                 '<constant> <date> <decimal> <function>'
                 '<identifier> <integer> <list> <literal>'
-                '<null> <placeholder> <select> <string>'
+                '<null> <placeholder> <string> <subquery>'
             )
 
     @tatsumasu('Placeholder')
@@ -1225,7 +1322,7 @@ class BQLParser(Parser):
                     self._define(['using'], [])
                 with self._option():
                     self._token('AS')
-                    self._select_()
+                    self._query_()
                     self.name_last_node('query')
                     self._define(['query'], [])
                 self._error(

@@ -15,12 +15,19 @@ def Select(targets, from_clause=None, where_clause=None, **kwargs):
                     from_clause=from_clause,
                     where_clause=where_clause,
                     group_by=None,
-                    order_by=None,
-                    pivot_by=None,
-                    limit=None,
                     distinct=None)
     defaults.update(kwargs)
     return ast.Select(**defaults)
+
+
+def Query(queries=None, set_operators=None, order_by=None, limit=None, pivot_by=None):
+    """Build an ast.Query wrapping a single Select, for test assertions."""
+    return ast.Query(
+        queries=queries or [],
+        set_operators=set_operators or [],
+        order_by=order_by,
+        limit=limit,
+        pivot_by=pivot_by)
 
 
 class QueryParserTestBase(unittest.TestCase):
@@ -29,18 +36,22 @@ class QueryParserTestBase(unittest.TestCase):
         return parser.parse(query.strip())
 
     def assertParse(self, query, expected):
+        # Convenience: a bare ast.Select expected is auto-wrapped in ast.Query.
+        if isinstance(expected, ast.Select):
+            expected = ast.Query(queries=[expected], set_operators=[], order_by=None, limit=None, pivot_by=None)
         self.assertEqual(parser.parse(query), expected)
 
     def assertParseTarget(self, query, expected):
         expr = parser.parse(query)
-        self.assertIsInstance(expr, ast.Select)
-        self.assertEqual(len(expr.targets), 1)
-        self.assertEqual(expr.targets[0].expression, expected)
+        self.assertIsInstance(expr, ast.Query)
+        select = expr.queries[0]
+        self.assertEqual(len(select.targets), 1)
+        self.assertEqual(select.targets[0].expression, expected)
 
     def assertParseFrom(self, query, expected):
         expr = parser.parse(query)
-        self.assertIsInstance(expr, ast.Select)
-        self.assertEqual(expr.from_clause, expected)
+        self.assertIsInstance(expr, ast.Query)
+        self.assertEqual(expr.queries[0].from_clause, expected)
 
 
 class TestParseSelect(QueryParserTestBase):
@@ -289,18 +300,19 @@ class TestSelectFromSelect(QueryParserTestBase):
             SELECT a, b FROM (
               SELECT * FROM date = 2014-05-02
             ) WHERE c = 5 LIMIT 100;""",
-            Select([
-                ast.Target(ast.Column('a'), None),
-                ast.Target(ast.Column('b'), None)],
-            Select(
-                ast.Asterisk(),
-                ast.From(
-                    ast.Equal(
-                        ast.Column('date'),
-                        ast.Constant(datetime.date(2014, 5, 2))),
-                    None, None, None)),
-            ast.Equal(ast.Column('c'), ast.Constant(5)),
-            limit=100))
+            Query([
+                Select([
+                    ast.Target(ast.Column('a'), None),
+                    ast.Target(ast.Column('b'), None)],
+                    Query([Select(
+                        ast.Asterisk(),
+                        ast.From(
+                            ast.Equal(
+                                ast.Column('date'),
+                                ast.Constant(datetime.date(2014, 5, 2))),
+                            None, None, None))]),
+                    ast.Equal(ast.Column('c'), ast.Constant(5)))],
+                limit=100))
 
 
 class TestSelectGroupBy(QueryParserTestBase):
@@ -362,41 +374,38 @@ class TestSelectOrderBy(QueryParserTestBase):
     def test_orderby_one(self):
         self.assertParse(
             "SELECT * ORDER BY a;",
-            Select(ast.Asterisk(),
-                   order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.ASC)]))
+            Query([Select(ast.Asterisk())],
+                  order_by=[ast.OrderBy(ast.Column('a'), ast.Ordering.ASC)]))
 
     def test_orderby_many(self):
         self.assertParse(
             "SELECT * ORDER BY a, b, c;",
-            Select(ast.Asterisk(),
-                   order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.ASC),
-                       ast.OrderBy(ast.Column('b'), ast.Ordering.ASC),
-                       ast.OrderBy(ast.Column('c'), ast.Ordering.ASC)]))
+            Query([Select(ast.Asterisk())],
+                  order_by=[
+                      ast.OrderBy(ast.Column('a'), ast.Ordering.ASC),
+                      ast.OrderBy(ast.Column('b'), ast.Ordering.ASC),
+                      ast.OrderBy(ast.Column('c'), ast.Ordering.ASC)]))
 
     def test_orderby_asc(self):
         self.assertParse(
             "SELECT * ORDER BY a ASC;",
-            Select(ast.Asterisk(),
-                   order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.ASC)]))
+            Query([Select(ast.Asterisk())],
+                  order_by=[ast.OrderBy(ast.Column('a'), ast.Ordering.ASC)]))
 
     def test_orderby_desc(self):
         self.assertParse(
             "SELECT * ORDER BY a DESC;",
-            Select(ast.Asterisk(),
-                   order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.DESC)]))
+            Query([Select(ast.Asterisk())],
+                  order_by=[ast.OrderBy(ast.Column('a'), ast.Ordering.DESC)]))
 
     def test_orderby_many_asc_desc(self):
         self.assertParse(
             "SELECT * ORDER BY a ASC, b DESC, c;",
-            Select(ast.Asterisk(),
-                   order_by=[
-                       ast.OrderBy(ast.Column('a'), ast.Ordering.ASC),
-                       ast.OrderBy(ast.Column('b'), ast.Ordering.DESC),
-                       ast.OrderBy(ast.Column('c'), ast.Ordering.ASC)]))
+            Query([Select(ast.Asterisk())],
+                  order_by=[
+                      ast.OrderBy(ast.Column('a'), ast.Ordering.ASC),
+                      ast.OrderBy(ast.Column('b'), ast.Ordering.DESC),
+                      ast.OrderBy(ast.Column('c'), ast.Ordering.ASC)]))
 
     def test_orderby_empty(self):
         with self.assertRaises(parser.ParseError):
@@ -417,11 +426,11 @@ class TestSelectPivotBy(QueryParserTestBase):
 
         self.assertParse(
             "SELECT * PIVOT BY a, b",
-            Select(ast.Asterisk(), pivot_by=ast.PivotBy([ast.Column('a'), ast.Column('b')])))
+            Query(queries=[Select(ast.Asterisk())], pivot_by=ast.PivotBy([ast.Column('a'), ast.Column('b')])))
 
         self.assertParse(
             "SELECT * PIVOT BY 1, 2",
-            Select(ast.Asterisk(), pivot_by=ast.PivotBy([1, 2])))
+            Query(queries=[Select(ast.Asterisk())], pivot_by=ast.PivotBy([1, 2])))
 
 
 class TestSelectOptions(QueryParserTestBase):
@@ -432,7 +441,7 @@ class TestSelectOptions(QueryParserTestBase):
 
     def test_limit_present(self):
         self.assertParse(
-            "SELECT * LIMIT 45;", Select(ast.Asterisk(), limit=45))
+            "SELECT * LIMIT 45;", Query([Select(ast.Asterisk())], limit=45, pivot_by=None))
 
     def test_limit_empty(self):
         with self.assertRaises(parser.ParseError):
@@ -582,21 +591,25 @@ class TestRepr(unittest.TestCase):
     def test_tosexp(self):
         sexp = parser.parse('SELECT a + 1 FROM #test WHERE a > 42 ORDER BY b DESC').tosexp()
         self.assertEqual(sexp, textwrap.dedent('''\
-            (select
-              targets: (
-                (target
-                  expression: (add
+            (query
+              queries: (
+                (select
+                  targets: (
+                    (target
+                      expression: (add
+                        left: (column
+                          name: 'a')
+                        right: (constant
+                          value: 1))))
+                  from-clause: (table
+                    name: 'test')
+                  where-clause: (greater
                     left: (column
                       name: 'a')
                     right: (constant
-                      value: 1))))
-              from-clause: (table
-                name: 'test')
-              where-clause: (greater
-                left: (column
-                  name: 'a')
-                right: (constant
-                  value: 42))
+                      value: 42))))
+              set-operators: (
+              )
               order-by: (
                 (orderby
                   column: (column
@@ -612,8 +625,9 @@ class TestRepr(unittest.TestCase):
 class TestNodeText(unittest.TestCase):
 
     def test_text(self):
-        select = parser.parse('SELECT date + 1')
-        self.assertEqual(select.text, 'SELECT date + 1')
+        query = parser.parse('SELECT date + 1')
+        select = query.queries[0]
+        self.assertEqual(query.text, 'SELECT date + 1')
         self.assertEqual(select.targets[0].expression.text, 'date + 1')
         self.assertEqual(select.targets[0].expression.left.text, 'date')
         self.assertEqual(select.targets[0].expression.right.text, '1')
@@ -689,3 +703,26 @@ class TestLiteral(unittest.TestCase):
 
     def test_date(self):
         self.assertEqualEx(self.parse('1972-05-28'), datetime.date(1972, 5, 28))
+
+
+class TestParseQuery(QueryParserTestBase):
+    """Parser always wraps SELECT in an ast.Query node."""
+
+    def test_single_select_is_wrapped_in_query(self):
+        """A plain SELECT is wrapped in an ast.Query containing one ast.Select."""
+        result = self.parse("SELECT 1")
+        self.assertIsInstance(result, ast.Query)
+        self.assertEqual(len(result.queries), 1)
+        self.assertIsInstance(result.queries[0], ast.Select)
+
+    def test_select_with_order_by_sets_query_order_by(self):
+        """ORDER BY on a plain SELECT is held by the enclosing ast.Query."""
+        result = self.parse("SELECT 1 AS n ORDER BY 1")
+        self.assertIsInstance(result, ast.Query)
+        self.assertIsNotNone(result.order_by)
+
+    def test_select_with_limit_sets_query_limit(self):
+        """LIMIT on a plain SELECT is held by the enclosing ast.Query."""
+        result = self.parse("SELECT 1 LIMIT 1")
+        self.assertIsInstance(result, ast.Query)
+        self.assertIsNotNone(result.limit)

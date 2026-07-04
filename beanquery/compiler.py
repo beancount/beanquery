@@ -22,12 +22,14 @@ from .query_compile import (
     EvalColumn,
     EvalConstant,
     EvalCreateTable,
+    EvalUnion,
     EvalGetItem,
     EvalGetter,
     EvalInsert,
     EvalOr,
     EvalPivot,
     EvalQuery,
+    EvalSelect,
     EvalConstantSubquery1D,
     EvalRow,
     EvalTarget,
@@ -97,6 +99,156 @@ class Compiler:
         raise NotImplementedError
 
     @_compile.register
+    def _query(self, node: ast.Query):
+        inner = self._build_inner(node)
+
+        # --- ORDER BY ---
+        # For a single SELECT, new invisible ORDER BY columns are appended
+        # directly. For a UNION, they are pushed to all operands only when
+        # every operand shares the same underlying table; otherwise we reject
+        # invisible ORDER BY to avoid ambiguity across different tables.
+        if isinstance(inner, EvalSelect):
+            new_targets, order_spec = self._compile_order_by(node.order_by, inner.c_targets)
+            inner.c_targets.extend(new_targets)
+        elif isinstance(inner, EvalUnion):
+            first_targets = inner.c_targets
+            new_targets, order_spec = self._compile_order_by(node.order_by, first_targets)
+        else:
+            raise AssertionError(f"Unexpected query child of type {type(inner)}")
+
+        if new_targets and isinstance(inner, EvalUnion):
+            all_tables = inner.tables
+            def table_key(t):
+                # Identify equivalent tables by type and underlying entries.
+                entries_id = id(getattr(t, 'entries', None))
+                return (type(t), entries_id)
+            all_same_table = len(all_tables) > 0 and len({table_key(t) for t in all_tables}) == 1
+            if all_same_table:
+                inner.extend_targets(new_targets)
+            else:
+                n_original = len(first_targets)
+                offending_text = None
+                for i, spec in enumerate(node.order_by):
+                    idx, _ = order_spec[i]
+                    if idx >= n_original and hasattr(spec.column, 'text'):
+                        offending_text = spec.column.text
+                        break
+                raise CompilationError(
+                    f'UNION queries only support ORDER BY on expressions that appear in the '
+                    f'SELECT list. Any column or expression in ORDER BY must be added as a '
+                    f'column to all SELECT clauses in the UNION. '
+                    f'Offending expression: {offending_text or "unknown"}')
+
+        # --- EvalSelect-only checks ---
+        if isinstance(inner, EvalSelect):
+            # DISTINCT with ORDER BY on columns not in SELECT produces non-deterministic
+            # results: when multiple rows have the same visible values but different
+            # ORDER BY values, which row survives DISTINCT is arbitrary.
+            # We allow ORDER BY f(x) if x is visible, since f(x) is computable from x.
+            if inner.distinct and new_targets:
+                visible_column_ids = set()
+                for t in inner.c_targets:
+                    if t.name is not None:
+                        visible_column_ids.update(id(c) for c in _collect_columns(t.c_expr))
+                for target in new_targets:
+                    for col in _collect_columns(target.c_expr):
+                        if id(col) not in visible_column_ids:
+                            raise CompilationError(
+                                f'When using DISTINCT, ORDER BY expressions must only '
+                                f'reference columns that appear in the SELECT list. '
+                                f'Offending ORDER BY expression: {node.order_by[0].column.text}')
+
+            # All non-aggregates must be covered by the GROUP-BY clause.
+            if inner.group_indexes is not None:
+                non_aggregate_indexes = {i for i, t in enumerate(inner.c_targets)
+                                         if not t.is_aggregate}
+                if non_aggregate_indexes != set(inner.group_indexes):
+                    missing_names = ['"{}"'.format(inner.c_targets[i].name)
+                                     for i in non_aggregate_indexes - set(inner.group_indexes)]
+                    raise CompilationError(
+                        'all non-aggregates must be covered by GROUP-BY clause in aggregate query: '
+                        'the following targets are missing: {}'.format(','.join(missing_names)))
+
+        # --- Wrap in EvalQuery ---
+        eval_query = EvalQuery(
+            select=inner,
+            order_spec=order_spec,
+            limit=node.limit,
+        )
+
+        # --- PIVOT BY ---
+        # PIVOT BY requires group_indexes, which only EvalSelect exposes.
+        if node.pivot_by is not None and isinstance(inner, EvalUnion):
+            raise CompilationError('PIVOT BY is not supported with UNION')
+        if isinstance(inner, EvalSelect):
+            pivots = self._compile_pivot_by(node.pivot_by, inner.c_targets, inner.group_indexes)
+            if pivots:
+                return EvalPivot(eval_query, pivots)
+
+        return eval_query
+
+    def _build_inner(self, node: ast.Query):
+        """Compile the inner node of a Query: EvalUnion for set-operator chains,
+        EvalSelect for a single SELECT.
+
+        Returns:
+          An EvalSelect (single SELECT) or EvalUnion (UNION chain).
+        """
+        set_operators = node.set_operators or []
+
+        if not set_operators:
+            return self._compile(node.queries[0])
+
+        # UNION chain: compile each SELECT against the original table.
+        # Each operand is wrapped in EvalQuery for a consistent interface
+        # between plain `SELECT ... UNION SELECT ...` and parenthesized
+        # subqueries `(SELECT ...) UNION (SELECT ...)`.
+        #
+        # Plain SELECTs get order_spec=[] and limit=None because the BQL
+        # grammar does not permit ORDER BY or LIMIT on bare UNION operands:
+        #
+        #   SELECT a FROM x UNION SELECT b FROM y ORDER BY 1
+        #   -- ORDER BY applies to the entire UNION result, not one operand
+        #
+        # To scope ORDER BY to a single operand, use a subquery:
+        #
+        #   (SELECT a FROM x ORDER BY a LIMIT 10) UNION SELECT b FROM y
+        saved_table = self.table
+        compiled = []
+        for select in node.queries:
+            self.table = saved_table
+            eq = self._compile(select)
+            if isinstance(eq, EvalSelect):
+                eq = EvalQuery(select=eq, order_spec=[], limit=None)
+            compiled.append(eq)
+
+        # Validate UNION operands: same column count and compatible types.
+        # Type compatibility is resolved via the same common-coercion policy
+        # used for binary operators (object widening, int/Decimal auto-coercion,
+        # and set/Set[T] widening); see types.common_coercion_type,
+        # types.coercion_target_type, and types.common_set_type for details.
+        first_targets = compiled[0].c_targets
+        for i, eq in enumerate(compiled[1:], start=1):
+            if len(eq.c_targets) != len(first_targets):
+                raise CompilationError(
+                    f'UNION operands must have the same number of columns: '
+                    f'operand 0 has {len(first_targets)} columns, '
+                    f'operand {i} has {len(eq.c_targets)} columns')
+            for j, (t1, t2) in enumerate(zip(first_targets, eq.c_targets)):
+                if t1.c_expr.dtype != t2.c_expr.dtype:
+                    common_dtype, coerced, error = self._try_coerce_to_common_type(
+                        [t1.c_expr, t2.c_expr])
+                    if error is not None:
+                        raise CompilationError(
+                            f'UNION operands have type mismatch at position {j}: '
+                            f'{t1.c_expr.dtype.__name__} vs {t2.c_expr.dtype.__name__}')
+                    coerced1, coerced2 = coerced
+                    first_targets[j] = EvalTarget(coerced1, t1.name, t1.is_aggregate)
+                    eq.c_targets[j] = EvalTarget(coerced2, t2.name, t2.is_aggregate)
+
+        return EvalUnion(queries=compiled, set_operators=set_operators)
+
+    @_compile.register
     def _select(self, node: ast.Select):
         self.stack.append(self.table)
 
@@ -123,47 +275,26 @@ class Compiler:
         new_targets, group_indexes, having_index = self._compile_group_by(node.group_by, c_targets)
         c_targets.extend(new_targets)
 
-        # Process the ORDER-BY clause.
-        new_targets, order_spec = self._compile_order_by(node.order_by, c_targets)
-        c_targets.extend(new_targets)
-
-        # If this is an aggregate query (it groups, see list of indexes), check that
-        # the set of non-aggregates match exactly the group indexes. This should
-        # always be the case at this point, because we have added all the necessary
-        # targets to the list of group-by expressions and should have resolved all
-        # the indexes.
-        if group_indexes is not None:
-            non_aggregate_indexes = {index for index, c_target in enumerate(c_targets)
-                                     if not c_target.is_aggregate}
-            if non_aggregate_indexes != set(group_indexes):
-                missing_names = ['"{}"'.format(c_targets[index].name)
-                                 for index in non_aggregate_indexes - set(group_indexes)]
-                raise CompilationError(
-                    'all non-aggregates must be covered by GROUP-BY clause in aggregate query: '
-                    'the following targets are missing: {}'.format(','.join(missing_names)))
-
-        query = EvalQuery(self.table,
-                          c_targets,
-                          c_where,
-                          group_indexes,
-                          having_index,
-                          order_spec,
-                          node.limit,
-                          node.distinct)
-
-        pivots = self._compile_pivot_by(node.pivot_by, c_targets, group_indexes)
-        if pivots:
-            return EvalPivot(query, pivots)
+        # ORDER BY and LIMIT are compiled by the enclosing _query handler,
+        # which also validates aggregate coverage after ORDER BY targets are added.
+        select = EvalSelect(
+            table=self.table,
+            c_targets=c_targets,
+            c_where=c_where,
+            group_indexes=group_indexes,
+            having_index=having_index,
+            distinct=node.distinct,
+        )
 
         self.stack.pop()
-        return query
+        return select
 
     def _compile_from(self, node):
         if node is None:
             return None
 
         # Subquery.
-        if isinstance(node, ast.Select):
+        if isinstance(node, ast.Query):
             self.table = SubqueryTable(self._compile(node))
             return None
 
@@ -653,6 +784,68 @@ class Compiler:
         op = OPERATORS[type(node)][0]
         return op(left, right)
 
+    def _try_coerce_operand(self, operand, target_type):
+        """Attempt to coerce an operand to a target type.
+
+        This performs value-transforming casts only (via a registered BQL
+        cast function). It does not handle 'set'/'typing.Set[T]' widening,
+        since no value transformation is needed there; use
+        'types.common_set_type' for that case instead.
+
+        Args:
+          operand: An EvalNode to coerce.
+          target_type: The desired type to coerce to.
+
+        Returns:
+          Coerced EvalNode if coercion is possible, None otherwise.
+        """
+        if operand.dtype == target_type:
+            return operand
+
+        resolved_type = types.coercion_target_type(FUNCTIONS, operand.dtype, target_type)
+        if resolved_type is None:
+            return None
+
+        name = types.MAP[resolved_type]
+        func = types.function_lookup(FUNCTIONS, name, [operand])
+        return func(self.context, [operand])
+
+    def _try_coerce_to_common_type(self, operands):
+        """Find a common type across N operands and coerce all of them to it.
+
+        Generalizes ``_try_coerce_operand``/``types.common_coercion_type`` to
+        more than two operands by folding pairwise over the whole list. This
+        includes 'set'/'typing.Set[T]' widening (see 'types.common_set_type'):
+        when the resolved common type is a set widening rather than a value
+        cast, the original operand is kept unchanged since no value
+        transformation is needed.
+
+        Args:
+          operands: A non-empty list of EvalNode instances.
+
+        Returns:
+          (common_dtype, coerced_operands, None) on success, or
+          (None, None, (source_dtype, target_dtype, index)) describing the
+          first incompatible operand encountered, where 'index' is its
+          position in 'operands'.
+        """
+        dtype = operands[0].dtype
+        for i, operand in enumerate(operands[1:], 1):
+            common = types.common_coercion_type(FUNCTIONS, dtype, operand.dtype)
+            if common is None:
+                return None, None, (dtype, operand.dtype, i)
+            dtype = common
+
+        # Coerce every operand to the resolved common type. Set widening
+        # (set / typing.Set[T]) needs no value coercion, so keep the original
+        # node when no cast function is found.
+        coerced = []
+        for operand in operands:
+            c = self._try_coerce_operand(operand, dtype)
+            coerced.append(operand if c is None else c)
+
+        return dtype, coerced, None
+
     @_compile.register
     def _binaryop(self, node: ast.BinaryOp):
         left = self._compile(node.left)
@@ -670,33 +863,17 @@ class Compiler:
                     return function
 
             # Implement type inference when one of the operands is not strongly typed.
-            if left.dtype is object and right.dtype is not object:
-                target = right.dtype
-                if target is int:
-                    # The Beancount parser does not emit int typed
-                    # values, thus casting to int is only going to
-                    # loose information. Promote to decimal.
-                    target = Decimal
-                name = types.MAP.get(target)
-                if name is None:
-                    break
-                left = types.function_lookup(FUNCTIONS, name, [left])(self.context, [left])
-                continue
-            if right.dtype is object and left.dtype is not object:
-                target = left.dtype
-                if target is int:
-                    # The Beancount parser does not emit int typed
-                    # values, thus casting to int is only going to
-                    # loose information. Promote to decimal.
-                    target = Decimal
-                name = types.MAP.get(target)
-                if name is None:
-                    break
-                right = types.function_lookup(FUNCTIONS, name, [right])(self.context, [right])
-                continue
-
-            # Failure.
-            break
+            common_dtype, coerced, error = self._try_coerce_to_common_type([left, right])
+            if error is not None:
+                break
+            new_left, new_right = coerced
+            if new_left is left and new_right is right:
+                # No progress possible (e.g. both operands already share a
+                # type, but no matching operator exists for it). Avoid
+                # looping forever.
+                break
+            left, right = new_left, new_right
+            continue
 
         raise CompilationError(
             f'operator "{type(node).__name__.lower()}('
@@ -735,7 +912,11 @@ class Compiler:
         self.table = self.context.tables.get('entries')
         expr = self._compile_from(node.from_clause)
         targets = [EvalTarget(EvalRow(), 'ROW(*)', False)]
-        return EvalQuery(self.table, targets, expr, None, None, None, None, False)
+        return EvalQuery(
+            select=EvalSelect(self.table, targets, expr, None, None, False),
+            order_spec=None,
+            limit=None,
+        )
 
     @_compile.register
     def _create_table(self, node: ast.CreateTable):
@@ -789,7 +970,7 @@ def transform_journal(journal):
     Returns:
       An instance of an uncompiled Select object.
     """
-    cooked_select = parser.parse("""
+    cooked = parser.parse("""
 
         SELECT
            date,
@@ -804,12 +985,15 @@ def transform_journal(journal):
     """.format(where=('WHERE account ~ "{}"'.format(journal.account)
                       if journal.account
                       else ''),
-               summary_func=journal.summary_func or ''))
+               summary_func=journal.summary_func or '')).queries[0]
 
-    return ast.Select(cooked_select.targets,
-                      journal.from_clause,
-                      cooked_select.where_clause,
-                      None, None, None, None, None)
+    select = ast.Select(
+        cooked.targets,
+        journal.from_clause,
+        cooked.where_clause,
+        None, None)
+
+    return ast.Query(queries=[select], set_operators=[], order_by=None, limit=None, pivot_by=None)
 
 
 def transform_balances(balances):
@@ -826,20 +1010,22 @@ def transform_balances(balances):
     ## the first or last sort-order value gets used, because it would simplify
     ## the input statement.
 
-    cooked_select = parser.parse("""
+    cooked_query = parser.parse("""
 
       SELECT account, SUM({}(position))
       GROUP BY account, ACCOUNT_SORTKEY(account)
       ORDER BY ACCOUNT_SORTKEY(account)
 
     """.format(balances.summary_func or ""))
+    cooked = cooked_query.queries[0]
 
-    return ast.Select(cooked_select.targets,
-                      balances.from_clause,
-                      balances.where_clause,
-                      cooked_select.group_by,
-                      cooked_select.order_by,
-                      None, None, None)
+    select = ast.Select(
+        cooked.targets,
+        balances.from_clause,
+        balances.where_clause,
+        cooked.group_by,
+        None)
+    return ast.Query(queries=[select], set_operators=[], order_by=cooked_query.order_by, limit=None, pivot_by=None)
 
 
 def get_target_name(target):
@@ -907,6 +1093,14 @@ def is_aggregate(node):
     # much. Performance of the query compilation matters very little overall.
     _, aggregates = get_columns_and_aggregates(node)
     return bool(aggregates)
+
+
+def _collect_columns(node):
+    """Recursively collect all EvalColumn nodes from an expression tree."""
+    if isinstance(node, EvalColumn):
+        yield node
+    for child in node.childnodes():
+        yield from _collect_columns(child)
 
 
 def compile(context, statement, parameters=None):
