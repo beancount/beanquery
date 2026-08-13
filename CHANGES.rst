@@ -1,6 +1,10 @@
 Version 0.1 (unreleased)
 ------------------------
 
+- Added the ``custom`` table to query Beancount ``custom`` directives.
+  It exposes the ``meta``, ``date``, ``type``, and ``values`` columns,
+  where ``values`` is a list of the directive's typed values.
+
 - The ``HAVING`` clause for aggregate queries is now supported.
 
 - The ``empty()`` BQL function to determine whether an Inventory
