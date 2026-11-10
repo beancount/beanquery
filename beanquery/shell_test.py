@@ -2,8 +2,10 @@ __copyright__ = "Copyright (C) 2014-2016  Martin Blais"
 __license__ = "GNU GPLv2"
 
 import functools
+import os
 import re
 import sys
+import tempfile
 import textwrap
 import unittest
 
@@ -312,6 +314,29 @@ class TestCommands(unittest.TestCase):
             prices
             transactions
         '''))
+
+
+class TestOutput(unittest.TestCase):
+
+    def _shell(self):
+        return shell.BQLShell('', sys.stdout)
+
+    def test_output_no_arg_resets_to_stdout(self):
+        shell_obj = self._shell()
+        shell_obj.onecmd('.output')
+        self.assertIs(shell_obj.outfile, sys.stdout)
+
+    def test_output_to_file(self):
+        shell_obj = self._shell()
+        with tempfile.NamedTemporaryFile('w', suffix='.txt',
+                                         delete=False) as f:
+            filename = f.name
+        try:
+            shell_obj.onecmd(f'.output {filename}')
+            self.assertEqual(shell_obj.outfile.name, filename)
+        finally:
+            shell_obj.outfile.close()
+            os.unlink(filename)
 
 
 class TestHelp(unittest.TestCase):

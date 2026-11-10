@@ -349,7 +349,7 @@ class DispatchingShell(cmd.Cmd):
         """Send output to FILE or stdout if FILE is omitted."""
         if self.outfile is not sys.stdout:
             self.outfile.close()
-        self.outfile = open(arg, "w") if arg else open(sys.stdout)
+        self.outfile = open(arg, "w") if arg else sys.stdout
 
     def do_parse(self, arg):
         """Run the parser on the following command and print the output."""
